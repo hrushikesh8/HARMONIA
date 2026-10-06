@@ -1,0 +1,34 @@
+# Harmonia — default configuration
+# Override values via environment variables (HARMONIA_ prefix) or .env file.
+
+[database]
+path = "data/harmonia.db"
+
+[library]
+# Directories containing music files.
+# Can also be set via HARMONIA_MUSIC_DIRS environment variable.
+music_dirs = []
+
+[import]
+# File extensions to recognize as music files.
+supported_formats = [
+    ".mp3", ".flac", ".m4a", ".ogg", ".opus",
+    ".wav", ".aac", ".wma", ".alac", ".aiff",
+]
+
+# Whether to follow symlinks when scanning directories.
+follow_symlinks = false
+
+# Whether to compute file hashes on import (for deduplication).
+compute_hashes = true
+
+[artwork]
+# Directory to store extracted artwork.
+path = "data/artwork"
+
+# Whether to extract artwork from files on import.
+extract_on_import = true
+
+[logging]
+level = "INFO"
+# file = "data/harmonia.log"  # Uncomment to log to file.
