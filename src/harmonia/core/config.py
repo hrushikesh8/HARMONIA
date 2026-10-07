@@ -74,6 +74,25 @@ class LoggingConfig(BaseSettings):
         return upper
 
 
+class ApiConfig(BaseSettings):
+    """HTTP API configuration."""
+
+    model_config = SettingsConfigDict(env_prefix="HARMONIA_API_")
+
+    host: str = "127.0.0.1"
+    port: int = 8000
+    token: str | None = None
+
+
+class AnalysisConfig(BaseSettings):
+    """Audio analysis configuration."""
+
+    model_config = SettingsConfigDict(env_prefix="HARMONIA_ANALYSIS_")
+
+    max_workers: int = 2
+    timeout_seconds: float = 120.0
+
+
 class HarmoniaConfig(BaseSettings):
     """Root configuration for Harmonia.
 
@@ -94,6 +113,8 @@ class HarmoniaConfig(BaseSettings):
     import_: ImportConfig = Field(default_factory=ImportConfig, alias="import")
     artwork: ArtworkConfig = Field(default_factory=ArtworkConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    api: ApiConfig = Field(default_factory=ApiConfig)
+    analysis: AnalysisConfig = Field(default_factory=AnalysisConfig)
 
     @classmethod
     def load(cls, config_path: Path | None = None) -> HarmoniaConfig:
@@ -119,6 +140,12 @@ class HarmoniaConfig(BaseSettings):
 
         if "logging" in defaults:
             kwargs["logging"] = LoggingConfig(**defaults["logging"])
+
+        if "api" in defaults:
+            kwargs["api"] = ApiConfig(**defaults["api"])
+
+        if "analysis" in defaults:
+            kwargs["analysis"] = AnalysisConfig(**defaults["analysis"])
 
         if "library" in defaults:
             music_dirs_raw = defaults["library"].get("music_dirs", [])

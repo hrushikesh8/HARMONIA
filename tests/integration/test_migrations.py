@@ -29,6 +29,7 @@ def test_alembic_migrations(temp_dir: Path) -> None:
     assert "tags" in tables
     assert "metadata_fields" in tables
     assert "duplicate_candidates" in tables
+    assert "audio_analyses" in tables
 
     # Verify added columns
     album_cols = [c["name"] for c in inspector.get_columns("albums")]
@@ -36,6 +37,8 @@ def test_alembic_migrations(temp_dir: Path) -> None:
 
     track_file_cols = [c["name"] for c in inspector.get_columns("track_files")]
     assert "file_mtime" in track_file_cols
+    assert "channel_layout" in track_file_cols
+    assert "encoder" in track_file_cols
 
     # Verify FTS virtual table
     with engine.connect() as conn:

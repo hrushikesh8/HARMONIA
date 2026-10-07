@@ -21,8 +21,10 @@ class AlbumRepository(Protocol):
         """Retrieve an album by its ID."""
         ...
 
-    def get_all(self, limit: int = 100, offset: int = 0) -> list[Album]:
-        """Retrieve all albums with pagination."""
+    def get_all(
+        self, limit: int = 100, offset: int = 0, artist_id: UUID | None = None
+    ) -> list[Album]:
+        """Retrieve all albums with pagination and optional artist filter."""
         ...
 
     def get_by_artist(self, artist_id: UUID) -> list[Album]:
@@ -46,6 +48,6 @@ class AlbumRepository(Protocol):
         """Remove an album."""
         ...
 
-    def count(self) -> int:
-        """Return the total number of albums."""
+    def count(self, artist_id: UUID | None = None) -> int:
+        """Return the total number of albums, optionally filtered by artist."""
         ...

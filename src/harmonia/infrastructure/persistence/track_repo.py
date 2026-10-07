@@ -36,13 +36,23 @@ class SqliteTrackRepository:
         model = self._session.get(TrackModel, track_id)
         return _model_to_track(model) if model else None
 
-    def get_all(self, limit: int = 100, offset: int = 0) -> list[Track]:
-        stmt = (
-            select(TrackModel)
-            .order_by(TrackModel.title)
-            .limit(limit)
-            .offset(offset)
-        )
+    def get_all(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        artist_id: UUID | None = None,
+        album_id: UUID | None = None,
+        genre: str | None = None,
+    ) -> list[Track]:
+        stmt = select(TrackModel)
+        if artist_id is not None:
+            stmt = stmt.where(TrackModel.artist_id == artist_id)
+        if album_id is not None:
+            stmt = stmt.where(TrackModel.album_id == album_id)
+        if genre is not None:
+            stmt = stmt.where(func.lower(TrackModel.genre) == genre.lower())
+
+        stmt = stmt.order_by(TrackModel.title).limit(limit).offset(offset)
         models = self._session.scalars(stmt).all()
         return [_model_to_track(m) for m in models]
 
@@ -87,8 +97,24 @@ class SqliteTrackRepository:
             self._session.delete(model)
             self._session.flush()
 
-    def count(self) -> int:
-        result = self._session.scalar(select(func.count(TrackModel.id)))
+    def count(
+        self,
+        artist_id: UUID | None = None,
+        album_id: UUID | None = None,
+        genre: str | None = None,
+    ) -> int:
+        stmt = select(func.count(TrackModel.id))
+        if artist_id is not None:
+            stmt = stmt.where(TrackModel.artist_id == artist_id)
+        if album_id is not None:
+            stmt = stmt.where(TrackModel.album_id == album_id)
+        if genre is not None:
+            stmt = stmt.where(func.lower(TrackModel.genre) == genre.lower())
+        result = self._session.scalar(stmt)
+        return result or 0
+
+    def count_files(self) -> int:
+        result = self._session.scalar(select(func.count(TrackFileModel.id)))
         return result or 0
 
     # ── Track files ───────────────────────────────────────────────────────
@@ -106,6 +132,11 @@ class SqliteTrackRepository:
         )
         models = self._session.scalars(stmt).all()
         return [_model_to_track_file(m) for m in models]
+
+    def get_file_by_id(self, file_id: UUID) -> TrackFile | None:
+        stmt = select(TrackFileModel).where(TrackFileModel.id == file_id)
+        model = self._session.scalar(stmt)
+        return _model_to_track_file(model) if model else None
 
     def get_file_by_path(self, file_path: str) -> TrackFile | None:
         stmt = select(TrackFileModel).where(TrackFileModel.file_path == file_path)
@@ -139,6 +170,8 @@ class SqliteTrackRepository:
         model.is_lossless = track_file.is_lossless
         model.quality_score = track_file.quality_score
         model.file_mtime = track_file.file_mtime
+        model.channel_layout = track_file.channel_layout
+        model.encoder = track_file.encoder
         model.verified_at = track_file.verified_at
         self._session.flush()
 
@@ -226,6 +259,8 @@ def _track_file_to_model(tf: TrackFile) -> TrackFileModel:
         is_lossless=tf.is_lossless,
         quality_score=tf.quality_score,
         file_mtime=tf.file_mtime,
+        channel_layout=tf.channel_layout,
+        encoder=tf.encoder,
         added_at=tf.added_at,
         verified_at=tf.verified_at,
     )
@@ -248,6 +283,8 @@ def _model_to_track_file(model: TrackFileModel) -> TrackFile:
         is_lossless=model.is_lossless,
         quality_score=model.quality_score,
         file_mtime=model.file_mtime,
+        channel_layout=model.channel_layout,
+        encoder=model.encoder,
         added_at=model.added_at,
         verified_at=model.verified_at,
     )

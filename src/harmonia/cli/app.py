@@ -6,6 +6,7 @@ import typer
 from rich.console import Console
 
 from harmonia import __version__
+from harmonia.cli.analyze import analyze_cmd
 from harmonia.cli.duplicates import duplicates_app
 from harmonia.cli.import_ import run_import
 from harmonia.cli.library import (
@@ -19,6 +20,7 @@ from harmonia.cli.library import (
     track_cmd,
 )
 from harmonia.cli.search import reindex_cmd, search_cmd
+from harmonia.cli.serve import serve_cmd
 
 console = Console()
 
@@ -60,6 +62,8 @@ app.command("info", help="Display overview statistics for the music library.")(i
 app.command("track", help="View full metadata and technical file info for a track.")(track_cmd)
 app.command("album", help="View album details and track list.")(album_cmd)
 app.command("artist", help="View artist details and albums.")(artist_cmd)
+app.command("analyze", help="Measure objective audio signal properties (ebur128, true peak).")(analyze_cmd)
+app.command("serve", help="Launch the local HTTP REST API server.")(serve_cmd)
 app.command("init-db", help="Initialize the SQLite database schema.")(init_db_cmd)
 
 

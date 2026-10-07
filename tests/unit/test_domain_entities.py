@@ -170,3 +170,39 @@ def test_duplicate_candidate() -> None:
     assert candidate.resolution == "merged"
     assert candidate.resolved_at is not None
 
+
+def test_audio_analysis_entity() -> None:
+    from harmonia.domain.entities.audio_analysis import AnalysisStatus, AudioAnalysis
+
+    file_id = uuid4()
+    analysis = AudioAnalysis(
+        track_file_id=file_id,
+        file_hash="abc123hash",
+        status=AnalysisStatus.COMPLETED,
+        integrated_lufs=-14.2,
+        loudness_range_lu=8.5,
+        true_peak_dbtp=-0.4,
+        peak_to_loudness_db=13.8,
+        is_clipped=False,
+    )
+    assert analysis.id is not None
+    assert analysis.track_file_id == file_id
+    assert analysis.integrated_lufs == -14.2
+    assert analysis.is_fresh("abc123hash") is True
+    assert analysis.is_fresh("different_hash") is False
+    assert analysis.is_fresh("abc123hash", current_analyzer_version="2.0.0") is False
+
+
+def test_track_file_phase3_fields() -> None:
+    tf = TrackFile(
+        track_id=uuid4(),
+        file_path="/music/test.flac",
+        file_size=1000,
+        format=AudioFormat.FLAC,
+        channel_layout="stereo",
+        encoder="Lavf62.1.103",
+    )
+    assert tf.channel_layout == "stereo"
+    assert tf.encoder == "Lavf62.1.103"
+
+

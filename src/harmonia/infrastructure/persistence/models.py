@@ -168,6 +168,8 @@ class TrackFileModel(Base):
     is_lossless: Mapped[bool] = mapped_column(Boolean, default=False)
     quality_score: Mapped[int | None] = mapped_column(Integer)
     file_mtime: Mapped[float | None] = mapped_column(Float)
+    channel_layout: Mapped[str | None] = mapped_column(String(50))
+    encoder: Mapped[str | None] = mapped_column(String(100))
     added_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
@@ -175,6 +177,9 @@ class TrackFileModel(Base):
 
     # Relationships
     track: Mapped[TrackModel] = relationship(back_populates="files")
+    audio_analysis: Mapped[AudioAnalysisModel | None] = relationship(
+        back_populates="track_file", uselist=False, cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("ix_track_files_track_id", "track_id"),
@@ -261,5 +266,56 @@ class DuplicateCandidateModel(Base):
         Index("ix_duplicate_candidates_track_a", "track_id_a"),
         Index("ix_duplicate_candidates_track_b", "track_id_b"),
         Index("ix_duplicate_candidates_unresolved", "resolved"),
+    )
+
+
+# ── AudioAnalysis ─────────────────────────────────────────────────────────────
+
+
+class AudioAnalysisModel(Base):
+    __tablename__ = "audio_analyses"
+
+    id: Mapped[str] = mapped_column(Uuid(), primary_key=True, default=uuid4)
+    track_file_id: Mapped[str] = mapped_column(
+        Uuid(),
+        ForeignKey("track_files.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="PENDING")
+    integrated_lufs: Mapped[float | None] = mapped_column(Float)
+    loudness_range_lu: Mapped[float | None] = mapped_column(Float)
+    true_peak_dbtp: Mapped[float | None] = mapped_column(Float)
+    sample_peak_dbfs: Mapped[float | None] = mapped_column(Float)
+    peak_to_loudness_db: Mapped[float | None] = mapped_column(Float)
+    clipping_samples: Mapped[int | None] = mapped_column(Integer)
+    is_clipped: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    duration_analyzed: Mapped[float | None] = mapped_column(Float)
+    silence_start_sec: Mapped[float | None] = mapped_column(Float)
+    silence_end_sec: Mapped[float | None] = mapped_column(Float)
+    analyzer_name: Mapped[str] = mapped_column(String(50), nullable=False, default="ffmpeg_ebur128")
+    analyzer_version: Mapped[str] = mapped_column(String(20), nullable=False, default="1.0.0")
+    config_version: Mapped[str] = mapped_column(String(20), nullable=False, default="1.0.0")
+    file_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    execution_time_sec: Mapped[float | None] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
+    track_file: Mapped[TrackFileModel] = relationship(back_populates="audio_analysis")
+
+    __table_args__ = (
+        Index("ix_audio_analyses_track_file_id", "track_file_id", unique=True),
+        Index("ix_audio_analyses_status", "status"),
+        Index("ix_audio_analyses_file_hash", "file_hash"),
+        Index("ix_audio_analyses_started_at", "started_at"),
     )
 

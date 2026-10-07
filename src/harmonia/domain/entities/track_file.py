@@ -41,6 +41,8 @@ class TrackFile:
     is_lossless: bool = False
     quality_score: int | None = None  # 0-100, computed by quality scorer
     file_mtime: float | None = None  # Modification timestamp (seconds since epoch)
+    channel_layout: str | None = None  # e.g., "stereo", "5.1(side)"
+    encoder: str | None = None  # e.g., "Lavf62.1.103", "LAME3.100"
     added_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     verified_at: datetime | None = None
 

@@ -18,24 +18,25 @@ The Harmonia ecosystem is built across 8 sequential phases:
 
 ---
 
-### Phase 2: Metadata & Search
-- Metadata normalization pipeline (Unicode NFC, whitespace, date standardization).
-- `MetadataSource` entity and provenance tracking.
-- Conflict resolution engine with strict priority rules (User > MusicBrainz > File > Path).
-- MusicBrainz provider integration (rate-limited lookup port).
-- Full-Text Search (SQLite FTS5 indexing for tracks, albums, artists, tags).
-- Artwork extraction, storage (`data/artwork/`), and linking.
-- Duplicate detection (SHA-256 hashes + metadata similarity).
+### Phase 2: Metadata & Discovery (Status: COMPLETE)
+- [x] Metadata normalization pipeline (Unicode NFC, whitespace, sort key generation).
+- [x] `MetadataFieldRecord` entity and field-level provenance tracking.
+- [x] Conflict resolution engine with strict priority rules (User > MusicBrainz > File > Path).
+- [x] MusicBrainz provider integration (rate-limited lookup port, offline-safe).
+- [x] Full-Text Search (SQLite FTS5 indexing for tracks, albums, artists, genres).
+- [x] Artwork extraction, SHA-256 deduplicated storage, and linking.
+- [x] Duplicate detection with explicit confidence tiers (Tier A physical, Tier B candidate review).
 
 ---
 
-### Phase 3: Audio Analysis & Quality
-- FFprobe & FFmpeg integration for deep stream properties.
-- Loudness analysis (integrated LUFS, loudness range, true peak dBTP).
-- Audio fingerprinting (Chromaprint / AcoustID).
-- Background job processing for deferred expensive analysis.
-- FastAPI HTTP API (REST endpoints for tracks, albums, artists, search).
-- Playlist CRUD domain model and service.
+### Phase 3: Audio Intelligence & Local HTTP API (Status: COMPLETE)
+- [x] `AudioAnalysis` domain entity, lifecycle states, and repository port.
+- [x] FFmpeg & FFprobe technical stream properties extraction (`channel_layout`, `encoder`).
+- [x] ITU-R BS.1770-4 signal analysis (integrated LUFS, loudness range LU, True Peak dBTP, clipping, silence).
+- [x] Bounded ThreadPool worker queue with crash recovery and short database transactions.
+- [x] Local-first FastAPI REST API (tracks, albums, artists, search, artwork, duplicates, analysis).
+- [x] Secure audio streaming via `GET /api/v1/stream/{file_id}` with HTTP 206 Partial Content Range support.
+- [x] Strict host filesystem path concealment and library root traversal protection.
 
 ---
 

@@ -30,13 +30,13 @@ class SqliteAlbumRepository:
         model = self._session.get(AlbumModel, album_id)
         return _model_to_album(model) if model else None
 
-    def get_all(self, limit: int = 100, offset: int = 0) -> list[Album]:
-        stmt = (
-            select(AlbumModel)
-            .order_by(AlbumModel.title)
-            .limit(limit)
-            .offset(offset)
-        )
+    def get_all(
+        self, limit: int = 100, offset: int = 0, artist_id: UUID | None = None
+    ) -> list[Album]:
+        stmt = select(AlbumModel)
+        if artist_id is not None:
+            stmt = stmt.where(AlbumModel.artist_id == artist_id)
+        stmt = stmt.order_by(AlbumModel.title).limit(limit).offset(offset)
         models = self._session.scalars(stmt).all()
         return [_model_to_album(m) for m in models]
 
@@ -83,8 +83,11 @@ class SqliteAlbumRepository:
             self._session.delete(model)
             self._session.flush()
 
-    def count(self) -> int:
-        result = self._session.scalar(select(func.count(AlbumModel.id)))
+    def count(self, artist_id: UUID | None = None) -> int:
+        stmt = select(func.count(AlbumModel.id))
+        if artist_id is not None:
+            stmt = stmt.where(AlbumModel.artist_id == artist_id)
+        result = self._session.scalar(stmt)
         return result or 0
 
 

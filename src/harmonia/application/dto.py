@@ -64,8 +64,12 @@ class TrackFileInfo(BaseModel):
     sample_rate: int | None = None
     bit_depth: int | None = None
     channels: int | None = None
+    channel_layout: str | None = None
+    encoder: str | None = None
+    duration_seconds: float | None = None
     is_lossless: bool = False
     quality_score: int | None = None
+    file_size_bytes: int = 0
     file_size_display: str = ""
 
 

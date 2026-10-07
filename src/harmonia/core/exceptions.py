@@ -89,6 +89,21 @@ class AudioAnalysisError(HarmoniaError):
         super().__init__(f"Audio analysis failed for '{file_path}': {reason}")
 
 
+class AudioToolNotFoundError(AudioAnalysisError):
+    """Required audio tool (ffmpeg/ffprobe) not installed or not in PATH."""
+
+    def __init__(self, tool_name: str) -> None:
+        super().__init__("", f"Required audio tool '{tool_name}' not found on PATH.")
+
+
+class AudioDecodeError(AudioAnalysisError):
+    """Failed to decode audio stream or corrupted audio file."""
+
+
+class AnalysisTimeoutError(AudioAnalysisError):
+    """Audio analysis exceeded execution timeout."""
+
+
 # ── Configuration errors ─────────────────────────────────────────────────────
 
 

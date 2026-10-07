@@ -46,14 +46,39 @@ class LibraryService:
             total_tracks=self._track_repo.count(),
             total_albums=self._album_repo.count(),
             total_artists=self._artist_repo.count(),
+            total_files=self._track_repo.count_files(),
         )
 
     # ── Tracks ────────────────────────────────────────────────────────────
 
-    def list_tracks(self, limit: int = 100, offset: int = 0) -> list[TrackSummary]:
+    def list_tracks(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        artist_id: UUID | None = None,
+        album_id: UUID | None = None,
+        genre: str | None = None,
+    ) -> list[TrackSummary]:
         """List tracks with pagination."""
-        tracks = self._track_repo.get_all(limit=limit, offset=offset)
+        tracks = self._track_repo.get_all(
+            limit=limit,
+            offset=offset,
+            artist_id=artist_id,
+            album_id=album_id,
+            genre=genre,
+        )
         return [self._to_track_summary(t) for t in tracks]
+
+    def count_tracks(
+        self,
+        artist_id: UUID | None = None,
+        album_id: UUID | None = None,
+        genre: str | None = None,
+    ) -> int:
+        """Count tracks with optional filters."""
+        return self._track_repo.count(
+            artist_id=artist_id, album_id=album_id, genre=genre
+        )
 
     def get_track(self, track_id: UUID) -> TrackDetail | None:
         """Get full details for a track."""
@@ -84,6 +109,10 @@ class LibraryService:
                 sample_rate=f.sample_rate,
                 bit_depth=f.bit_depth,
                 channels=f.channels,
+                channel_layout=getattr(f, "channel_layout", None),
+                encoder=getattr(f, "encoder", None),
+                duration_seconds=getattr(f, "duration_seconds", None),
+                file_size_bytes=getattr(f, "file_size", 0),
                 is_lossless=f.is_lossless,
                 quality_score=f.quality_score,
                 file_size_display=f.file_size_display,
@@ -131,6 +160,10 @@ class LibraryService:
             for a in artists
         ]
 
+    def count_artists(self) -> int:
+        """Count total artists in library."""
+        return self._artist_repo.count()
+
     def get_artist(self, artist_id: UUID) -> ArtistDetail | None:
         """Get full details for an artist including albums."""
         artist = self._artist_repo.get_by_id(artist_id)
@@ -159,9 +192,11 @@ class LibraryService:
 
     # ── Albums ────────────────────────────────────────────────────────────
 
-    def list_albums(self, limit: int = 100, offset: int = 0) -> list[AlbumSummary]:
+    def list_albums(
+        self, limit: int = 100, offset: int = 0, artist_id: UUID | None = None
+    ) -> list[AlbumSummary]:
         """List albums with pagination."""
-        albums = self._album_repo.get_all(limit=limit, offset=offset)
+        albums = self._album_repo.get_all(limit=limit, offset=offset, artist_id=artist_id)
         summaries = []
         for album in albums:
             artist_name = None
@@ -177,6 +212,10 @@ class LibraryService:
                 )
             )
         return summaries
+
+    def count_albums(self, artist_id: UUID | None = None) -> int:
+        """Count albums with optional artist filter."""
+        return self._album_repo.count(artist_id=artist_id)
 
     def get_album(self, album_id: UUID) -> AlbumDetail | None:
         """Get full details for an album including track listing."""

@@ -23,8 +23,15 @@ class TrackRepository(Protocol):
         """Retrieve a track by its ID."""
         ...
 
-    def get_all(self, limit: int = 100, offset: int = 0) -> list[Track]:
-        """Retrieve all tracks with pagination."""
+    def get_all(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        artist_id: UUID | None = None,
+        album_id: UUID | None = None,
+        genre: str | None = None,
+    ) -> list[Track]:
+        """Retrieve all tracks with pagination and optional filters."""
         ...
 
     def get_by_album(self, album_id: UUID) -> list[Track]:
@@ -43,8 +50,17 @@ class TrackRepository(Protocol):
         """Remove a track and its associated files/tags."""
         ...
 
-    def count(self) -> int:
-        """Return the total number of tracks in the library."""
+    def count(
+        self,
+        artist_id: UUID | None = None,
+        album_id: UUID | None = None,
+        genre: str | None = None,
+    ) -> int:
+        """Return the total number of tracks in the library, with optional filters."""
+        ...
+
+    def count_files(self) -> int:
+        """Return the total number of track files in the library."""
         ...
 
     # ── Track files ───────────────────────────────────────────────────────
@@ -55,6 +71,10 @@ class TrackRepository(Protocol):
 
     def get_files(self, track_id: UUID) -> list[TrackFile]:
         """Get all physical files for a track."""
+        ...
+
+    def get_file_by_id(self, file_id: UUID) -> TrackFile | None:
+        """Look up a track file by its unique ID."""
         ...
 
     def get_file_by_path(self, file_path: str) -> TrackFile | None:
