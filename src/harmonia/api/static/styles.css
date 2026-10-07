@@ -4,11 +4,11 @@
    ========================================================================== */
 
 :root {
-  --bg-deep: #08090c;
-  --bg-surface: #10121a;
-  --bg-surface-elevated: #161a24;
-  --bg-surface-hover: #1f2433;
-  --bg-surface-active: #262c3e;
+  --bg-deep: #090b10;
+  --bg-surface: #141721;
+  --bg-surface-elevated: #1e2333;
+  --bg-surface-hover: #222738;
+  --bg-surface-active: #2b3248;
   
   --border-subtle: rgba(255, 255, 255, 0.06);
   --border-medium: rgba(255, 255, 255, 0.12);
@@ -18,13 +18,14 @@
   --accent-cyan-glow: rgba(0, 210, 180, 0.25);
   --accent-cyan-subtle: rgba(0, 210, 180, 0.12);
   
-  --accent-indigo: #6366f1;
+  --accent-violet: #6e56cf;
+  --accent-indigo: #6e56cf;
   --accent-purple: #8b5cf6;
 
-  --text-main: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --text-dim: #475569;
+  --text-main: #f0f3f8;
+  --text-secondary: #8e95a5;
+  --text-muted: #525866;
+  --text-dim: #3e4452;
 
   --status-green: #10b981;
   --status-green-glow: rgba(16, 185, 129, 0.2);
@@ -107,20 +108,27 @@ body {
 }
 
 .brand-icon {
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   border-radius: var(--radius-md);
-  background: linear-gradient(135deg, var(--accent-cyan), var(--accent-indigo));
+  background: var(--bg-surface);
+  border: 1px solid var(--border-medium);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
-  box-shadow: 0 0 16px var(--accent-cyan-glow);
+  box-shadow: 0 0 16px rgba(0, 210, 180, 0.12);
+  transition: var(--transition-normal);
+}
+
+.brand-icon:hover {
+  border-color: rgba(0, 210, 180, 0.4);
+  box-shadow: 0 0 20px rgba(0, 210, 180, 0.25);
 }
 
 .brand-icon svg {
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
+  display: block;
 }
 
 .brand-text {
@@ -131,8 +139,8 @@ body {
 .brand-name {
   font-size: 15px;
   font-weight: 700;
-  letter-spacing: 0.1em;
-  color: #fff;
+  letter-spacing: 0.18em;
+  color: var(--text-main);
 }
 
 .brand-tag {

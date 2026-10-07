@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+  <title>Harmonia Symbol (Monochrome White)</title>
+  <g id="harmonia-symbol-white">
+  <rect x="14" y="46" width="6" height="8" rx="3" fill="#FFFFFF"/>
+  <rect x="80" y="46" width="6" height="8" rx="3" fill="#FFFFFF"/>
+  <rect x="25" y="37" width="6.5" height="26" rx="3.25" fill="#FFFFFF"/>
+  <rect x="68.5" y="37" width="6.5" height="26" rx="3.25" fill="#FFFFFF"/>
+  <path d="M 40 37 C 40 50, 60 50, 60 63" fill="none" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round"/>
+  <rect x="36.5" y="18" width="7" height="64" rx="3.5" fill="#FFFFFF"/>
+  <rect x="56.5" y="18" width="7" height="64" rx="3.5" fill="#FFFFFF"/>
+</g>
+</svg>

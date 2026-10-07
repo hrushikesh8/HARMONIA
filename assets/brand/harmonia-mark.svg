@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+  <title>Harmonia Symbol</title>
+  <g id="harmonia-symbol">
+  <!-- Outer Resonance Nodes -->
+  <rect x="14" y="46" width="6" height="8" rx="3" fill="#00D2B4"/>
+  <rect x="80" y="46" width="6" height="8" rx="3" fill="#00D2B4"/>
+  
+  <!-- Inner Resonance Bars -->
+  <rect x="25" y="37" width="6.5" height="26" rx="3.25" fill="#00D2B4"/>
+  <rect x="68.5" y="37" width="6.5" height="26" rx="3.25" fill="#00D2B4"/>
+  
+  <!-- Resonant S-Bridge connecting the pillars -->
+  <path d="M 40 37 C 40 50, 60 50, 60 63" fill="none" stroke="#00D2B4" stroke-width="7" stroke-linecap="round"/>
+
+  <!-- Left Pillar -->
+  <rect x="36.5" y="18" width="7" height="64" rx="3.5" fill="#00D2B4"/>
+  
+  <!-- Right Pillar -->
+  <rect x="56.5" y="18" width="7" height="64" rx="3.5" fill="#00D2B4"/>
+</g>
+</svg>

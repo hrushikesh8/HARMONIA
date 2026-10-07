@@ -70,6 +70,18 @@ def test_ui_index_and_static_serving(tmp_path: Path) -> None:
     assert any(t in js_resp.headers["content-type"] for t in ("javascript", "text/plain"))
     assert "loadLibrary" in js_resp.text
 
+    # 5. /static/favicon.svg is served with image/svg+xml mime
+    fav_resp = client.get("/static/favicon.svg")
+    assert fav_resp.status_code == 200
+    assert "svg" in fav_resp.headers["content-type"]
+    assert "Harmonia Favicon" in fav_resp.text
+
+    # 6. /static/brand/harmonia-mark.svg is served
+    brand_resp = client.get("/static/brand/harmonia-mark.svg")
+    assert brand_resp.status_code == 200
+    assert "svg" in brand_resp.headers["content-type"]
+    assert "Harmonia Symbol" in brand_resp.text
+
 
 def test_track_api_includes_ui_fields(tmp_path: Path) -> None:
     """Verify TrackResponse and TrackDetail DTOs expose file_id, album_id, and art_url."""
