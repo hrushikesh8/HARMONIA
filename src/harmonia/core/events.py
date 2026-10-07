@@ -27,10 +27,13 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
-from typing import Any, Callable
-from uuid import UUID
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from uuid import UUID
 
 logger = logging.getLogger("harmonia.events")
 

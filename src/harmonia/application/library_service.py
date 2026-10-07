@@ -5,9 +5,7 @@ This is the primary read-path service for library operations.
 
 from __future__ import annotations
 
-from uuid import UUID
-
-from sqlalchemy.orm import Session
+from typing import TYPE_CHECKING
 
 from harmonia.application.dto import (
     AlbumDetail,
@@ -24,6 +22,11 @@ from harmonia.core.logging import get_logger
 from harmonia.infrastructure.persistence.album_repo import SqliteAlbumRepository
 from harmonia.infrastructure.persistence.artist_repo import SqliteArtistRepository
 from harmonia.infrastructure.persistence.track_repo import SqliteTrackRepository
+
+if TYPE_CHECKING:
+    from uuid import UUID
+
+    from sqlalchemy.orm import Session
 
 logger = get_logger(__name__)
 

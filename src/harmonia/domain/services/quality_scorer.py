@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from harmonia.domain.entities.track_file import TrackFile
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from harmonia.domain.entities.track_file import TrackFile
 
 
 def compute_quality_score(track_file: TrackFile) -> int:
-    """Compute an objective technical quality score (0–100) for a TrackFile.
+    """Compute an objective technical quality score (0-100) for a TrackFile.
 
     This score ranks audio files by technical quality only. It does NOT
     encode subjective preferences (e.g., "vinyl warmth"). User preferences

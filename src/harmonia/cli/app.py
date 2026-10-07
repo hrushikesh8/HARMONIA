@@ -6,6 +6,7 @@ import typer
 from rich.console import Console
 
 from harmonia import __version__
+from harmonia.cli.duplicates import duplicates_app
 from harmonia.cli.import_ import run_import
 from harmonia.cli.library import (
     album_cmd,
@@ -17,6 +18,7 @@ from harmonia.cli.library import (
     list_tracks_cmd,
     track_cmd,
 )
+from harmonia.cli.search import reindex_cmd, search_cmd
 
 console = Console()
 
@@ -47,10 +49,13 @@ def list_default(ctx: typer.Context) -> None:
 
 
 app.add_typer(list_app, name="list")
+app.add_typer(duplicates_app, name="duplicates")
 
 # ── Standalone Commands ───────────────────────────────────────────────────────
 
 app.command("import", help="Import music files from a directory into Harmonia.")(run_import)
+app.command("search", help="Search the library by track title, artist, album, or genre.")(search_cmd)
+app.command("reindex", help="Rebuild the full-text search index.")(reindex_cmd)
 app.command("info", help="Display overview statistics for the music library.")(info_cmd)
 app.command("track", help="View full metadata and technical file info for a track.")(track_cmd)
 app.command("album", help="View album details and track list.")(album_cmd)

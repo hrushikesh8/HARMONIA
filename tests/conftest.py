@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import tempfile
-from collections.abc import Generator
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 from harmonia.core.database import _enable_sqlite_pragmas, init_database
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
 
 
 @pytest.fixture

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Protocol
-from uuid import UUID
+from typing import TYPE_CHECKING, Protocol
 
-from harmonia.domain.entities.artist import Artist
+if TYPE_CHECKING:
+    from uuid import UUID
+
+    from harmonia.domain.entities.artist import Artist
 
 
 class ArtistRepository(Protocol):

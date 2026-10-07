@@ -14,7 +14,7 @@ EntityId = UUID
 # ── Enumerations ──────────────────────────────────────────────────────────────
 
 
-class TagSource(str, enum.Enum):
+class TagSource(enum.StrEnum):
     """Origin of a tag value."""
 
     FILE = "file"
@@ -27,7 +27,7 @@ class TagSource(str, enum.Enum):
     """Fetched from an external metadata provider (MusicBrainz, etc.)."""
 
 
-class PlaylistSource(str, enum.Enum):
+class PlaylistSource(enum.StrEnum):
     """How a playlist was created."""
 
     MANUAL = "manual"
@@ -35,14 +35,14 @@ class PlaylistSource(str, enum.Enum):
     IMPORT = "import"
 
 
-class PlaylistItemSource(str, enum.Enum):
+class PlaylistItemSource(enum.StrEnum):
     """How a track was added to a playlist."""
 
     MANUAL = "manual"
     AI = "ai"
 
 
-class FavoriteEntityType(str, enum.Enum):
+class FavoriteEntityType(enum.StrEnum):
     """Entity types that can be favorited."""
 
     TRACK = "track"
@@ -50,16 +50,42 @@ class FavoriteEntityType(str, enum.Enum):
     ARTIST = "artist"
 
 
-class MetadataProviderName(str, enum.Enum):
+class MetadataProviderName(enum.StrEnum):
     """Known metadata providers."""
 
     FILE = "file"
+    PATH = "path"
     MUSICBRAINZ = "musicbrainz"
     DISCOGS = "discogs"
-    MANUAL = "manual"
+    MANUAL = "user"
+    USER = "user"
 
 
-class ImportStatus(str, enum.Enum):
+class MetadataPriority:
+    """Standard priority levels for metadata provenance resolution."""
+
+    USER: int = 100
+    MUSICBRAINZ: int = 50
+    FILE: int = 30
+    PATH: int = 10
+
+
+class DuplicateConfidence(enum.StrEnum):
+    """Confidence level of duplicate match."""
+
+    CERTAIN = "certain"
+    PROBABLE = "probable"
+    UNCERTAIN = "uncertain"
+
+
+class DuplicateResolution(enum.StrEnum):
+    """Resolution of a duplicate candidate."""
+
+    MERGED = "merged"
+    DISTINCT = "distinct"
+
+
+class ImportStatus(enum.StrEnum):
     """Status of an import operation."""
 
     PENDING = "pending"

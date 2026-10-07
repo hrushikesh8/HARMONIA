@@ -6,22 +6,18 @@ M4A/MP4, OGG, and other formats supported by mutagen.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 from dataclasses import dataclass
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import mutagen
-from mutagen.easyid3 import EasyID3
-from mutagen.easymp4 import EasyMP4Tags
-from mutagen.flac import FLAC
-from mutagen.id3 import ID3NoHeaderError
-from mutagen.mp3 import MP3
-from mutagen.mp4 import MP4
-from mutagen.oggopus import OggOpus
-from mutagen.oggvorbis import OggVorbis
 
 from harmonia.core.exceptions import MetadataExtractionError
 from harmonia.core.logging import get_logger
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = get_logger(__name__)
 
@@ -174,10 +170,8 @@ def _parse_number_pair(value: str | None) -> tuple[int | None, int | None]:
         return None, None
     total = None
     if len(parts) > 1:
-        try:
+        with contextlib.suppress(ValueError):
             total = int(parts[1].strip())
-        except ValueError:
-            pass
     return number, total
 
 

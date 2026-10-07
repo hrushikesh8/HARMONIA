@@ -12,7 +12,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-
 # ── Library summaries ─────────────────────────────────────────────────────────
 
 
@@ -91,7 +90,7 @@ class ImportResult(BaseModel):
     errors: list[ImportError_] = Field(default_factory=list)
 
 
-class ImportError_(BaseModel):
+class ImportError_(BaseModel):  # noqa: N801
     """Details about a failed import."""
 
     file_path: str
@@ -137,3 +136,48 @@ class ArtistDetail(ArtistSummary):
 
     mbid: str | None = None
     albums: list[AlbumSummary] = Field(default_factory=list)
+
+
+# ── Search DTOs ───────────────────────────────────────────────────────────────
+
+
+class SearchResultItem(BaseModel):
+    """A single track result from a search."""
+
+    track_id: UUID
+    title: str
+    artist_name: str | None = None
+    album_title: str | None = None
+    duration_display: str = "-"
+    genre: str | None = None
+    year: int | None = None
+    format: str | None = None
+    quality_score: int | None = None
+
+
+class SearchResult(BaseModel):
+    """Result of a search operation."""
+
+    query: str
+    total_matches: int
+    items: list[SearchResultItem] = Field(default_factory=list)
+
+
+# ── Duplicate DTOs ────────────────────────────────────────────────────────────
+
+
+class DuplicateCandidateInfo(BaseModel):
+    """Information about a duplicate candidate."""
+
+    id: UUID
+    track_id_a: UUID
+    track_id_b: UUID
+    track_a_title: str = ""
+    track_b_title: str = ""
+    artist_name: str | None = None
+    confidence: str
+    reason: str
+    resolved: bool = False
+    resolution: str | None = None
+    created_at: datetime
+

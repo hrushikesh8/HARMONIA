@@ -6,12 +6,15 @@ foreign keys are enabled automatically.
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Engine, create_engine, event, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from harmonia.core.logging import get_logger
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = get_logger(__name__)
 
@@ -72,6 +75,20 @@ def init_database(engine: Engine) -> None:
     from harmonia.infrastructure.persistence.models import Base
 
     Base.metadata.create_all(engine)
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                "CREATE VIRTUAL TABLE IF NOT EXISTS tracks_fts USING fts5("
+                "track_id UNINDEXED, "
+                "title, "
+                "artist_name, "
+                "album_title, "
+                "genre, "
+                "tokenize='unicode61 remove_diacritics 2'"
+                ")"
+            )
+        )
+        conn.commit()
     logger.info("Database tables initialized")
 
 

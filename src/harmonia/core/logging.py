@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import logging
 import sys
-from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def setup_logging(level: str = "INFO", log_file: Path | None = None) -> None:

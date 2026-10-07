@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from harmonia.domain.values.audio_format import AudioFormat
+if TYPE_CHECKING:
+    from harmonia.domain.values.audio_format import AudioFormat
 
 
 @dataclass
@@ -38,6 +40,7 @@ class TrackFile:
     duration_seconds: float | None = None
     is_lossless: bool = False
     quality_score: int | None = None  # 0-100, computed by quality scorer
+    file_mtime: float | None = None  # Modification timestamp (seconds since epoch)
     added_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     verified_at: datetime | None = None
 

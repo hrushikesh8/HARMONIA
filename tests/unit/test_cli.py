@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 from typer.testing import CliRunner
@@ -10,6 +10,9 @@ from typer.testing import CliRunner
 from harmonia import __version__
 from harmonia.cli.app import app
 from harmonia.infrastructure.audio.mutagen_reader import ExtractedMetadata
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 runner = CliRunner()
 

@@ -76,6 +76,7 @@ class AlbumModel(Base):
     total_discs: Mapped[int | None] = mapped_column(Integer)
     mbid: Mapped[str | None] = mapped_column(String(36), unique=True)
     art_path: Mapped[str | None] = mapped_column(String(1000))
+    art_hash: Mapped[str | None] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
@@ -166,6 +167,7 @@ class TrackFileModel(Base):
     duration_seconds: Mapped[float | None] = mapped_column(Float)
     is_lossless: Mapped[bool] = mapped_column(Boolean, default=False)
     quality_score: Mapped[int | None] = mapped_column(Integer)
+    file_mtime: Mapped[float | None] = mapped_column(Float)
     added_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
@@ -205,3 +207,59 @@ class TagModel(Base):
         Index("ix_tags_track_id", "track_id"),
         Index("ix_tags_name_value", "name", "value"),
     )
+
+
+# ── MetadataField ─────────────────────────────────────────────────────────────
+
+
+class MetadataFieldModel(Base):
+    __tablename__ = "metadata_fields"
+
+    id: Mapped[str] = mapped_column(Uuid(), primary_key=True, default=uuid4)
+    entity_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    entity_id: Mapped[str] = mapped_column(Uuid(), nullable=False)
+    field_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    raw_value: Mapped[str] = mapped_column(Text, nullable=False)
+    normalized_value: Mapped[str] = mapped_column(Text, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    priority: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+    __table_args__ = (
+        Index("ix_metadata_fields_entity", "entity_type", "entity_id"),
+        Index("ix_metadata_fields_entity_field", "entity_type", "entity_id", "field_name"),
+        Index("ix_metadata_fields_provider", "provider"),
+    )
+
+
+# ── DuplicateCandidate ────────────────────────────────────────────────────────
+
+
+class DuplicateCandidateModel(Base):
+    __tablename__ = "duplicate_candidates"
+
+    id: Mapped[str] = mapped_column(Uuid(), primary_key=True, default=uuid4)
+    track_id_a: Mapped[str] = mapped_column(
+        Uuid(), ForeignKey("tracks.id", ondelete="CASCADE"), nullable=False
+    )
+    track_id_b: Mapped[str] = mapped_column(
+        Uuid(), ForeignKey("tracks.id", ondelete="CASCADE"), nullable=False
+    )
+    confidence: Mapped[str] = mapped_column(String(20), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    resolved: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    resolution: Mapped[str | None] = mapped_column(String(20))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index("ix_duplicate_candidates_track_a", "track_id_a"),
+        Index("ix_duplicate_candidates_track_b", "track_id_b"),
+        Index("ix_duplicate_candidates_unresolved", "resolved"),
+    )
+

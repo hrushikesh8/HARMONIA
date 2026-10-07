@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import patch
-from uuid import UUID
-
-from sqlalchemy.orm import Session
 
 from harmonia.application.import_service import ImportService
 from harmonia.application.library_service import LibraryService
 from harmonia.core.events import ImportCompleted, TrackImported, event_bus
 from harmonia.infrastructure.audio.mutagen_reader import ExtractedMetadata
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 
 def test_import_and_query_pipeline(session: Session, temp_dir: Path) -> None:

@@ -4,8 +4,21 @@ These are Python Protocols — structural subtyping contracts that
 infrastructure implementations must satisfy.  No ABCs, no inheritance.
 """
 
-from harmonia.domain.ports.track_repository import TrackRepository
 from harmonia.domain.ports.album_repository import AlbumRepository
 from harmonia.domain.ports.artist_repository import ArtistRepository
+from harmonia.domain.ports.duplicate_candidate_repository import DuplicateCandidateRepository
+from harmonia.domain.ports.metadata_field_repository import MetadataFieldRepository
+from harmonia.domain.ports.metadata_provider import MetadataProvider
+from harmonia.domain.ports.search_repository import SearchRepository
+from harmonia.domain.ports.track_repository import TrackRepository
 
-__all__ = ["TrackRepository", "AlbumRepository", "ArtistRepository"]
+__all__ = [
+    "AlbumRepository",
+    "ArtistRepository",
+    "DuplicateCandidateRepository",
+    "MetadataFieldRepository",
+    "MetadataProvider",
+    "SearchRepository",
+    "TrackRepository",
+]
+

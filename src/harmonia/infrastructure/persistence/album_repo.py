@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-from uuid import UUID
+from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
 
 from harmonia.domain.entities.album import Album
 from harmonia.infrastructure.persistence.models import AlbumModel
+
+if TYPE_CHECKING:
+    from uuid import UUID
+
+    from sqlalchemy.orm import Session
 
 
 class SqliteAlbumRepository:
@@ -69,6 +73,7 @@ class SqliteAlbumRepository:
         model.total_discs = album.total_discs
         model.mbid = album.mbid
         model.art_path = album.art_path
+        model.art_hash = album.art_hash
         model.updated_at = album.updated_at
         self._session.flush()
 
@@ -96,6 +101,7 @@ def _album_to_model(album: Album) -> AlbumModel:
         total_discs=album.total_discs,
         mbid=album.mbid,
         art_path=album.art_path,
+        art_hash=album.art_hash,
         created_at=album.created_at,
         updated_at=album.updated_at,
     )
@@ -111,6 +117,8 @@ def _model_to_album(model: AlbumModel) -> Album:
         total_discs=model.total_discs,
         mbid=model.mbid,
         art_path=model.art_path,
+        art_hash=model.art_hash,
         created_at=model.created_at,
         updated_at=model.updated_at,
     )
+

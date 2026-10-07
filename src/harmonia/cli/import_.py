@@ -48,6 +48,18 @@ def run_import(
         bool,
         typer.Option("--hash/--no-hash", help="Compute SHA-256 hashes for imported files."),
     ] = True,
+    fetch_metadata: Annotated[
+        bool,
+        typer.Option("--fetch-metadata", help="Fetch online metadata from MusicBrainz (opt-in, default OFF)."),
+    ] = False,
+    rescan: Annotated[
+        bool,
+        typer.Option("--rescan", help="Force re-checking of all files, bypassing fast mtime/size skip."),
+    ] = False,
+    artwork: Annotated[
+        bool,
+        typer.Option("--artwork/--no-artwork", help="Extract embedded cover art during import."),
+    ] = True,
 ) -> None:
     """Scan a directory and import music files into the Harmonia library."""
     config = HarmoniaConfig.load(config_path)
@@ -66,6 +78,13 @@ def run_import(
 
     console.print(f"[bold cyan]Scanning directory:[/bold cyan] {directory}")
     console.print(f"[dim]Supported formats: {', '.join(effective_formats)}[/dim]")
+    if fetch_metadata:
+        console.print("[dim]MusicBrainz metadata lookup: [green]ENABLED[/green][/dim]")
+
+    mb_provider = None
+    if fetch_metadata:
+        from harmonia.infrastructure.metadata.musicbrainz_provider import MusicBrainzProvider
+        mb_provider = MusicBrainzProvider()
 
     try:
         with session_factory() as session:
@@ -74,10 +93,13 @@ def run_import(
                 supported_formats=effective_formats,
                 follow_symlinks=follow_symlinks,
                 compute_hashes=compute_hashes,
+                extract_artwork=artwork,
+                fetch_metadata=fetch_metadata,
+                metadata_provider=mb_provider,
             )
 
             with console.status("[bold green]Importing tracks...[/bold green]"):
-                result = importer.import_directory(directory)
+                result = importer.import_directory(directory, rescan=rescan)
 
         # Display results table
         table = Table(title="Import Summary", show_header=True, header_style="bold magenta")

@@ -5,7 +5,7 @@ from __future__ import annotations
 import enum
 
 
-class AudioFormat(str, enum.Enum):
+class AudioFormat(enum.StrEnum):
     """Recognized audio file formats.
 
     Determined from file extension during scanning. The codec within

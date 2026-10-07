@@ -23,10 +23,12 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 # Set db url dynamically from Harmonia config if not explicitly overridden
-harmonia_cfg = HarmoniaConfig.load()
-db_path = harmonia_cfg.database.path
-harmonia_cfg.ensure_directories()
-config.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+if not config.get_main_option("sqlalchemy.url") or config.get_main_option("sqlalchemy.url") == "sqlite:///data/harmonia.db":
+    harmonia_cfg = HarmoniaConfig.load()
+    db_path = harmonia_cfg.database.path
+    harmonia_cfg.ensure_directories()
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
+
 
 
 def run_migrations_offline() -> None:

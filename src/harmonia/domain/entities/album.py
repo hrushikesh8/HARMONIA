@@ -24,6 +24,7 @@ class Album:
     total_discs: int | None = None
     mbid: str | None = None  # MusicBrainz release/release-group ID
     art_path: str | None = None  # Relative path to artwork file
+    art_hash: str | None = None  # SHA-256 content hash of artwork
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 

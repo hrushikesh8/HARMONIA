@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-from uuid import UUID
+from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
 
 from harmonia.domain.entities.artist import Artist
 from harmonia.infrastructure.persistence.models import ArtistModel
+
+if TYPE_CHECKING:
+    from uuid import UUID
+
+    from sqlalchemy.orm import Session
 
 
 class SqliteArtistRepository:

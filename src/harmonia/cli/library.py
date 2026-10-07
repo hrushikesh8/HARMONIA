@@ -182,7 +182,7 @@ def track_cmd(
             uid = UUID(track_id)
         except ValueError:
             console.print(f"[bold red]Invalid track UUID:[/bold red] {track_id}")
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from None
 
         track = svc.get_track(uid)
         if not track:
@@ -250,7 +250,7 @@ def album_cmd(
             uid = UUID(album_id)
         except ValueError:
             console.print(f"[bold red]Invalid album UUID:[/bold red] {album_id}")
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from None
 
         album = svc.get_album(uid)
         if not album:
@@ -293,7 +293,7 @@ def artist_cmd(
             uid = UUID(artist_id)
         except ValueError:
             console.print(f"[bold red]Invalid artist UUID:[/bold red] {artist_id}")
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from None
 
         artist = svc.get_artist(uid)
         if not artist:

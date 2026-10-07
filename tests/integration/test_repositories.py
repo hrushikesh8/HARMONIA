@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy.orm import Session
+from typing import TYPE_CHECKING
 
 from harmonia.core.types import TagSource
 from harmonia.domain.entities.album import Album
@@ -14,6 +14,9 @@ from harmonia.domain.values.audio_format import AudioFormat
 from harmonia.infrastructure.persistence.album_repo import SqliteAlbumRepository
 from harmonia.infrastructure.persistence.artist_repo import SqliteArtistRepository
 from harmonia.infrastructure.persistence.track_repo import SqliteTrackRepository
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 
 def test_artist_repository_crud(session: Session) -> None:

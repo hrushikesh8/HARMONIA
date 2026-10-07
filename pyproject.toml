@@ -54,7 +54,8 @@ select = [
     "RUF",  # ruff-specific rules
 ]
 ignore = [
-    "E501",  # line too long — handled by formatter
+    "E501",   # line too long — handled by formatter
+    "TC003",  # stdlib imports needed at runtime for Pydantic/Typer
 ]
 
 [tool.ruff.lint.isort]

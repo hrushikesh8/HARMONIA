@@ -105,3 +105,68 @@ def test_audio_format_lossless() -> None:
     assert AudioFormat.MP3.is_lossless_format is False
     assert AudioFormat.AAC.is_lossless_format is False
     assert AudioFormat.OGG.is_lossless_format is False
+
+
+def test_album_art_hash() -> None:
+    album = Album(title="Kind of Blue", art_path="data/artwork/ab/abcdef.jpg", art_hash="abcdef123456")
+    assert album.art_hash == "abcdef123456"
+    assert album.art_path == "data/artwork/ab/abcdef.jpg"
+
+
+def test_track_file_file_mtime() -> None:
+    tf = TrackFile(
+        track_id=uuid4(),
+        file_path="/music/track.mp3",
+        file_size=1024,
+        format=AudioFormat.MP3,
+        file_mtime=1700000000.5,
+    )
+    assert tf.file_mtime == 1700000000.5
+
+
+def test_metadata_field_record() -> None:
+    from harmonia.domain.entities.metadata_field import MetadataFieldRecord
+
+    entity_id = uuid4()
+    record = MetadataFieldRecord(
+        entity_type="track",
+        entity_id=entity_id,
+        field_name="title",
+        provider="file",
+        raw_value="  Song Title  ",
+        normalized_value="Song Title",
+        priority=30,
+    )
+    assert record.id is not None
+    assert record.entity_id == entity_id
+    assert record.entity_type == "track"
+    assert record.field_name == "title"
+    assert record.provider == "file"
+    assert record.raw_value == "  Song Title  "
+    assert record.normalized_value == "Song Title"
+    assert record.is_active is False
+    assert record.priority == 30
+
+
+def test_duplicate_candidate() -> None:
+    from harmonia.domain.entities.duplicate_candidate import DuplicateCandidate
+
+    id_a = uuid4()
+    id_b = uuid4()
+    candidate = DuplicateCandidate(
+        track_id_a=id_a,
+        track_id_b=id_b,
+        confidence="probable",
+        reason="Same artist, album, title, duration within 2s",
+    )
+    assert candidate.id is not None
+    assert candidate.track_id_a == id_a
+    assert candidate.track_id_b == id_b
+    assert candidate.resolved is False
+    assert candidate.resolution is None
+
+    candidate.mark_resolved("merged")
+    assert candidate.resolved is True
+    assert candidate.resolution == "merged"
+    assert candidate.resolved_at is not None
+

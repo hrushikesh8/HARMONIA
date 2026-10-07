@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Protocol
-from uuid import UUID
+from typing import TYPE_CHECKING, Protocol
 
-from harmonia.domain.entities.track import Track
-from harmonia.domain.entities.track_file import TrackFile
-from harmonia.domain.entities.tag import Tag
+if TYPE_CHECKING:
+    from uuid import UUID
+
+    from harmonia.domain.entities.tag import Tag
+    from harmonia.domain.entities.track import Track
+    from harmonia.domain.entities.track_file import TrackFile
 
 
 class TrackRepository(Protocol):
@@ -65,6 +67,10 @@ class TrackRepository(Protocol):
 
     def get_file_by_hash(self, file_hash: str) -> TrackFile | None:
         """Look up a track file by its SHA-256 hash."""
+        ...
+
+    def update_file(self, track_file: TrackFile) -> None:
+        """Update properties of an existing track file."""
         ...
 
     # ── Tags ──────────────────────────────────────────────────────────────

@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from uuid import UUID
+from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
 
 from harmonia.core.types import TagSource
 from harmonia.domain.entities.tag import Tag
@@ -13,6 +12,11 @@ from harmonia.domain.entities.track import Track
 from harmonia.domain.entities.track_file import TrackFile
 from harmonia.domain.values.audio_format import AudioFormat
 from harmonia.infrastructure.persistence.models import TagModel, TrackFileModel, TrackModel
+
+if TYPE_CHECKING:
+    from uuid import UUID
+
+    from sqlalchemy.orm import Session
 
 
 class SqliteTrackRepository:
@@ -118,6 +122,26 @@ class SqliteTrackRepository:
         model = self._session.scalar(stmt)
         return _model_to_track_file(model) if model else None
 
+    def update_file(self, track_file: TrackFile) -> None:
+        model = self._session.get(TrackFileModel, track_file.id)
+        if model is None:
+            return
+        model.file_path = track_file.file_path
+        model.file_hash = track_file.file_hash
+        model.file_size = track_file.file_size
+        model.format = track_file.format.value
+        model.codec = track_file.codec
+        model.bitrate = track_file.bitrate
+        model.sample_rate = track_file.sample_rate
+        model.bit_depth = track_file.bit_depth
+        model.channels = track_file.channels
+        model.duration_seconds = track_file.duration_seconds
+        model.is_lossless = track_file.is_lossless
+        model.quality_score = track_file.quality_score
+        model.file_mtime = track_file.file_mtime
+        model.verified_at = track_file.verified_at
+        self._session.flush()
+
     # ── Tags ──────────────────────────────────────────────────────────────
 
     def add_tag(self, tag: Tag) -> None:
@@ -201,6 +225,7 @@ def _track_file_to_model(tf: TrackFile) -> TrackFileModel:
         duration_seconds=tf.duration_seconds,
         is_lossless=tf.is_lossless,
         quality_score=tf.quality_score,
+        file_mtime=tf.file_mtime,
         added_at=tf.added_at,
         verified_at=tf.verified_at,
     )
@@ -222,6 +247,7 @@ def _model_to_track_file(model: TrackFileModel) -> TrackFile:
         duration_seconds=model.duration_seconds,
         is_lossless=model.is_lossless,
         quality_score=model.quality_score,
+        file_mtime=model.file_mtime,
         added_at=model.added_at,
         verified_at=model.verified_at,
     )
