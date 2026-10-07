@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from harmonia import __version__
 from harmonia.api.routers import (
@@ -113,5 +115,15 @@ def create_app(
     app.include_router(artwork_router, prefix="/api/v1")
     app.include_router(duplicates_router, prefix="/api/v1")
     app.include_router(stream_router, prefix="/api/v1")
+
+    # Static assets and UI serving
+    static_dir = Path(__file__).parent / "static"
+    if static_dir.exists():
+        app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+        @app.get("/", include_in_schema=False)
+        @app.get("/ui", include_in_schema=False)
+        async def serve_ui() -> FileResponse:
+            return FileResponse(static_dir / "index.html", media_type="text/html")
 
     return app

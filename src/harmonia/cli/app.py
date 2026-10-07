@@ -20,7 +20,7 @@ from harmonia.cli.library import (
     track_cmd,
 )
 from harmonia.cli.search import reindex_cmd, search_cmd
-from harmonia.cli.serve import serve_cmd
+from harmonia.cli.serve import serve_cmd, ui_cmd
 
 console = Console()
 
@@ -64,6 +64,7 @@ app.command("album", help="View album details and track list.")(album_cmd)
 app.command("artist", help="View artist details and albums.")(artist_cmd)
 app.command("analyze", help="Measure objective audio signal properties (ebur128, true peak).")(analyze_cmd)
 app.command("serve", help="Launch the local HTTP REST API server.")(serve_cmd)
+app.command("ui", help="Launch the Harmonia desktop web UI.")(ui_cmd)
 app.command("init-db", help="Initialize the SQLite database schema.")(init_db_cmd)
 
 

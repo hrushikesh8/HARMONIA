@@ -46,3 +46,7 @@ coverage.xml
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Scratch / temp
+scratch/
+

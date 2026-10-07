@@ -21,6 +21,7 @@ from harmonia.application.dto import (
 from harmonia.core.logging import get_logger
 from harmonia.infrastructure.persistence.album_repo import SqliteAlbumRepository
 from harmonia.infrastructure.persistence.artist_repo import SqliteArtistRepository
+from harmonia.infrastructure.persistence.audio_analysis_repo import SqliteAudioAnalysisRepository
 from harmonia.infrastructure.persistence.track_repo import SqliteTrackRepository
 
 if TYPE_CHECKING:
@@ -39,6 +40,7 @@ class LibraryService:
         self._track_repo = SqliteTrackRepository(session)
         self._album_repo = SqliteAlbumRepository(session)
         self._artist_repo = SqliteArtistRepository(session)
+        self._analysis_repo = SqliteAudioAnalysisRepository(session)
 
     def get_summary(self) -> LibrarySummary:
         """Get high-level library statistics."""
@@ -93,9 +95,15 @@ class LibraryService:
             artist_name = artist.name if artist else None
 
         album_title = None
+        art_url = None
         if track.album_id:
             album = self._album_repo.get_by_id(track.album_id)
-            album_title = album.title if album else None
+            if album:
+                album_title = album.title
+                if album.art_hash:
+                    art_url = f"/api/v1/artwork/{album.art_hash}"
+                elif album.art_path:
+                    art_url = f"/api/v1/artwork/{album.art_path}"
 
         # Get files.
         files = self._track_repo.get_files(track.id)
@@ -127,6 +135,15 @@ class LibraryService:
             for t in tags
         ]
 
+        file_id = files[0].id if files else None
+        format_name = files[0].format.value if files else None
+        is_lossless = files[0].is_lossless if files else False
+        analysis_status = None
+        if file_id:
+            an = self._analysis_repo.get_by_track_file_id(file_id)
+            if an:
+                analysis_status = an.status.value
+
         return TrackDetail(
             id=track.id,
             title=track.title,
@@ -134,6 +151,11 @@ class LibraryService:
             album_title=album_title,
             artist_id=track.artist_id,
             album_id=track.album_id,
+            file_id=file_id,
+            art_url=art_url,
+            format=format_name,
+            is_lossless=is_lossless,
+            analysis_status=analysis_status,
             track_number=track.track_number,
             disc_number=track.disc_number,
             duration_seconds=track.duration_seconds,
@@ -260,9 +282,25 @@ class LibraryService:
             artist_name = artist.name if artist else None
 
         album_title = None
+        art_url = None
         if t.album_id:
             album = self._album_repo.get_by_id(t.album_id)
-            album_title = album.title if album else None
+            if album:
+                album_title = album.title
+                if album.art_hash:
+                    art_url = f"/api/v1/artwork/{album.art_hash}"
+                elif album.art_path:
+                    art_url = f"/api/v1/artwork/{album.art_path}"
+
+        files = self._track_repo.get_files(t.id)
+        file_id = files[0].id if files else None
+        format_name = files[0].format.value if files else None
+        is_lossless = files[0].is_lossless if files else False
+        analysis_status = None
+        if file_id:
+            an = self._analysis_repo.get_by_track_file_id(file_id)
+            if an:
+                analysis_status = an.status.value
 
         return TrackSummary(
             id=t.id,
@@ -272,4 +310,10 @@ class LibraryService:
             duration_display=t.duration_display,
             genre=t.genre,
             year=t.year,
+            album_id=t.album_id,
+            file_id=file_id,
+            art_url=art_url,
+            format=format_name,
+            is_lossless=is_lossless,
+            analysis_status=analysis_status,
         )

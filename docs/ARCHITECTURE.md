@@ -75,12 +75,13 @@
 ### 4. Presentation Layer (`harmonia.cli` & `harmonia.api`)
 - **CLI (`harmonia.cli`)**:
   - Built with **Typer** and **Rich**.
-  - Subcommands: `import`, `search`, `reindex`, `info`, `list`, `track`, `album`, `artist`, `duplicates`, `analyze`, `serve`, `init-db`.
-- **Local HTTP API (`harmonia.api`)**:
+  - Subcommands: `import`, `search`, `reindex`, `info`, `list`, `track`, `album`, `artist`, `duplicates`, `analyze`, `serve`, `ui`, `init-db`.
+- **Local HTTP API & Web UI (`harmonia.api`)**:
   - Built with **FastAPI** bound exclusively to loopback (`127.0.0.1:8000`).
   - Strict host path concealment: physical paths (`C:\...`, `/home/...`) are completely redacted from all API response models. Clients interact solely via stable UUID identifiers (`track_id`, `file_id`, `album_id`, `artist_id`).
   - Standard REST envelopes with pagination (`page`, `page_size`, `total`, `total_pages`).
   - Audio streaming via `GET /api/v1/stream/{file_id}` supporting byte ranges (RFC 7233).
+  - **Embedded Desktop Web UI**: Served directly from FastAPI at `/` and `/ui`, providing a responsive dark audiophile interface for library management, real-time track inspection, asynchronous Audio Intelligence orchestration, and HTML5 audio streaming.
 
 ---
 

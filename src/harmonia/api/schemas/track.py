@@ -46,6 +46,12 @@ class TrackResponse(BaseModel):
     duration_display: str = "-"
     genre: str | None = None
     year: int | None = None
+    album_id: UUID | None = None
+    file_id: UUID | None = None
+    art_url: str | None = None
+    format: str | None = None
+    is_lossless: bool = False
+    analysis_status: str | None = None
 
 
 class TrackDetailResponse(TrackResponse):

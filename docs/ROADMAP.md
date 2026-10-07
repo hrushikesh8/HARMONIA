@@ -40,6 +40,18 @@ The Harmonia ecosystem is built across 8 sequential phases:
 
 ---
 
+### Visual Productization: Real Music Library & Audio Intelligence UI (Status: COMPLETE)
+- [x] Embedded desktop web UI served directly at `/` and `/ui`.
+- [x] Real music library table with sorting, format badges, and live analysis status indicators.
+- [x] Track details inspector displaying factual container metadata and content-addressed artwork.
+- [x] Audio Intelligence visualization panel with live ITU-R BS.1770-4 meters (integrated LUFS, True Peak, LRA, Crest, digital clipping).
+- [x] Asynchronous analysis triggering with real state transitions (`NOT ANALYZED` → `QUEUED` → `ANALYZING...` → `✓ COMPLETED`).
+- [x] Playback dock player wired to native audio elements and HTTP 206 Range stream endpoints.
+- [x] Full-text search and format filter tabs (`All`, `Lossless`, `Analyzed`).
+- [x] CLI `harmonia serve --open` and `harmonia ui` commands for instant desktop launching.
+
+---
+
 ### Phase 4: Playback & Events
 - Playback engine port and mpv integration adapter.
 - Queue management and transport controls.

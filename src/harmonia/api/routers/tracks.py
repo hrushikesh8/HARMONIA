@@ -63,6 +63,12 @@ def list_tracks(
             duration_display=t.duration_display,
             genre=t.genre,
             year=t.year,
+            album_id=t.album_id,
+            file_id=t.file_id,
+            art_url=t.art_url,
+            format=t.format,
+            is_lossless=t.is_lossless,
+            analysis_status=t.analysis_status,
         )
         for t in items_dto
     ]
@@ -121,8 +127,13 @@ def get_track(
         duration_display=t.duration_display,
         genre=t.genre,
         year=t.year,
-        artist_id=t.artist_id,
         album_id=t.album_id,
+        file_id=t.file_id,
+        art_url=t.art_url,
+        format=t.format,
+        is_lossless=t.is_lossless,
+        analysis_status=t.analysis_status,
+        artist_id=t.artist_id,
         track_number=t.track_number,
         disc_number=t.disc_number,
         duration_seconds=t.duration_seconds,
