@@ -28,7 +28,10 @@ data class SearchUiState(
     val matchingArtists: List<Artist> = emptyList(),
     val matchingPlaylists: List<Playlist> = emptyList(),
     val isSearching: Boolean = false
-)
+) {
+    val isEmpty: Boolean get() = matchingTracks.isEmpty() && matchingAlbums.isEmpty() && matchingArtists.isEmpty() && matchingPlaylists.isEmpty()
+    val totalCount: Int get() = matchingTracks.size + matchingAlbums.size + matchingArtists.size + matchingPlaylists.size
+}
 
 @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 class SearchViewModel(
@@ -39,17 +42,18 @@ class SearchViewModel(
     val query: StateFlow<String> = _query.asStateFlow()
 
     val uiState: StateFlow<SearchUiState> = _query
-        .debounce(300)
+        .debounce(250)
         .distinctUntilChanged()
         .flatMapLatest { text ->
-            if (text.isBlank()) {
-                flowOf(SearchUiState())
+            val clean = text.trim()
+            if (clean.isBlank()) {
+                flowOf(SearchUiState(query = text, isSearching = false))
             } else {
                 combine(
-                    searchRepository.searchTracks(text),
-                    searchRepository.searchAlbums(text),
-                    searchRepository.searchArtists(text),
-                    searchRepository.searchPlaylists(text)
+                    searchRepository.searchTracks(clean),
+                    searchRepository.searchAlbums(clean),
+                    searchRepository.searchArtists(clean),
+                    searchRepository.searchPlaylists(clean)
                 ) { tracks, albums, artists, playlists ->
                     SearchUiState(
                         query = text,
@@ -69,5 +73,9 @@ class SearchViewModel(
 
     fun onQueryChanged(newQuery: String) {
         _query.value = newQuery
+    }
+
+    fun clearQuery() {
+        _query.value = ""
     }
 }

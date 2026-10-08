@@ -35,6 +35,8 @@ interface TrackDao {
     @Query("""
         SELECT * FROM mobile_tracks 
         WHERE title LIKE '%' || :query || '%'
+           OR artist_id IN (SELECT id FROM mobile_artists WHERE name LIKE '%' || :query || '%')
+           OR album_id IN (SELECT id FROM mobile_albums WHERE title LIKE '%' || :query || '%')
         ORDER BY title COLLATE NOCASE ASC
     """)
     fun searchTracks(query: String): Flow<List<TrackWithDetails>>

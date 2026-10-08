@@ -1,6 +1,6 @@
 package org.harmonia.player.presentation.components
 
-import android.graphics.BitmapFactory
+import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -9,7 +9,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -19,19 +23,23 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.harmonia.player.data.local.ArtworkProvider
 import org.harmonia.player.design.theme.AcousticCharcoal
 import org.harmonia.player.design.theme.AcousticTeal
 import org.harmonia.player.design.theme.HarmoniaIcons
-import org.harmonia.player.design.theme.MutedSlate
 import org.harmonia.player.design.theme.StudioSlate
 
 /**
  * Reusable artwork presentation component.
  * Adheres strictly to Harmonia Core SHA-256 artwork hash identity.
- * Clearly separates artwork identity from on-disk byte availability.
- * When local artwork file is present, renders the bitmap.
- * Otherwise, renders the bespoke Harmonia geometric gradient placeholder.
+ * 
+ * Behavior:
+ * 1. Checks in-memory cache synchronously (instant render on cache hit).
+ * 2. On cache miss, loads bitmap asynchronously on Dispatchers.IO.
+ * 3. Falls back gracefully to Harmonia geometric gradient placeholder on missing or corrupt artwork.
+ * 4. Never exposes filesystem paths or raw files to Composables.
  */
 @Composable
 fun HarmoniaArtwork(
@@ -44,15 +52,18 @@ fun HarmoniaArtwork(
 ) {
     val context = LocalContext.current
     val artworkProvider = remember(context) { ArtworkProvider(context) }
-    val artworkFile = remember(artworkHash) { artworkProvider.getArtworkFile(artworkHash) }
 
-    val bitmap = remember(artworkFile) {
-        artworkFile?.let { file ->
-            try {
-                BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap()
-            } catch (e: Exception) {
-                null
+    // Instant check from LRU memory cache
+    var bitmap by remember(artworkHash) {
+        mutableStateOf<Bitmap?>(artworkProvider.getCachedBitmap(artworkHash))
+    }
+
+    LaunchedEffect(artworkHash) {
+        if (bitmap == null && !artworkHash.isNullOrBlank()) {
+            val loaded = withContext(Dispatchers.IO) {
+                artworkProvider.loadBitmap(artworkHash)
             }
+            bitmap = loaded
         }
     }
 
@@ -62,14 +73,15 @@ fun HarmoniaArtwork(
             .clip(RoundedCornerShape(cornerRadius)),
         contentAlignment = Alignment.Center
     ) {
-        if (bitmap != null) {
+        val currentBitmap = bitmap
+        if (currentBitmap != null && !currentBitmap.isRecycled) {
             Image(
-                bitmap = bitmap,
+                bitmap = currentBitmap.asImageBitmap(),
                 contentDescription = contentDescription,
                 modifier = Modifier.fillMaxSize()
             )
         } else {
-            // Elegant geometric acoustic gradient fallback
+            // Harmonia geometric acoustic gradient fallback
             Box(
                 modifier = Modifier
                     .fillMaxSize()

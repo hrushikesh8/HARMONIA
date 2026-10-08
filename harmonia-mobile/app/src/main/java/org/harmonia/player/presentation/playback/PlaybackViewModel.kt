@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.harmonia.player.core.di.ServiceLocator
@@ -67,5 +68,15 @@ class PlaybackViewModel(
 
     fun playTrackList(tracks: List<Track>, startIndex: Int) {
         playbackPort.setQueue(tracks, startIndex)
+    }
+
+    fun shuffleAll() {
+        viewModelScope.launch {
+            val tracks = trackRepository.observeAllTracks().firstOrNull()
+            if (!tracks.isNullOrEmpty()) {
+                playbackPort.setQueue(tracks.shuffled(), 0)
+                playbackPort.play()
+            }
+        }
     }
 }

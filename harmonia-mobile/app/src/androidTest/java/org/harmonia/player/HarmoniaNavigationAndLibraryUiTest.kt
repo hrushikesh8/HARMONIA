@@ -8,14 +8,23 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.coroutines.runBlocking
+import org.harmonia.player.data.local.HarmoniaDatabase
+import org.harmonia.player.data.local.entity.PlaybackStateEntity
+import org.harmonia.player.data.local.entity.TrackEntity
 import org.harmonia.player.design.theme.HarmoniaTheme
 import org.harmonia.player.presentation.MainAppContainer
 import org.harmonia.player.presentation.home.HomeScreen
 import org.harmonia.player.presentation.library.LibraryScreen
 import org.harmonia.player.presentation.playlists.PlaylistsScreen
 import org.harmonia.player.presentation.search.SearchScreen
+import org.junit.After
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -25,6 +34,22 @@ class HarmoniaNavigationAndLibraryUiTest {
 
     @get:Rule
     val composeTestRule = createComposeRule()
+
+    @Before
+    fun setup() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = HarmoniaDatabase.getInstance(context)
+        db.trackDao().deleteAllTracks()
+        db.playbackStateDao().clearQueue()
+    }
+
+    @After
+    fun tearDown() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = HarmoniaDatabase.getInstance(context)
+        db.trackDao().deleteAllTracks()
+        db.playbackStateDao().clearQueue()
+    }
 
     @Test
     fun main_navigation_displays_five_destinations_and_switches_screens() {
@@ -172,5 +197,106 @@ class HarmoniaNavigationAndLibraryUiTest {
         composeTestRule.onNodeWithText("LOCAL CATALOG INDEX").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Search input field").assertIsDisplayed()
         composeTestRule.onNodeWithText("Type to search local catalog").assertIsDisplayed()
+    }
+
+    @Test
+    fun search_screen_typing_query_shows_clear_button_and_clearing_works() {
+        composeTestRule.setContent {
+            HarmoniaTheme {
+                SearchScreen()
+            }
+        }
+
+        composeTestRule.waitUntil(5000) {
+            composeTestRule.onAllNodesWithText("SEARCH").fetchSemanticsNodes().isNotEmpty()
+        }
+
+        val searchField = composeTestRule.onNodeWithContentDescription("Search input field")
+        searchField.assertIsDisplayed()
+        searchField.performTextInput("Radiohead")
+
+        // Clear button should become visible
+        composeTestRule.onNodeWithContentDescription("Clear search query").assertIsDisplayed()
+
+        // Clicking clear button resets the search field
+        composeTestRule.onNodeWithContentDescription("Clear search query").performClick()
+        composeTestRule.onNodeWithText("Type to search local catalog").assertIsDisplayed()
+    }
+
+    @Test
+    fun search_screen_no_results_displays_helpful_empty_state() {
+        composeTestRule.setContent {
+            HarmoniaTheme {
+                SearchScreen()
+            }
+        }
+
+        composeTestRule.waitUntil(5000) {
+            composeTestRule.onAllNodesWithText("SEARCH").fetchSemanticsNodes().isNotEmpty()
+        }
+
+        val searchField = composeTestRule.onNodeWithContentDescription("Search input field")
+        searchField.performTextInput("NonExistentItemXYZ")
+
+        // Wait for debounce and state update
+        composeTestRule.waitUntil(5000) {
+            composeTestRule.onAllNodesWithText("No matches found for \"NonExistentItemXYZ\"").fetchSemanticsNodes().isNotEmpty()
+        }
+
+        composeTestRule.onNodeWithText("No matches found for \"NonExistentItemXYZ\"").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Check for typos or try searching by title, artist, or album name").assertIsDisplayed()
+    }
+
+    @Test
+    fun home_screen_renders_quick_play_controls_and_shortcuts() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val db = HarmoniaDatabase.getInstance(context)
+        db.trackDao().upsertTrack(
+            TrackEntity(
+                id = "home-trk-seed",
+                title = "Home Quick Track",
+                durationSec = 180.0,
+                createdAt = 1000L,
+                updatedAt = 1000L
+            )
+        )
+        db.playbackStateDao().upsertPlaybackState(
+            PlaybackStateEntity(
+                singletonId = 1,
+                currentTrackId = "home-trk-seed",
+                currentPositionMs = 12000L,
+                isPlaying = false,
+                updatedAt = 1000L
+            )
+        )
+
+        var resumeClicked = false
+        var shuffleClicked = false
+
+        composeTestRule.setContent {
+            HarmoniaTheme {
+                HomeScreen(
+                    onResumeClick = { resumeClicked = true },
+                    onShuffleAllClick = { shuffleClicked = true }
+                )
+            }
+        }
+
+        composeTestRule.waitUntil(5000) {
+            composeTestRule.onAllNodesWithText("HARMONIA").fetchSemanticsNodes().isNotEmpty()
+        }
+
+        composeTestRule.waitUntil(5000) {
+            composeTestRule.onAllNodesWithText("Resume").fetchSemanticsNodes().isNotEmpty()
+        }
+
+        composeTestRule.onNodeWithText("Shuffle All").assertIsDisplayed()
+
+        // Verify clicking buttons calls callbacks
+        composeTestRule.onAllNodesWithText("Resume").onFirst().performClick()
+        assertTrue(resumeClicked)
+
+        composeTestRule.onNodeWithText("Shuffle All").performClick()
+        assertTrue(shuffleClicked)
     }
 }

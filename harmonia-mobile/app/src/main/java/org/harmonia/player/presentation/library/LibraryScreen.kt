@@ -214,17 +214,10 @@ fun LibraryScreen(
         Spacer(modifier = Modifier.height(12.dp))
 
         // Tabs: Tracks, Albums, Artists
-        TabRow(
+        androidx.compose.material3.SecondaryTabRow(
             selectedTabIndex = uiState.selectedTab.ordinal,
             containerColor = ObsidianSpace,
             contentColor = PureSignalWhite,
-            indicator = { tabPositions ->
-                TabRowDefaults.SecondaryIndicator(
-                    modifier = Modifier.tabIndicatorOffset(tabPositions[uiState.selectedTab.ordinal]),
-                    color = AcousticTeal,
-                    height = 3.dp
-                )
-            },
             divider = {
                 Box(
                     modifier = Modifier

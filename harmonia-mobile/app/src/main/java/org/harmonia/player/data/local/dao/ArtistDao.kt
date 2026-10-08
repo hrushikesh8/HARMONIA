@@ -15,7 +15,12 @@ interface ArtistDao {
     @Query("SELECT * FROM mobile_artists WHERE id = :id LIMIT 1")
     suspend fun getArtistById(id: String): ArtistEntity?
 
-    @Query("SELECT * FROM mobile_artists WHERE name LIKE '%' || :query || '%' ORDER BY sort_name COLLATE NOCASE ASC")
+    @Query("""
+        SELECT * FROM mobile_artists 
+        WHERE name LIKE '%' || :query || '%' 
+           OR (sort_name IS NOT NULL AND sort_name LIKE '%' || :query || '%')
+        ORDER BY sort_name COLLATE NOCASE ASC
+    """)
     fun searchArtists(query: String): Flow<List<ArtistEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

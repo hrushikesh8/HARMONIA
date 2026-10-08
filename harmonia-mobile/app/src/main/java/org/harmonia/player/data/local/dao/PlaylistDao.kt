@@ -18,7 +18,12 @@ interface PlaylistDao {
     @Query("SELECT * FROM mobile_playlists WHERE id = :id LIMIT 1")
     suspend fun getPlaylistById(id: String): PlaylistEntity?
 
-    @Query("SELECT * FROM mobile_playlists WHERE name LIKE '%' || :query || '%' ORDER BY name COLLATE NOCASE ASC")
+    @Query("""
+        SELECT * FROM mobile_playlists 
+        WHERE name LIKE '%' || :query || '%' 
+           OR (description IS NOT NULL AND description LIKE '%' || :query || '%')
+        ORDER BY name COLLATE NOCASE ASC
+    """)
     fun searchPlaylists(query: String): Flow<List<PlaylistEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

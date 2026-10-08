@@ -121,10 +121,7 @@ fun MainAppContainer(
                         playbackViewModel.playTrackList(listOf(track), 0)
                     },
                     onResumeClick = { playbackViewModel.play() },
-                    onShuffleAllClick = {
-                        // Shuffle all tracks
-                        playbackViewModel.play()
-                    }
+                    onShuffleAllClick = { playbackViewModel.shuffleAll() }
                 )
                 NavigationTab.LIBRARY -> LibraryScreen(
                     onTrackClick = { tracks, clickedIndex ->
@@ -135,7 +132,10 @@ fun MainAppContainer(
                 NavigationTab.SEARCH -> org.harmonia.player.presentation.search.SearchScreen(
                     onTrackClick = { track ->
                         playbackViewModel.playTrackList(listOf(track), 0)
-                    }
+                    },
+                    onAlbumClick = { selectedTab = NavigationTab.LIBRARY },
+                    onArtistClick = { selectedTab = NavigationTab.LIBRARY },
+                    onPlaylistClick = { selectedTab = NavigationTab.PLAYLISTS }
                 )
                 NavigationTab.SETTINGS -> SettingsScreen()
             }

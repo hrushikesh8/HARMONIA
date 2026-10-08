@@ -1,6 +1,7 @@
 package org.harmonia.player.data.local
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import org.harmonia.player.data.local.dao.AlbumDao
 import org.harmonia.player.data.local.dao.ArtistDao
@@ -14,7 +15,7 @@ import org.harmonia.player.domain.repository.SearchRepository
 
 /**
  * Concrete implementation of SearchRepository backed by Room SQLite queries.
- * Establishes the query foundation for M3-B search.
+ * Establishes the offline query foundation for search without artificial benchmarks.
  */
 class OfflineSearchRepository(
     private val trackDao: TrackDao,
@@ -24,13 +25,17 @@ class OfflineSearchRepository(
 ) : SearchRepository {
 
     override fun searchTracks(query: String): Flow<List<Track>> {
-        return trackDao.searchTracks(query).map { list ->
+        val clean = query.trim()
+        if (clean.isBlank()) return flowOf(emptyList())
+        return trackDao.searchTracks(clean).map { list ->
             list.map { it.toDomainTrack() }
         }
     }
 
     override fun searchAlbums(query: String): Flow<List<Album>> {
-        return albumDao.searchAlbums(query).map { entities ->
+        val clean = query.trim()
+        if (clean.isBlank()) return flowOf(emptyList())
+        return albumDao.searchAlbums(clean).map { entities ->
             entities.map { entity ->
                 val artist = entity.artistId?.let { artistDao.getArtistById(it) }
                 Album(
@@ -51,7 +56,9 @@ class OfflineSearchRepository(
     }
 
     override fun searchArtists(query: String): Flow<List<Artist>> {
-        return artistDao.searchArtists(query).map { entities ->
+        val clean = query.trim()
+        if (clean.isBlank()) return flowOf(emptyList())
+        return artistDao.searchArtists(clean).map { entities ->
             entities.map { entity ->
                 Artist(
                     id = entity.id,
@@ -67,7 +74,9 @@ class OfflineSearchRepository(
     }
 
     override fun searchPlaylists(query: String): Flow<List<Playlist>> {
-        return playlistDao.searchPlaylists(query).map { entities ->
+        val clean = query.trim()
+        if (clean.isBlank()) return flowOf(emptyList())
+        return playlistDao.searchPlaylists(clean).map { entities ->
             entities.map { it.toDomain() }
         }
     }

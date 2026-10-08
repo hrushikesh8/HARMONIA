@@ -1,5 +1,6 @@
 package org.harmonia.player.presentation.home
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -90,6 +91,21 @@ fun HomeScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
+        // Resume Section (Active or Meaningful Empty State)
+        if (uiState.totalTrackCount > 0) {
+            item {
+                if (uiState.resumeTrack != null) {
+                    ResumeCard(
+                        track = uiState.resumeTrack!!,
+                        onResume = onResumeClick
+                    )
+                } else {
+                    NoResumeCard()
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+
         // Quick Actions
         item {
             QuickActionsSection(
@@ -113,7 +129,7 @@ fun HomeScreen(
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // Recently Played
+        // Recently Played (Factual ListeningEvent history)
         if (uiState.recentlyPlayed.isNotEmpty()) {
             item {
                 SectionTitle(title = "RECENTLY PLAYED")
@@ -129,7 +145,7 @@ fun HomeScreen(
             }
         }
 
-        // Recently Added
+        // Recently Added (Authoritative track createdAt metadata)
         if (uiState.recentlyAdded.isNotEmpty()) {
             item {
                 SectionTitle(title = "RECENTLY ADDED")
@@ -171,6 +187,115 @@ private fun HeaderSection() {
             style = MaterialTheme.typography.labelSmall,
             color = AcousticTeal
         )
+    }
+}
+
+@Composable
+private fun ResumeCard(
+    track: Track,
+    onResume: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, BorderSlate, RoundedCornerShape(12.dp)),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = AcousticCharcoal)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            HarmoniaArtwork(
+                artworkHash = track.localFile?.fileHash,
+                size = 48.dp,
+                cornerRadius = 8.dp,
+                contentDescription = "${track.title} artwork"
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "RESUME PLAYBACK",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AcousticTeal,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = track.title,
+                    color = PureSignalWhite,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = track.artistName ?: "Unknown Artist",
+                    color = MutedSlate,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(
+                onClick = onResume,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AcousticTeal,
+                    contentColor = ObsidianSpace
+                ),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier
+                    .height(40.dp)
+                    .semantics { contentDescription = "Resume playback of ${track.title}" }
+            ) {
+                Icon(
+                    imageVector = HarmoniaIcons.Play,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Resume", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun NoResumeCard() {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, BorderSlate, RoundedCornerShape(12.dp)),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = AcousticCharcoal)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = HarmoniaIcons.MusicNote,
+                contentDescription = null,
+                tint = MutedSlate,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(
+                    text = "No Active Playback",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = PureSignalWhite
+                )
+                Text(
+                    text = "Select any track from your library to start listening",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MutedSlate
+                )
+            }
+        }
     }
 }
 
@@ -218,9 +343,7 @@ private fun QuickActionsSection(
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = PureSignalWhite
                 ),
-                border = ButtonDefaults.outlinedButtonBorder.copy(
-                    brush = androidx.compose.ui.graphics.SolidColor(BorderSlate)
-                ),
+                border = BorderStroke(1.dp, BorderSlate),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Icon(
@@ -249,16 +372,16 @@ private fun CategoryShortcutsSection(
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         ShortcutCard(
-            title = "Albums",
-            count = albumCount,
-            icon = HarmoniaIcons.Album,
+            title = "Artists",
+            count = artistCount,
+            icon = HarmoniaIcons.Person,
             onClick = onNavigateToLibrary,
             modifier = Modifier.weight(1f)
         )
         ShortcutCard(
-            title = "Artists",
-            count = artistCount,
-            icon = HarmoniaIcons.Person,
+            title = "Albums",
+            count = albumCount,
+            icon = HarmoniaIcons.Album,
             onClick = onNavigateToLibrary,
             modifier = Modifier.weight(1f)
         )
@@ -284,15 +407,13 @@ private fun ShortcutCard(
         modifier = modifier
             .border(1.dp, BorderSlate, RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
-            .semantics { contentDescription = "$title, $count items" },
+            .semantics { contentDescription = "Navigate to $title, $count available" },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = AcousticCharcoal)
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.Center
         ) {
             Icon(
                 imageVector = icon,

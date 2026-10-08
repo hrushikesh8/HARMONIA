@@ -33,6 +33,9 @@ class RoomMigrationAndPlaylistDaoTest {
     private lateinit var db: HarmoniaDatabase
     private lateinit var playlistDao: PlaylistDao
     private lateinit var trackDao: TrackDao
+    private lateinit var albumDao: org.harmonia.player.data.local.dao.AlbumDao
+    private lateinit var artistDao: org.harmonia.player.data.local.dao.ArtistDao
+    private lateinit var searchRepository: org.harmonia.player.data.local.OfflineSearchRepository
 
     @Before
     fun setup() {
@@ -40,6 +43,14 @@ class RoomMigrationAndPlaylistDaoTest {
         db = HarmoniaDatabase.buildInMemory(context)
         playlistDao = db.playlistDao()
         trackDao = db.trackDao()
+        albumDao = db.albumDao()
+        artistDao = db.artistDao()
+        searchRepository = org.harmonia.player.data.local.OfflineSearchRepository(
+            trackDao = trackDao,
+            albumDao = albumDao,
+            artistDao = artistDao,
+            playlistDao = playlistDao
+        )
     }
 
     @After
@@ -265,5 +276,99 @@ class RoomMigrationAndPlaylistDaoTest {
 
         rawDb.close()
         dbFile.delete()
+    }
+
+    @Test
+    fun track_dao_search_matches_title_artist_and_album_case_insensitively() = runBlocking {
+        artistDao.upsertArtist(org.harmonia.player.data.local.entity.ArtistEntity(id = "art-rh", name = "Radiohead", sortName = "Radiohead", createdAt = 100L, updatedAt = 100L))
+        artistDao.upsertArtist(org.harmonia.player.data.local.entity.ArtistEntity(id = "art-ma", name = "Massive Attack", sortName = "Massive Attack", createdAt = 200L, updatedAt = 200L))
+        albumDao.upsertAlbum(org.harmonia.player.data.local.entity.AlbumEntity(id = "alb-ok", title = "OK Computer", artistId = "art-rh", createdAt = 100L, updatedAt = 100L))
+        albumDao.upsertAlbum(org.harmonia.player.data.local.entity.AlbumEntity(id = "alb-mez", title = "Mezzanine", artistId = "art-ma", createdAt = 200L, updatedAt = 200L))
+
+        trackDao.upsertTrack(TrackEntity(id = "trk-s1", title = "Paranoid Android", artistId = "art-rh", albumId = "alb-ok", durationSec = 380.0, createdAt = 100L, updatedAt = 100L))
+        trackDao.upsertTrack(TrackEntity(id = "trk-s2", title = "Karma Police", artistId = "art-rh", albumId = "alb-ok", durationSec = 260.0, createdAt = 200L, updatedAt = 200L))
+        trackDao.upsertTrack(TrackEntity(id = "trk-s3", title = "Teardrop", artistId = "art-ma", albumId = "alb-mez", durationSec = 330.0, createdAt = 300L, updatedAt = 300L))
+
+        // Search by title (partial, case-insensitive)
+        val titleMatch = trackDao.searchTracks("paranoid").first()
+        assertEquals(1, titleMatch.size)
+        assertEquals("trk-s1", titleMatch[0].track.id)
+
+        // Search by artist (partial, uppercase)
+        val artistMatch = trackDao.searchTracks("RADIOHEAD").first()
+        assertEquals(2, artistMatch.size)
+
+        // Search by album
+        val albumMatch = trackDao.searchTracks("mezzanine").first()
+        assertEquals(1, albumMatch.size)
+        assertEquals("trk-s3", albumMatch[0].track.id)
+    }
+
+    @Test
+    fun album_dao_search_matches_title_and_artist_case_insensitively() = runBlocking {
+        artistDao.upsertArtist(org.harmonia.player.data.local.entity.ArtistEntity(id = "art-s1", name = "Radiohead", sortName = "Radiohead", createdAt = 100L, updatedAt = 100L))
+        artistDao.upsertArtist(org.harmonia.player.data.local.entity.ArtistEntity(id = "art-s2", name = "Massive Attack", sortName = "Massive Attack", createdAt = 200L, updatedAt = 200L))
+        albumDao.upsertAlbum(org.harmonia.player.data.local.entity.AlbumEntity(id = "alb-s1", title = "OK Computer", artistId = "art-s1", createdAt = 100L, updatedAt = 100L))
+        albumDao.upsertAlbum(org.harmonia.player.data.local.entity.AlbumEntity(id = "alb-s2", title = "Mezzanine", artistId = "art-s2", createdAt = 200L, updatedAt = 200L))
+
+        val matchTitle = albumDao.searchAlbums("computer").first()
+        assertEquals(1, matchTitle.size)
+        assertEquals("alb-s1", matchTitle[0].id)
+
+        val matchArtist = albumDao.searchAlbums("massive").first()
+        assertEquals(1, matchArtist.size)
+        assertEquals("alb-s2", matchArtist[0].id)
+    }
+
+    @Test
+    fun artist_dao_search_matches_name_and_sort_name_case_insensitively() = runBlocking {
+        artistDao.upsertArtist(org.harmonia.player.data.local.entity.ArtistEntity(id = "art-s1", name = "The Beatles", sortName = "Beatles, The", createdAt = 100L, updatedAt = 100L))
+        artistDao.upsertArtist(org.harmonia.player.data.local.entity.ArtistEntity(id = "art-s2", name = "Pink Floyd", sortName = "Pink Floyd", createdAt = 200L, updatedAt = 200L))
+
+        // Match by display name
+        val matchName = artistDao.searchArtists("floyd").first()
+        assertEquals(1, matchName.size)
+        assertEquals("art-s2", matchName[0].id)
+
+        // Match by sort name
+        val matchSort = artistDao.searchArtists("beatles").first()
+        assertEquals(1, matchSort.size)
+        assertEquals("art-s1", matchSort[0].id)
+    }
+
+    @Test
+    fun playlist_dao_search_matches_name_and_description_case_insensitively() = runBlocking {
+        playlistDao.insertPlaylist(PlaylistEntity(id = "pl-s1", name = "Morning Focus", description = "Ambient instrumental focus", createdAt = 100L, updatedAt = 100L))
+        playlistDao.insertPlaylist(PlaylistEntity(id = "pl-s2", name = "Night Drive", description = "Synthwave and electronic", createdAt = 200L, updatedAt = 200L))
+
+        val matchName = playlistDao.searchPlaylists("focus").first()
+        assertEquals(1, matchName.size)
+        assertEquals("pl-s1", matchName[0].id)
+
+        val matchDesc = playlistDao.searchPlaylists("synthwave").first()
+        assertEquals(1, matchDesc.size)
+        assertEquals("pl-s2", matchDesc[0].id)
+    }
+
+    @Test
+    fun offline_search_repository_executes_categorized_queries_against_room() = runBlocking {
+        artistDao.upsertArtist(org.harmonia.player.data.local.entity.ArtistEntity(id = "art-c1", name = "Acoustic Project", sortName = "Acoustic Project", createdAt = 100L, updatedAt = 100L))
+        albumDao.upsertAlbum(org.harmonia.player.data.local.entity.AlbumEntity(id = "alb-c1", title = "Acoustic Vibe", artistId = "art-c1", createdAt = 100L, updatedAt = 100L))
+        trackDao.upsertTrack(TrackEntity(id = "trk-c1", title = "Acoustic Sun", artistId = "art-c1", albumId = "alb-c1", durationSec = 200.0, createdAt = 100L, updatedAt = 100L))
+        playlistDao.insertPlaylist(PlaylistEntity(id = "pl-c1", name = "Acoustic Collection", description = "Peaceful", createdAt = 100L, updatedAt = 100L))
+
+        val tracks = searchRepository.searchTracks("acoustic").first()
+        val albums = searchRepository.searchAlbums("acoustic").first()
+        val artists = searchRepository.searchArtists("acoustic").first()
+        val playlists = searchRepository.searchPlaylists("acoustic").first()
+
+        assertEquals(1, tracks.size)
+        assertEquals("Acoustic Sun", tracks[0].title)
+        assertEquals(1, albums.size)
+        assertEquals("Acoustic Vibe", albums[0].title)
+        assertEquals(1, artists.size)
+        assertEquals("Acoustic Project", artists[0].name)
+        assertEquals(1, playlists.size)
+        assertEquals("Acoustic Collection", playlists[0].name)
     }
 }

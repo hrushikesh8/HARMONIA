@@ -106,7 +106,7 @@ abstract class HarmoniaDatabase : RoomDatabase() {
             )
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
                 .addMigrations(MIGRATION_1_2)
-                .fallbackToDestructiveMigration()
+                .fallbackToDestructiveMigration(false)
                 .build()
         }
 
