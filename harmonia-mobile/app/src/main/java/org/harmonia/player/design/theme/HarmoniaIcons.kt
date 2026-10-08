@@ -482,4 +482,95 @@ object HarmoniaIcons {
             close()
         }
     }.build()
+
+    val ArrowUp: ImageVector = ImageVector.Builder(
+        name = "ArrowUp",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(7.41f, 15.41f)
+            lineTo(12f, 10.83f)
+            lineToRelative(4.59f, 4.58f)
+            lineTo(18f, 14f)
+            lineToRelative(-6f, -6f)
+            lineToRelative(-6f, 6f)
+            close()
+        }
+    }.build()
+
+    val ArrowDown: ImageVector = ImageVector.Builder(
+        name = "ArrowDown",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(7.41f, 8.59f)
+            lineTo(12f, 13.17f)
+            lineToRelative(4.59f, -4.58f)
+            lineTo(18f, 10f)
+            lineToRelative(-6f, 6f)
+            lineToRelative(-6f, -6f)
+            close()
+        }
+    }.build()
+
+    val Delete: ImageVector = ImageVector.Builder(
+        name = "Delete",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(6f, 19f)
+            curveToRelative(0f, 1.1f, 0.9f, 2f, 2f, 2f)
+            horizontalLineToRelative(8f)
+            curveToRelative(1.1f, 0f, 2f, -0.9f, 2f, -2f)
+            verticalLineTo(7f)
+            horizontalLineTo(6f)
+            verticalLineToRelative(12f)
+            close()
+            moveTo(19f, 4f)
+            horizontalLineToRelative(-3.5f)
+            lineToRelative(-1f, -1f)
+            horizontalLineToRelative(-5f)
+            lineToRelative(-1f, 1f)
+            horizontalLineTo(5f)
+            verticalLineToRelative(2f)
+            horizontalLineToRelative(14f)
+            verticalLineTo(4f)
+            close()
+        }
+    }.build()
+
+    val Edit: ImageVector = ImageVector.Builder(
+        name = "Edit",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(3f, 17.25f)
+            verticalLineTo(21f)
+            horizontalLineToRelative(3.75f)
+            lineTo(17.81f, 9.94f)
+            lineToRelative(-3.75f, -3.75f)
+            lineTo(3f, 17.25f)
+            close()
+            moveTo(20.71f, 7.04f)
+            curveToRelative(0.39f, -0.39f, 0.39f, -1.02f, 0f, -1.41f)
+            lineToRelative(-2.34f, -2.34f)
+            curveToRelative(-0.39f, -0.39f, -1.02f, -0.39f, -1.41f, 0f)
+            lineToRelative(-1.83f, 1.83f)
+            lineToRelative(3.75f, 3.75f)
+            lineToRelative(1.83f, -1.83f)
+            close()
+        }
+    }.build()
 }

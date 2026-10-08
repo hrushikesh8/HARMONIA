@@ -39,6 +39,8 @@ import org.harmonia.player.presentation.navigation.HarmoniaNavDestination
 import org.harmonia.player.presentation.playback.MiniPlayer
 import org.harmonia.player.presentation.playback.NowPlayingSheet
 import org.harmonia.player.presentation.playback.PlaybackViewModel
+import org.harmonia.player.presentation.playlists.PlaylistDetailScreen
+import org.harmonia.player.presentation.playlists.PlaylistsScreen
 import org.harmonia.player.presentation.settings.SettingsScreen
 
 class MainActivity : ComponentActivity() {
@@ -71,6 +73,7 @@ fun MainAppContainer(
     playbackViewModel: PlaybackViewModel = viewModel()
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(NavigationTab.HOME) }
+    var selectedPlaylistId by rememberSaveable { mutableStateOf<String?>(null) }
     var showNowPlayingSheet by remember { mutableStateOf(false) }
     val playerUiState by playbackViewModel.uiState.collectAsState()
 
@@ -85,7 +88,12 @@ fun MainAppContainer(
                     val isSelected = selectedTab == tab
                     NavigationBarItem(
                         selected = isSelected,
-                        onClick = { selectedTab = tab },
+                        onClick = {
+                            if (tab == NavigationTab.PLAYLISTS && selectedTab == NavigationTab.PLAYLISTS) {
+                                selectedPlaylistId = null
+                            }
+                            selectedTab = tab
+                        },
                         icon = {
                             Icon(
                                 imageVector = tab.icon,
@@ -116,7 +124,10 @@ fun MainAppContainer(
             when (selectedTab) {
                 NavigationTab.HOME -> org.harmonia.player.presentation.home.HomeScreen(
                     onNavigateToLibrary = { selectedTab = NavigationTab.LIBRARY },
-                    onNavigateToPlaylists = { selectedTab = NavigationTab.PLAYLISTS },
+                    onNavigateToPlaylists = {
+                        selectedPlaylistId = null
+                        selectedTab = NavigationTab.PLAYLISTS
+                    },
                     onTrackClick = { track ->
                         playbackViewModel.playTrackList(listOf(track), 0)
                     },
@@ -128,14 +139,36 @@ fun MainAppContainer(
                         playbackViewModel.playTrackList(tracks, clickedIndex)
                     }
                 )
-                NavigationTab.PLAYLISTS -> org.harmonia.player.presentation.playlists.PlaylistsScreen()
+                NavigationTab.PLAYLISTS -> {
+                    if (selectedPlaylistId != null) {
+                        PlaylistDetailScreen(
+                            playlistId = selectedPlaylistId!!,
+                            onBack = { selectedPlaylistId = null },
+                            onPlay = { tracks, startIndex ->
+                                playbackViewModel.playTrackList(tracks, startIndex)
+                            },
+                            onShuffle = { tracks ->
+                                playbackViewModel.playTrackList(tracks.shuffled(), 0)
+                            }
+                        )
+                    } else {
+                        PlaylistsScreen(
+                            onPlaylistClick = { playlist ->
+                                selectedPlaylistId = playlist.id
+                            }
+                        )
+                    }
+                }
                 NavigationTab.SEARCH -> org.harmonia.player.presentation.search.SearchScreen(
                     onTrackClick = { track ->
                         playbackViewModel.playTrackList(listOf(track), 0)
                     },
                     onAlbumClick = { selectedTab = NavigationTab.LIBRARY },
                     onArtistClick = { selectedTab = NavigationTab.LIBRARY },
-                    onPlaylistClick = { selectedTab = NavigationTab.PLAYLISTS }
+                    onPlaylistClick = {
+                        selectedPlaylistId = null
+                        selectedTab = NavigationTab.PLAYLISTS
+                    }
                 )
                 NavigationTab.SETTINGS -> SettingsScreen()
             }

@@ -371,4 +371,51 @@ class RoomMigrationAndPlaylistDaoTest {
         assertEquals(1, playlists.size)
         assertEquals("Acoustic Collection", playlists[0].name)
     }
+
+    @Test
+    fun replace_playlist_items_transaction_executes_atomically() = runBlocking {
+        val playlist = PlaylistEntity(id = "pl-atomic", name = "Atomic Reorder", createdAt = 0L, updatedAt = 0L)
+        playlistDao.insertPlaylist(playlist)
+
+        trackDao.upsertTrack(TrackEntity(id = "trk-x", title = "X", durationSec = 100.0, createdAt = 0L, updatedAt = 0L))
+        trackDao.upsertTrack(TrackEntity(id = "trk-y", title = "Y", durationSec = 100.0, createdAt = 0L, updatedAt = 0L))
+
+        playlistDao.insertItem(PlaylistItemEntity(id = "item-x", playlistId = "pl-atomic", trackId = "trk-x", position = 0, addedAt = 10L))
+        playlistDao.insertItem(PlaylistItemEntity(id = "item-y", playlistId = "pl-atomic", trackId = "trk-y", position = 1, addedAt = 10L))
+
+        // Swap positions atomically
+        val swapped = listOf(
+            PlaylistItemEntity(id = "item-y", playlistId = "pl-atomic", trackId = "trk-y", position = 0, addedAt = 10L),
+            PlaylistItemEntity(id = "item-x", playlistId = "pl-atomic", trackId = "trk-x", position = 1, addedAt = 10L)
+        )
+        playlistDao.replacePlaylistItems("pl-atomic", swapped)
+
+        val retrieved = playlistDao.getItemsForPlaylist("pl-atomic")
+        assertEquals(2, retrieved.size)
+        assertEquals("trk-y", retrieved[0].trackId)
+        assertEquals(0, retrieved[0].position)
+        assertEquals("trk-x", retrieved[1].trackId)
+        assertEquals(1, retrieved[1].position)
+    }
+
+    @Test
+    fun observe_playlists_with_count_emits_accurate_track_counts() = runBlocking {
+        val p1 = PlaylistEntity(id = "pl-count-1", name = "P1", createdAt = 10L, updatedAt = 10L)
+        val p2 = PlaylistEntity(id = "pl-count-2", name = "P2", createdAt = 20L, updatedAt = 20L)
+        playlistDao.insertPlaylist(p1)
+        playlistDao.insertPlaylist(p2)
+
+        trackDao.upsertTrack(TrackEntity(id = "trk-cnt1", title = "T1", durationSec = 120.0, createdAt = 0L, updatedAt = 0L))
+        trackDao.upsertTrack(TrackEntity(id = "trk-cnt2", title = "T2", durationSec = 130.0, createdAt = 0L, updatedAt = 0L))
+
+        playlistDao.insertItem(PlaylistItemEntity(id = "pi-1", playlistId = "pl-count-1", trackId = "trk-cnt1", position = 0, addedAt = 10L))
+        playlistDao.insertItem(PlaylistItemEntity(id = "pi-2", playlistId = "pl-count-1", trackId = "trk-cnt2", position = 1, addedAt = 10L))
+
+        val counts = playlistDao.observePlaylistsWithCount().first()
+        val c1 = counts.find { it.playlist.id == "pl-count-1" }
+        val c2 = counts.find { it.playlist.id == "pl-count-2" }
+
+        assertEquals(2, c1?.trackCount)
+        assertEquals(0, c2?.trackCount)
+    }
 }

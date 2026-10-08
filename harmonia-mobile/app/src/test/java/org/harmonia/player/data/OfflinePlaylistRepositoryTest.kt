@@ -54,6 +54,13 @@ class FakePlaylistDao : PlaylistDao {
         itemsFlow.value = items.toList()
     }
 
+    override suspend fun deleteAllPlaylists() {
+        playlists.clear()
+        items.clear()
+        playlistFlow.value = emptyList()
+        itemsFlow.value = emptyList()
+    }
+
     override fun observePlaylistItems(playlistId: String): Flow<List<PlaylistItemEntity>> {
         return itemsFlow.map { list ->
             list.filter { it.playlistId == playlistId }.sortedBy { it.position }
@@ -70,9 +77,9 @@ class FakePlaylistDao : PlaylistDao {
         itemsFlow.value = items.toList()
     }
 
-    override suspend fun insertItems(newItems: List<PlaylistItemEntity>) {
-        items.addAll(newItems)
-        itemsFlow.value = items.toList()
+    override suspend fun insertItems(items: List<PlaylistItemEntity>) {
+        this.items.addAll(items)
+        itemsFlow.value = this.items.toList()
     }
 
     override suspend fun removeItem(playlistId: String, trackId: String) {
@@ -92,6 +99,17 @@ class FakePlaylistDao : PlaylistDao {
     override fun searchPlaylists(query: String): Flow<List<PlaylistEntity>> {
         return playlistFlow.map { list ->
             list.filter { it.name.contains(query, ignoreCase = true) }
+        }
+    }
+
+    override fun observePlaylistsWithCount(): Flow<List<org.harmonia.player.data.local.dao.PlaylistWithCount>> {
+        return playlistFlow.map { list ->
+            list.map { entity ->
+                org.harmonia.player.data.local.dao.PlaylistWithCount(
+                    playlist = entity,
+                    trackCount = items.count { it.playlistId == entity.id }
+                )
+            }
         }
     }
 }
@@ -201,5 +219,55 @@ class OfflinePlaylistRepositoryTest {
         assertEquals(0, remaining[0].position)
         assertEquals("track-2", remaining[1].trackId)
         assertEquals(1, remaining[1].position)
+    }
+
+    @Test
+    fun `renamePlaylist updates playlist name successfully`() = runBlocking {
+        val playlist = repository.createPlaylist("Original Title", null)
+        repository.renamePlaylist(playlist.id, "Renamed Title")
+
+        val retrieved = repository.getPlaylistById(playlist.id)
+        assertEquals("Renamed Title", retrieved?.name)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `renamePlaylist rejects empty or blank name`() = runBlocking {
+        val playlist = repository.createPlaylist("Valid Name", null)
+        repository.renamePlaylist(playlist.id, "   ")
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `createPlaylist rejects empty or blank name`() = runBlocking<Unit> {
+        repository.createPlaylist("   ", null)
+    }
+
+    @Test
+    fun `addTracksToPlaylist inserts multiple tracks in deterministic order`() = runBlocking {
+        val playlist = repository.createPlaylist("Batch Test", null)
+        val added = repository.addTracksToPlaylist(playlist.id, listOf("t-1", "t-2", "t-3"))
+
+        assertEquals(3, added.size)
+        assertEquals(0, added[0].position)
+        assertEquals(1, added[1].position)
+        assertEquals(2, added[2].position)
+
+        val items = repository.observePlaylistItems(playlist.id).first()
+        assertEquals(3, items.size)
+        assertEquals("t-1", items[0].trackId)
+        assertEquals("t-2", items[1].trackId)
+        assertEquals("t-3", items[2].trackId)
+    }
+
+    @Test
+    fun `observeAllPlaylists accurately emits real-time trackCount`() = runBlocking {
+        val playlist = repository.createPlaylist("Count Test", null)
+        var all = repository.observeAllPlaylists().first()
+        assertEquals(0, all.find { it.id == playlist.id }?.trackCount)
+
+        repository.addTrackToPlaylist(playlist.id, "trk-1")
+        repository.addTrackToPlaylist(playlist.id, "trk-2")
+
+        all = repository.observeAllPlaylists().first()
+        assertEquals(2, all.find { it.id == playlist.id }?.trackCount)
     }
 }

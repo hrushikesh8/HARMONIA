@@ -25,6 +25,9 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -62,6 +65,8 @@ fun PlaylistsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showCreateDialog by remember { mutableStateOf(false) }
+    var playlistToRename by remember { mutableStateOf<Playlist?>(null) }
+    var playlistToDelete by remember { mutableStateOf<Playlist?>(null) }
 
     Column(
         modifier = modifier
@@ -124,7 +129,12 @@ fun PlaylistsScreen(
                 contentPadding = PaddingValues(bottom = 96.dp)
             ) {
                 items(uiState.playlists, key = { it.id }) { playlist ->
-                    PlaylistRowCard(playlist = playlist, onClick = { onPlaylistClick(playlist) })
+                    PlaylistRowCard(
+                        playlist = playlist,
+                        onClick = { onPlaylistClick(playlist) },
+                        onRenameClick = { playlistToRename = playlist },
+                        onDeleteClick = { playlistToDelete = playlist }
+                    )
                 }
             }
         }
@@ -139,13 +149,39 @@ fun PlaylistsScreen(
             }
         )
     }
+
+    if (playlistToRename != null) {
+        RenamePlaylistDialog(
+            currentName = playlistToRename!!.name,
+            onDismiss = { playlistToRename = null },
+            onConfirm = { newName ->
+                viewModel.renamePlaylist(playlistToRename!!.id, newName)
+                playlistToRename = null
+            }
+        )
+    }
+
+    if (playlistToDelete != null) {
+        DeletePlaylistDialog(
+            playlistName = playlistToDelete!!.name,
+            onDismiss = { playlistToDelete = null },
+            onConfirm = {
+                viewModel.deletePlaylist(playlistToDelete!!.id)
+                playlistToDelete = null
+            }
+        )
+    }
 }
 
 @Composable
 private fun PlaylistRowCard(
     playlist: Playlist,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onRenameClick: () -> Unit,
+    onDeleteClick: () -> Unit
 ) {
+    var showMenu by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -177,11 +213,53 @@ private fun PlaylistRowCard(
                     style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
                     color = PureSignalWhite
                 )
+                val subtitle = buildString {
+                    append("${playlist.trackCount} ${if (playlist.trackCount == 1) "track" else "tracks"}")
+                    if (!playlist.description.isNullOrBlank()) {
+                        append(" • ${playlist.description}")
+                    }
+                }
                 Text(
-                    text = playlist.description ?: "User Playlist",
+                    text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = MutedSlate
                 )
+            }
+
+            Box {
+                IconButton(
+                    onClick = { showMenu = true },
+                    modifier = Modifier.semantics { contentDescription = "Options for ${playlist.name}" }
+                ) {
+                    Icon(
+                        imageVector = HarmoniaIcons.MoreVert,
+                        contentDescription = "Options for ${playlist.name}",
+                        tint = MutedSlate
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false },
+                    modifier = Modifier.background(AcousticCharcoal)
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Rename", color = PureSignalWhite) },
+                        leadingIcon = { Icon(HarmoniaIcons.Edit, contentDescription = null, tint = AcousticTeal) },
+                        onClick = {
+                            showMenu = false
+                            onRenameClick()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Delete", color = PureSignalWhite) },
+                        leadingIcon = { Icon(HarmoniaIcons.Delete, contentDescription = null, tint = AcousticTeal) },
+                        onClick = {
+                            showMenu = false
+                            onDeleteClick()
+                        }
+                    )
+                }
             }
         }
     }

@@ -12,7 +12,8 @@ data class Playlist(
     val criteriaJson: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
-    val versionVector: String = "1"
+    val versionVector: String = "1",
+    val trackCount: Int = 0
 ) {
     val title: String get() = name
 }

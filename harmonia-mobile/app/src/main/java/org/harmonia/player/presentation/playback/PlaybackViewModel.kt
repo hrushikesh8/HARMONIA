@@ -68,6 +68,7 @@ class PlaybackViewModel(
 
     fun playTrackList(tracks: List<Track>, startIndex: Int) {
         playbackPort.setQueue(tracks, startIndex)
+        playbackPort.play()
     }
 
     fun shuffleAll() {

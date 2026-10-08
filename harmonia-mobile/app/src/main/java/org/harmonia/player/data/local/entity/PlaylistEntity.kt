@@ -26,14 +26,15 @@ data class PlaylistEntity(
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long = System.currentTimeMillis()
 ) {
-    fun toDomain(): Playlist {
+    fun toDomain(trackCount: Int = 0): Playlist {
         return Playlist(
             id = id,
             name = name,
             description = description,
             artworkHash = artworkHash,
             createdAt = createdAt,
-            updatedAt = updatedAt
+            updatedAt = updatedAt,
+            trackCount = trackCount
         )
     }
 

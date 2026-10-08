@@ -20,26 +20,39 @@ class OfflinePlaylistRepository(
 ) : PlaylistRepository {
 
     override fun observeAllPlaylists(): Flow<List<Playlist>> {
-        return playlistDao.observeAllPlaylists().map { list ->
-            list.map { it.toDomain() }
+        return playlistDao.observePlaylistsWithCount().map { list ->
+            list.map { it.playlist.toDomain(trackCount = it.trackCount) }
         }
     }
 
     override suspend fun getPlaylistById(id: String): Playlist? {
-        return playlistDao.getPlaylistById(id)?.toDomain()
+        val entity = playlistDao.getPlaylistById(id) ?: return null
+        val count = playlistDao.getItemCount(id)
+        return entity.toDomain(trackCount = count)
     }
 
     override suspend fun createPlaylist(name: String, description: String?): Playlist {
+        val trimmed = name.trim()
+        require(trimmed.isNotBlank()) { "Playlist name cannot be blank" }
         val now = System.currentTimeMillis()
         val playlist = Playlist(
             id = UUID.randomUUID().toString(),
-            name = name.trim(),
-            description = description?.trim(),
+            name = trimmed,
+            description = description?.trim()?.ifBlank { null },
             createdAt = now,
-            updatedAt = now
+            updatedAt = now,
+            trackCount = 0
         )
         playlistDao.insertPlaylist(PlaylistEntity.fromDomain(playlist))
         return playlist
+    }
+
+    override suspend fun renamePlaylist(id: String, newName: String) {
+        val trimmed = newName.trim()
+        require(trimmed.isNotBlank()) { "Playlist name cannot be blank" }
+        val existing = playlistDao.getPlaylistById(id) ?: return
+        val updated = existing.copy(name = trimmed, updatedAt = System.currentTimeMillis())
+        playlistDao.updatePlaylist(updated)
     }
 
     override suspend fun updatePlaylist(playlist: Playlist) {
@@ -63,24 +76,51 @@ class OfflinePlaylistRepository(
     override suspend fun addTrackToPlaylist(playlistId: String, trackId: String): PlaylistItem {
         val maxPos = playlistDao.getMaxPosition(playlistId)
         val nextPos = if (maxPos != null) maxPos + 1 else 0
+        val now = System.currentTimeMillis()
         val item = PlaylistItem(
             id = UUID.randomUUID().toString(),
             playlistId = playlistId,
             trackId = trackId,
             position = nextPos,
-            addedAt = System.currentTimeMillis()
+            addedAt = now
         )
         playlistDao.insertItem(PlaylistItemEntity.fromDomain(item))
         val playlist = playlistDao.getPlaylistById(playlistId)
         if (playlist != null) {
-            playlistDao.updatePlaylist(playlist.copy(updatedAt = System.currentTimeMillis()))
+            playlistDao.updatePlaylist(playlist.copy(updatedAt = now))
         }
         return item
+    }
+
+    override suspend fun addTracksToPlaylist(playlistId: String, trackIds: List<String>): List<PlaylistItem> {
+        if (trackIds.isEmpty()) return emptyList()
+        val maxPos = playlistDao.getMaxPosition(playlistId)
+        var nextPos = if (maxPos != null) maxPos + 1 else 0
+        val now = System.currentTimeMillis()
+        val items = trackIds.map { trackId ->
+            PlaylistItem(
+                id = UUID.randomUUID().toString(),
+                playlistId = playlistId,
+                trackId = trackId,
+                position = nextPos++,
+                addedAt = now
+            )
+        }
+        playlistDao.insertItems(items.map { PlaylistItemEntity.fromDomain(it) })
+        val playlist = playlistDao.getPlaylistById(playlistId)
+        if (playlist != null) {
+            playlistDao.updatePlaylist(playlist.copy(updatedAt = now))
+        }
+        return items
     }
 
     override suspend fun removeTrackFromPlaylist(playlistId: String, trackId: String) {
         playlistDao.removeItem(playlistId, trackId)
         normalizePositions(playlistId)
+        val playlist = playlistDao.getPlaylistById(playlistId)
+        if (playlist != null) {
+            playlistDao.updatePlaylist(playlist.copy(updatedAt = System.currentTimeMillis()))
+        }
     }
 
     override suspend fun reorderPlaylistItem(playlistId: String, fromPosition: Int, toPosition: Int) {
@@ -91,12 +131,10 @@ class OfflinePlaylistRepository(
         val moved = items.removeAt(fromPosition)
         items.add(toPosition, moved)
 
-        // Clear and rewrite with updated 0-based positions to prevent unique constraint conflict
-        playlistDao.clearPlaylist(playlistId)
         val updatedEntities = items.mapIndexed { index, entity ->
             entity.copy(position = index)
         }
-        playlistDao.insertItems(updatedEntities)
+        playlistDao.replacePlaylistItems(playlistId, updatedEntities)
 
         val playlist = playlistDao.getPlaylistById(playlistId)
         if (playlist != null) {
@@ -109,7 +147,6 @@ class OfflinePlaylistRepository(
         val updatedEntities = items.mapIndexed { index, entity ->
             entity.copy(position = index)
         }
-        playlistDao.clearPlaylist(playlistId)
-        playlistDao.insertItems(updatedEntities)
+        playlistDao.replacePlaylistItems(playlistId, updatedEntities)
     }
 }
