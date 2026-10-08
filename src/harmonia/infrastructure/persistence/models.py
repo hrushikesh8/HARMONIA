@@ -136,6 +136,9 @@ class TrackModel(Base):
     tags: Mapped[list[TagModel]] = relationship(
         back_populates="track", cascade="all, delete-orphan"
     )
+    listening_events: Mapped[list[ListeningEventModel]] = relationship(
+        back_populates="track", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("ix_tracks_title", "title"),
@@ -318,4 +321,65 @@ class AudioAnalysisModel(Base):
         Index("ix_audio_analyses_file_hash", "file_hash"),
         Index("ix_audio_analyses_started_at", "started_at"),
     )
+
+
+# ── ListeningEvent ────────────────────────────────────────────────────────────
+
+
+class ListeningEventModel(Base):
+    __tablename__ = "listening_events"
+
+    id: Mapped[str] = mapped_column(Uuid(), primary_key=True, default=uuid4)
+    track_id: Mapped[str] = mapped_column(
+        Uuid(), ForeignKey("tracks.id", ondelete="CASCADE"), nullable=False
+    )
+    track_file_id: Mapped[str | None] = mapped_column(
+        Uuid(), ForeignKey("track_files.id", ondelete="SET NULL"), nullable=True
+    )
+    timestamp_utc: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+    started_at_sec: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    ended_at_sec: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    duration_listened_seconds: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    track_duration_seconds: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    was_completed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    was_skipped: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    playback_source: Mapped[str] = mapped_column(String(50), nullable=False, default="queue")
+    device_id: Mapped[str | None] = mapped_column(Uuid(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+    track: Mapped[TrackModel] = relationship(back_populates="listening_events")
+    track_file: Mapped[TrackFileModel | None] = relationship()
+
+    __table_args__ = (
+        Index("ix_listening_events_track_id", "track_id"),
+        Index("ix_listening_events_timestamp", "timestamp_utc"),
+        Index("ix_listening_events_track_file_id", "track_file_id"),
+    )
+
+
+# ── PlaybackQueueSnapshot ─────────────────────────────────────────────────────
+
+
+class PlaybackQueueSnapshotModel(Base):
+    __tablename__ = "playback_queue_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    current_track_id: Mapped[str | None] = mapped_column(Uuid(), nullable=True)
+    current_track_file_id: Mapped[str | None] = mapped_column(Uuid(), nullable=True)
+    position_seconds: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    volume: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
+    repeat_mode: Mapped[str] = mapped_column(String(20), nullable=False, default="off")
+    shuffle_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    queue_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    current_queue_index: Mapped[int] = mapped_column(Integer, nullable=False, default=-1)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
 

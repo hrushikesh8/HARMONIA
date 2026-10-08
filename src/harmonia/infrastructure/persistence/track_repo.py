@@ -246,7 +246,7 @@ def _track_file_to_model(tf: TrackFile) -> TrackFileModel:
     return TrackFileModel(
         id=tf.id,
         track_id=tf.track_id,
-        file_path=tf.file_path,
+        file_path=str(tf.file_path),
         file_hash=tf.file_hash,
         file_size=tf.file_size,
         format=tf.format.value,

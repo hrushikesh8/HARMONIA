@@ -8,6 +8,9 @@ from harmonia.infrastructure.persistence.audio_analysis_repo import (
 from harmonia.infrastructure.persistence.duplicate_candidate_repo import (
     SqliteDuplicateCandidateRepository,
 )
+from harmonia.infrastructure.persistence.listening_event_repo import (
+    SqliteListeningEventRepository,
+)
 from harmonia.infrastructure.persistence.metadata_field_repo import (
     SqliteMetadataFieldRepository,
 )
@@ -16,10 +19,15 @@ from harmonia.infrastructure.persistence.models import (
     ArtistModel,
     AudioAnalysisModel,
     DuplicateCandidateModel,
+    ListeningEventModel,
     MetadataFieldModel,
+    PlaybackQueueSnapshotModel,
     TagModel,
     TrackFileModel,
     TrackModel,
+)
+from harmonia.infrastructure.persistence.playback_snapshot_repo import (
+    SqlitePlaybackSnapshotRepository,
 )
 from harmonia.infrastructure.persistence.search_repo import SqliteSearchRepository
 from harmonia.infrastructure.persistence.track_repo import SqliteTrackRepository
@@ -29,12 +37,16 @@ __all__ = [
     "ArtistModel",
     "AudioAnalysisModel",
     "DuplicateCandidateModel",
+    "ListeningEventModel",
     "MetadataFieldModel",
+    "PlaybackQueueSnapshotModel",
     "SqliteAlbumRepository",
     "SqliteArtistRepository",
     "SqliteAudioAnalysisRepository",
     "SqliteDuplicateCandidateRepository",
+    "SqliteListeningEventRepository",
     "SqliteMetadataFieldRepository",
+    "SqlitePlaybackSnapshotRepository",
     "SqliteSearchRepository",
     "SqliteTrackRepository",
     "TagModel",

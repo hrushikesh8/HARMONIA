@@ -191,3 +191,50 @@ class DuplicateCandidateInfo(BaseModel):
     resolution: str | None = None
     created_at: datetime
 
+
+# ── Playback & Telemetry DTOs ────────────────────────────────────────────────
+
+
+class QueueItemDTO(BaseModel):
+    """Information about an item in the queue."""
+
+    id: UUID
+    track_id: UUID
+    track_file_id: UUID | None = None
+    title: str = ""
+    artist_name: str = ""
+    duration_seconds: float = 0.0
+    is_manual: bool = False
+
+
+class PlaybackStateDTO(BaseModel):
+    """Factual snapshot of playback engine state."""
+
+    status: str
+    current_track_id: UUID | None = None
+    current_track_file_id: UUID | None = None
+    position_seconds: float = 0.0
+    duration_seconds: float = 0.0
+    volume: float = 1.0
+    repeat_mode: str = "off"
+    shuffle_enabled: bool = False
+    current_queue_index: int = -1
+
+
+class ListeningEventDTO(BaseModel):
+    """Factual telemetry record DTO."""
+
+    id: UUID
+    track_id: UUID
+    track_file_id: UUID | None = None
+    timestamp_utc: datetime
+    started_at_sec: float
+    ended_at_sec: float
+    duration_listened_seconds: float
+    track_duration_seconds: float
+    was_completed: bool
+    was_skipped: bool
+    playback_source: str = "queue"
+    device_id: UUID | None = None
+
+
