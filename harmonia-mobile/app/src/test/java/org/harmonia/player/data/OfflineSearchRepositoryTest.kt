@@ -31,6 +31,9 @@ class FakeSearchAlbumDao : AlbumDao {
     override fun searchAlbums(query: String): Flow<List<AlbumEntity>> {
         return MutableStateFlow(albums.filter { it.title.contains(query, ignoreCase = true) })
     }
+    override suspend fun getAlbumByTitleAndArtist(title: String, artistId: String?): AlbumEntity? {
+        return albums.find { it.title.equals(title, ignoreCase = true) && it.artistId == artistId }
+    }
 }
 
 class FakeSearchArtistDao : ArtistDao {
@@ -45,6 +48,9 @@ class FakeSearchArtistDao : ArtistDao {
     override suspend fun deleteArtistById(id: String) { artists.removeAll { it.id == id } }
     override fun searchArtists(query: String): Flow<List<ArtistEntity>> {
         return MutableStateFlow(artists.filter { it.name.contains(query, ignoreCase = true) || it.sortName.contains(query, ignoreCase = true) })
+    }
+    override suspend fun getArtistByName(name: String): ArtistEntity? {
+        return artists.find { it.name.equals(name, ignoreCase = true) }
     }
 }
 

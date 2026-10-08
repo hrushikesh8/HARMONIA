@@ -15,6 +15,9 @@ interface AlbumDao {
     @Query("SELECT * FROM mobile_albums WHERE id = :id LIMIT 1")
     suspend fun getAlbumById(id: String): AlbumEntity?
 
+    @Query("SELECT * FROM mobile_albums WHERE title = :title AND (artist_id = :artistId OR (:artistId IS NULL AND artist_id IS NULL)) LIMIT 1")
+    suspend fun getAlbumByTitleAndArtist(title: String, artistId: String?): AlbumEntity?
+
     @Query("SELECT * FROM mobile_albums WHERE artist_id = :artistId ORDER BY year DESC, title ASC")
     fun observeAlbumsByArtist(artistId: String): Flow<List<AlbumEntity>>
 

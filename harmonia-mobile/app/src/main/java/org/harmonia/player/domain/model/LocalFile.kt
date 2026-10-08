@@ -6,7 +6,9 @@ package org.harmonia.player.domain.model
 enum class StorageType {
     INTERNAL_SYNC,
     SAF_IMPORTED,
-    EXTERNAL_SD
+    EXTERNAL_SD,
+    MEDIA_STORE_PRIMARY,
+    MEDIA_STORE_VOLUME
 }
 
 /**

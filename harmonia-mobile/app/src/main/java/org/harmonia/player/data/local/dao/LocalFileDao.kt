@@ -19,6 +19,15 @@ interface LocalFileDao {
     @Query("SELECT * FROM mobile_local_files WHERE file_uri = :fileUri LIMIT 1")
     suspend fun getLocalFileByUri(fileUri: String): LocalFileEntity?
 
+    @Query("SELECT * FROM mobile_local_files WHERE file_hash = :fileHash LIMIT 1")
+    suspend fun getLocalFileByHash(fileHash: String): LocalFileEntity?
+
+    @Query("SELECT * FROM mobile_local_files WHERE storage_type = :storageType")
+    suspend fun getLocalFilesByStorageType(storageType: String): List<LocalFileEntity>
+
+    @Query("SELECT * FROM mobile_local_files")
+    suspend fun getAllLocalFiles(): List<LocalFileEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertLocalFile(localFile: LocalFileEntity)
 

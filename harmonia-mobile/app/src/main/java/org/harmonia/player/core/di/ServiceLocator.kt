@@ -57,6 +57,9 @@ object ServiceLocator {
     private var audioMetadataReaderInstance: org.harmonia.player.domain.metadata.AudioMetadataReader? = null
 
     @Volatile
+    private var mediaReconciliationEngineInstance: org.harmonia.player.domain.scanner.MediaReconciliationEngine? = null
+
+    @Volatile
     private var playbackPortInstance: PlaybackPort? = null
 
     fun initialize(context: Context) {
@@ -68,6 +71,21 @@ object ServiceLocator {
         }
         if (audioMetadataReaderInstance == null) {
             audioMetadataReaderInstance = org.harmonia.player.data.local.metadata.AndroidAudioMetadataReader(context.applicationContext)
+        }
+        if (mediaReconciliationEngineInstance == null) {
+            val permChecker = storagePermissionCheckerInstance ?: org.harmonia.player.data.local.permission.AndroidStoragePermissionChecker(context.applicationContext)
+            val metaReader = audioMetadataReaderInstance ?: org.harmonia.player.data.local.metadata.AndroidAudioMetadataReader(context.applicationContext)
+            val db = database ?: HarmoniaDatabase.getInstance(context)
+            val msScanner = org.harmonia.player.data.local.scanner.MediaStoreScanner(context.applicationContext, permChecker)
+            val safScanner = org.harmonia.player.data.local.scanner.SafTreeScanner(context.applicationContext, permChecker)
+            mediaReconciliationEngineInstance = org.harmonia.player.data.local.scanner.DefaultMediaReconciliationEngine(
+                context = context.applicationContext,
+                database = db,
+                metadataReader = metaReader,
+                permissionChecker = permChecker,
+                mediaStoreScanner = msScanner,
+                safTreeScanner = safScanner
+            )
         }
     }
 
@@ -194,6 +212,14 @@ object ServiceLocator {
         audioMetadataReaderInstance = reader
     }
 
+    fun getMediaReconciliationEngine(): org.harmonia.player.domain.scanner.MediaReconciliationEngine {
+        return mediaReconciliationEngineInstance ?: error("MediaReconciliationEngine has not been initialized in ServiceLocator!")
+    }
+
+    fun setMediaReconciliationEngineForTesting(engine: org.harmonia.player.domain.scanner.MediaReconciliationEngine) {
+        mediaReconciliationEngineInstance = engine
+    }
+
     fun getPlaybackPort(): PlaybackPort {
         return playbackPortInstance ?: error("PlaybackPort has not been registered in ServiceLocator!")
     }
@@ -217,6 +243,7 @@ object ServiceLocator {
         scanCheckpointRepositoryInstance = null
         storagePermissionCheckerInstance = null
         audioMetadataReaderInstance = null
+        mediaReconciliationEngineInstance = null
         playbackPortInstance = null
     }
 }
