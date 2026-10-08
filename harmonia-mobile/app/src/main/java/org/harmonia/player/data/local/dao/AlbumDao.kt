@@ -1,0 +1,29 @@
+package org.harmonia.player.data.local.dao
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import kotlinx.coroutines.flow.Flow
+import org.harmonia.player.data.local.entity.AlbumEntity
+
+@Dao
+interface AlbumDao {
+    @Query("SELECT * FROM mobile_albums ORDER BY title COLLATE NOCASE ASC")
+    fun observeAllAlbums(): Flow<List<AlbumEntity>>
+
+    @Query("SELECT * FROM mobile_albums WHERE id = :id LIMIT 1")
+    suspend fun getAlbumById(id: String): AlbumEntity?
+
+    @Query("SELECT * FROM mobile_albums WHERE artist_id = :artistId ORDER BY year DESC, title ASC")
+    fun observeAlbumsByArtist(artistId: String): Flow<List<AlbumEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAlbums(albums: List<AlbumEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAlbum(album: AlbumEntity)
+
+    @Query("DELETE FROM mobile_albums WHERE id = :id")
+    suspend fun deleteAlbumById(id: String)
+}

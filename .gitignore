@@ -27,7 +27,7 @@ env/
 .env.*.local
 
 # Harmonia data (user-specific)
-data/
+/data/
 
 # Testing
 .pytest_cache/
