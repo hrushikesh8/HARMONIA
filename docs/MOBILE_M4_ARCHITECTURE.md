@@ -2,25 +2,42 @@
 **Local Media Ingestion & Device Storage Engine**
 
 **Document Classification:** Engineering Architecture Specification & Pre-Implementation Gate  
-**Status:** COMPLETE & FROZEN — AWAITING IMPLEMENTATION APPROVAL  
+**Status:** REVISED & FROZEN (REVIEW 2) — AWAITING IMPLEMENTATION APPROVAL  
 **Author:** Harmonia Lead Research Architect  
 **Accepted Baseline:** Harmonia Mobile M3-E (Commit `c952e15`, Tag `restore-point/mobile-m3-complete`)  
 **Scope Directive:** Zero production code modifications. Architectural blueprint, data contracts, identity models, storage lifecycles, and subphase definitions only.
 
 ---
 
+## Architecture Corrections — Review 2
+
+Following the architectural review pass, the specification incorporates the following mandatory corrections:
+
+1. **Rejection of Metadata-Only Provisional Track Identity:** Metadata-only slugs (UUIDv5) are explicitly rejected as a collision-free identity mechanism. A multi-tier identity model is established: Content Identity (`fileHash` + `fileSize`), Location Identity (`SourceIdentity`), Runtime Locator (`contentUri` / `documentUri`), and Discovery Locator (`MediaStore._ID`). Two distinct physical files with identical metadata (e.g. alternate masterings, remasters, live vs studio, or duplicate tags) remain completely distinct. Two copies of identical bytes are recognized via Content Identity SHA-256 and linked to the same track.
+2. **MediaStore ID Demotion to Discovery Locator:** Android MediaStore integer `_ID` values are formally classified as ephemeral platform discovery handles, NEVER as universal content identities or database foreign keys.
+3. **Decoupling of Incremental Scanning from Full Reconciliation:** Incremental change detection via `MediaStore.getGeneration()` is decoupled from Full Source Reconciliation. Incremental scans process only newly added/modified rows without enumerating the whole library. Full reconciliation (which detects disappeared/deleted files) is triggered strictly on explicit user request, generation counter resets, or storage volume remounting.
+4. **Provider-Neutral Scanner Boundary (`MediaSourceScanner`):** Introduced a unified scanner boundary supporting both `MediaStoreScanner` (for internal and external volumes) and `SafTreeScanner` (for user-selected SAF document trees with recursive traversal and persisted URI permissions).
+5. **Artwork Reconciliation with Existing M3 `ArtworkProvider`:** Eliminated the proposed `.bin` format. M4 metadata extraction strictly integrates with the verified M3 `ArtworkProvider`, writing content-addressed `$artworkHash.jpg` files to `filesDir/artwork` and warming the existing in-memory LRU cache. Exactly one artwork system exists.
+6. **Removal of Unsupported Performance Claims:** Removed speculative claims such as `"<100ms for 10,000 tracks"` and blanket `"O(1) memory"` guarantees. Replaced with bounded 50-item batch streaming, $O(\text{batch size})$ memory consumption, and an empirical device benchmarking methodology.
+7. **Qualified Best-Effort Metadata Extraction:** All extracted metadata fields are explicitly modeled as nullable (`title?`, `artist?`, `album?`, `durationSec?`, `bitrate?`, `sampleRate?`). The scanner does not invent or fabricate metadata.
+8. **Audio Focus State Machine Refinement:** Strict separation of `PLAYING`, `PAUSED_BY_USER`, `PAUSED_BY_FOCUS`, and `STOPPED`. Auto-resume on focus regain occurs ONLY if playback was actively running before transient focus loss. Becoming Noisy (headphone unplug) transitions to `PAUSED_BY_USER`, strictly requiring manual user interaction to resume.
+9. **M4 Scope Purity Enforcement:** Reaffirmed that M4 introduces zero new playback engines, DSP, equalizers, AI, cloud, or sync networking. M4 is strictly local media ingestion, storage lifecycle, and essential audio ergonomics.
+10. **Updated ADR Baseline:** ADR-026 through ADR-031 updated to reflect these corrected decisions.
+
+---
+
 ## 1. Approved Direction
 
-Following the forensic evaluation in `MOBILE_M4_RESEARCH.md`, the approved direction for Milestone 4 is:
+Following the forensic evaluation in `MOBILE_M4_RESEARCH.md` and the Review 2 corrections, the approved direction for Milestone 4 is:
 
 > **M4: LOCAL MEDIA INGESTION & DEVICE STORAGE ENGINE**  
 > *(incorporating essential peripheral audio ergonomics: Audio Focus & Becoming Noisy)*
 
 ### Core Objectives:
 1. Transform Harmonia Mobile into a completely self-sufficient, autonomous offline player capable of indexing and playing music existing on the user's Android phone (internal storage, SD card, custom folders).
-2. Establish the Android Scoped Storage and volume lifecycle architecture (`StorageSource`, `LocalFileRepository`, `VolumeManager`) that will act as the stable landing pad for future desktop-to-mobile synchronization (LocalSync).
-3. Implement clean-room, zero-NDK metadata and embedded artwork extraction using Android's native platform APIs.
-4. Integrate critical real-world audio lifecycle safety hooks (`AudioFocusCoordinator` and `BecomingNoisyReceiver`) so playback automatically ducks during navigation, pauses on incoming phone calls, and immediately halts when headphones or Bluetooth disconnect.
+2. Establish the Android Scoped Storage and volume lifecycle architecture (`StorageSource`, `LocalFileRepository`, `VolumeManager`, `MediaSourceScanner`) that will act as the stable landing pad for future desktop-to-mobile synchronization (LocalSync).
+3. Implement clean-room, zero-NDK metadata and embedded artwork extraction using Android's native platform APIs integrated with the existing M3 `ArtworkProvider`.
+4. Integrate critical real-world audio lifecycle safety hooks (`AudioFocusCoordinator` and `BecomingNoisyReceiver`) so playback automatically ducks during navigation, pauses on incoming phone calls (auto-resuming ONLY if actively playing beforehand), and immediately halts when headphones or Bluetooth disconnect.
 5. Strictly preserve existing architectural authorities (single ExoPlayer, single `PlaybackPort`, single authoritative queue, decoupled Room persistence, zero network dependencies).
 
 ---
@@ -40,7 +57,7 @@ Harmonia Mobile M3-E represents the verified, frozen baseline:
   - Single `ExoPlayer` in `HarmoniaPlaybackService` (`MediaSessionService`).
   - Single `PlaybackPort` implementation in `HarmoniaPlayerController`.
   - Multi-tab Jetpack Compose navigation (`Home`, `Library`, `Search`, `Playlists`).
-  - Offline SHA-256 content-addressed artwork cache.
+  - Offline SHA-256 content-addressed artwork cache (`ArtworkProvider`).
   - Zero `INTERNET` permission in `AndroidManifest.xml`.
 
 ---
@@ -52,7 +69,8 @@ Harmonia Mobile M3-E represents the verified, frozen baseline:
 3. **Harmonia AI Understands the Person:** AI modeling runs independently of Mobile and Core. Mobile provides factual, unpolluted telemetry (`ListeningEvent` records); AI derives recommendations.
 4. **Offline-First & Sovereign:** Ingestion operates 100% locally on the device without internet access, accounts, telemetry SDKs, or cloud dependencies.
 5. **Read-Only Media Policy:** Harmonia Mobile NEVER modifies, overwrites, renames, or writes tags back to physical audio files on disk. The user's files are sacred.
-6. **Ejection Invariant:** Ejecting an SD card or revoking folder permissions marks files `UNAVAILABLE`, but NEVER deletes playlists, listening history, or track records.
+6. **Ejection Invariant:** Ejecting an SD card or revoking folder permissions marks files `UNAVAILABLE` or `STORAGE_UNMOUNTED`, but NEVER deletes playlists, listening history, or track records.
+7. **Scope Purity:** M4 introduces no DSP, equalizers, gapless playback redesign, cloud sync, or recommendation systems.
 
 ---
 
@@ -81,28 +99,28 @@ Harmonia Mobile M3-E represents the verified, frozen baseline:
 ### The 9 Critical Architectural Boundary Decisions
 
 #### 1. What happens when Mobile discovers a completely new MP3?
-Mobile extracts factual technical properties (format, duration, bitrate, sample rate) and embedded tags (title, artist, album, track number, year) using `MediaMetadataRetriever`. It computes a content digest (file size + header/sample hash or SHA-256), writes a `LocalFile` entity to Room SQLite (`mobile_local_files`), and creates or links to a **Provisional local `Track`** (`mobile_tracks`).
+Mobile extracts factual technical properties (format, duration, bitrate, sample rate) and embedded tags (title, artist, album, track number, year) using `MediaMetadataRetriever` on a best-effort basis. It computes the cryptographic Content Identity (`fileHash` = SHA-256 of the audio bitstream + `fileSize`), writes a `LocalFile` entity to Room SQLite (`mobile_local_files`), and creates or links to a **Provisional local `Track`** in `mobile_tracks`.
 
 #### 2. Does Mobile create a local Track?
 **YES.** Mobile must create a local `Track` entity immediately. If Mobile only created a raw file record without a `Track`, the entire M3 presentation layer (Library, Search, Playlists, Album detail, Artist detail, Now Playing) would be unable to display or navigate the music without a connection to Desktop Core.
 
 #### 3. Is that Track authoritative or provisional?
-**PROVISIONAL.** The track's provenance is explicitly flagged as `PROVISIONAL_LOCAL`. It represents a local working model of the musical work. It is authoritative for on-device playback, but provisional with respect to the global Harmonia catalog.
+**PROVISIONAL.** The track's provenance is explicitly flagged as `is_provisional = 1` (`PROVISIONAL_LOCAL`). It represents a local working model of the musical work. It is authoritative for on-device playback, but provisional with respect to the global Harmonia catalog.
 
 #### 4. How is Track identity determined locally?
-Locally on Mobile, Track identity is generated deterministically:
+Locally on Mobile, Track identity is rooted in Content Identity and verified metadata:
 - If an embedded MusicBrainz Recording ID (`mbid`) exists, `track.id = mbid`.
-- Otherwise, a deterministic UUIDv5 is generated from a normalized slug:  
-  `UUID.nameUUIDFromBytes("harmonia:track:${normalizedArtist}:${normalizedAlbum}:${normalizedTitle}:${trackNo}:${discNo}".toByteArray())`.  
-  This ensures deterministic deduplication: rescanning the same file or discovering identical tracks across volumes maps to the identical local `Track.id`.
+- Otherwise, a deterministic provisional ID is generated:  
+  `track.id = "local:" + sha256(fileHash + normalizedTitle + normalizedArtist + normalizedAlbum)`.  
+  **Why this prevents collisions:** Because `fileHash` is a component of the provisional track key, distinct physical recordings with identical metadata (e.g. remastered editions, studio vs live bonus tracks) produce distinct provisional tracks and never collide into a single confused record.
 
 #### 5. Relationship between Track, TrackFile, LocalFile, MediaStore ID, URI, and SHA-256:
 - **`Track` (Domain/Room):** Abstract musical recording. Holds presentation metadata.
 - **`TrackFile` (Core Entity):** Desktop Core's bitstream model. Not present in Mobile.
 - **`LocalFile` (Mobile Entity):** Android device's physical bitstream model. Foreign-keyed to `Track.id`.
-- **`MediaStore ID` (OS Handle):** Integer primary key in Android `MediaStore.Audio.Media._ID`. Volatile across OS scans; used solely as an ephemeral query cursor, NEVER as a foreign key.
-- **`URI` (Platform Locator):** Content URI (`content://media/external/audio/media/1234`) or Document URI (`content://.../document/...`). Used by Media3 ExoPlayer to open audio streams. Stored as `mobile_local_files.file_uri` (unique index).
-- **`SHA-256` (Universal Content Digest):** Cryptographic digest of the audio bitstream bytes. Persisted in `mobile_local_files.file_hash`. Universally maps Mobile's `LocalFile` to Core's `TrackFile` during sync.
+- **`MediaStore ID` (Discovery Locator):** Ephemeral integer primary key in Android `MediaStore.Audio.Media._ID`. Volatile across OS scans; used solely as an ephemeral discovery cursor, NEVER as a foreign key or universal identity.
+- **`URI` (Runtime Locator):** Content URI (`content://media/external/audio/media/1234`) or Document URI (`content://.../document/...`). Used by Media3 ExoPlayer to open audio streams. Stored as `mobile_local_files.file_uri` (unique index).
+- **`SHA-256` (Content Identity):** Cryptographic digest of the audio bitstream bytes. Persisted in `mobile_local_files.file_hash`. Universally maps Mobile's `LocalFile` to Core's `TrackFile` during sync.
 
 #### 6. Metadata Divergence & Priority Hierarchy:
 When metadata differs between sources, the following strict resolution hierarchy applies:
@@ -134,37 +152,48 @@ When metadata differs between sources, the following strict resolution hierarchy
 
 ## 5. Local File Identity Model
 
-### Three-Tier Identity Architecture
+### Classification of Identifiers
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    THREE-TIER ANDROID IDENTITY MODEL                        │
-├─────────────────┬───────────────────────────────────────────────────────────┤
-│ Tier 1:         │ SHA-256 Digest (Audio Bitstream Hash)                     │
-│ Content Identity│ • Universal, permanent, platform-agnostic                 │
-│                 │ • Survives renames, moves, SD card transfers, OS re-index │
-├─────────────────┼───────────────────────────────────────────────────────────┤
-│ Tier 2:         │ SourceIdentity Key                                        │
-│ Location Identity│ • Format: "sourceType:volumeIdentifier:relativePath"     │
-│                 │ • Stable across app restarts; detects file renames/moves  │
-├─────────────────┼───────────────────────────────────────────────────────────┤
-│ Tier 3:         │ Platform URI Handle                                       │
-│ Runtime Locator │ • content:// or document:// URI                           │
-│                 │ • Ephemeral; passed to ExoPlayer for byte-stream access   │
-└─────────────────┴───────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                            IDENTIFIER CLASSIFICATION MATRIX                                 │
+├────────────────────┬─────────────────────────────┬──────────────────────────────────────────┤
+│ Identifier         │ Classification Category     │ Scope & Invariants                       │
+├────────────────────┼─────────────────────────────┼──────────────────────────────────────────┤
+│ SHA-256            │ Content Identity            │ Universal, cryptographic, immutable.     │
+│                    │                             │ Survives renames, moves, SD swaps, sync. │
+├────────────────────┼─────────────────────────────┼──────────────────────────────────────────┤
+│ SourceIdentity     │ Location Identity           │ Session-stable composite key             │
+│                    │                             │ "sourceType:volumeIdentifier:path".      │
+├────────────────────┼─────────────────────────────┼──────────────────────────────────────────┤
+│ Content URI        │ Runtime Locator             │ Ephemeral stream handle passed to        │
+│ / Document URI     │                             │ Media3 ExoPlayer.                        │
+├────────────────────┼─────────────────────────────┼──────────────────────────────────────────┤
+│ MediaStore _ID     │ Discovery Locator           │ Ephemeral OS cursor handle. Volatile     │
+│                    │                             │ across media database rebuilds.          │
+├────────────────────┼─────────────────────────────┼──────────────────────────────────────────┤
+│ Relative Path      │ Location Attribute          │ Human-readable directory location.       │
+├────────────────────┼─────────────────────────────┼──────────────────────────────────────────┤
+│ Generation         │ Freshness / Checkpoint Meta │ Monotonically increasing change counter. │
+└────────────────────┴─────────────────────────────┴──────────────────────────────────────────┘
 ```
 
-### Edge Case Invariants
+### Collision Handling & Multi-File Invariants
 
-| Scenario | Behavior & Resolution |
-| :--- | :--- |
-| **File Renamed in Same Folder** | Same `fileHash` + same volume + same file size. `SourceIdentity` detects name change; `LocalFile.file_uri` updated; track identity unchanged. |
-| **File Moved to Another Folder** | Same `fileHash`. Scanner matches existing `fileHash`; updates `file_uri` and location without creating duplicate `Track` or breaking playlist links. |
-| **SD Card Ejected** | Volume UUID absent. `LocalFile.availability_status` transitions to `STORAGE_UNMOUNTED`. Records preserved. |
-| **SD Card Reinserted** | Volume UUID returns. `LocalFile.availability_status` transitions back to `AVAILABLE`. No re-ingestion needed. |
-| **MediaStore Cleared / OS Re-indexed**| MediaStore integer `_ID` changes. `fileHash` matches existing `LocalFile`; `file_uri` updated smoothly without duplicating library. |
-| **Identical Audio Copied to 2 Folders**| Same `fileHash`, different URIs. Ingested as secondary `LocalFile` pointing to the **same** underlying `Track.id`. |
-| **File Edited in Place (Tags Modified)**| `fileHash` and `dateModified` change. Scanner reads new tags, updates provisional metadata; track identity preserved. |
+1. **Two Distinct Files with Identical Metadata:**
+   - Example: A studio version and a live acoustic bonus track with identical title, artist, and album tags.
+   - `fileHash_A != fileHash_B`.
+   - Their Content Identities differ.
+   - Mobile generates two distinct `LocalFile` entities and two distinct provisional tracks:  
+     `track_A.id = "local:" + sha256(fileHash_A + tags)`  
+     `track_B.id = "local:" + sha256(fileHash_B + tags)`  
+   - They remain completely separate in the library and cannot collide or overwrite each other.
+2. **Two Copies of Identical Audio Bytes:**
+   - Example: An MP3 copied to both internal `/Music` and external SD card `/Music/Backup`.
+   - `fileHash_A == fileHash_B`.
+   - Both files have identical Content Identity.
+   - Mobile creates two distinct `LocalFile` records (reflecting their separate Location Identities and Runtime Locators), but links both to the **same single `Track`** record.
+   - If the SD card is removed, the remaining `LocalFile` maintains `availabilityStatus = AVAILABLE`, and the track remains playable seamlessly.
 
 ---
 
@@ -214,15 +243,6 @@ sealed interface StorageSource {
     ) : StorageSource
 }
 ```
-
-### Storage Source Authority & Access Matrix
-
-| Storage Source | Authority | Permission Required | Scan Mechanism | Byte Stream Access |
-| :--- | :--- | :--- | :--- | :--- |
-| **`MediaStorePrimary`** | Android OS | `READ_MEDIA_AUDIO` (API 33+) / `READ_EXTERNAL_STORAGE` (API <33) | `ContentResolver.query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI)` | `ContentResolver.openFileDescriptor(uri, "r")` |
-| **`MediaStoreVolume`** | StorageManager | Same as primary | `MediaStore.Audio.Media.getContentUri(volumeName)` | `ContentResolver.openFileDescriptor(uri, "r")` |
-| **`SafDocumentTree`** | DocumentProvider | `takePersistableUriPermission` on `ACTION_OPEN_DOCUMENT_TREE` | `DocumentsContract.buildChildDocumentsUriUsingTree` | `ContentResolver.openInputStream(docUri)` |
-| **`InternalSyncStorage`** | Harmonia App | None (App-scoped sandboxed storage) | Filesystem `java.io.File` traversal | Direct `FileInputStream` |
 
 ---
 
@@ -297,129 +317,125 @@ object MediaStoreAudioContract {
 
 ## 9. Metadata Architecture
 
-### Clean-Room `AudioMetadataReader` Pipeline
+### Best-Effort, Qualified `AudioMetadataReader` Pipeline
 
 Metadata extraction is executed exclusively via Android's native `android.media.MediaMetadataRetriever` (clean-room, zero native JNI/NDK dependencies, zero GPL copyleft).
 
+**All fields are explicitly modeled as nullable:**
+
 ```kotlin
-data class RawExtractedMetadata(
+data class ExtractedAudioMetadata(
     val title: String?,
     val artist: String?,
     val album: String?,
     val albumArtist: String?,
     val genre: String?,
-    val trackNumberRaw: String?,
-    val discNumberRaw: String?,
-    val yearRaw: String?,
-    val durationMs: Long?,
-    val bitrateKbps: Int?,
-    val mimeType: String?,
-    val embeddedArtwork: ByteArray?
-)
-
-data class NormalizedMetadata(
-    val title: String,
-    val artist: String,
-    val album: String,
     val trackNumber: Int?,
-    val discNumber: Int,
+    val discNumber: Int?,
     val year: Int?,
-    val genre: String?,
-    val durationSec: Double,
-    val bitrate: Int?,
-    val artworkHash: String?
+    val durationSec: Double?,
+    val bitrateKbps: Int?,
+    val sampleRateHz: Int?,
+    val mimeType: String?,
+    val rawArtworkBytes: ByteArray?
 )
 ```
 
-### Normalization Rules (ADR-004 Aligned)
+### Normalization & Fallback Rules
 1. **Unicode NFC Normalization:** All text strings are normalized via `Normalizer.normalize(str, Normalizer.Form.NFC)`.
 2. **Ordinal Parsing:** Track and disc numbers parsed from compound strings (`"4/12"` → track `4`).
 3. **Year Extraction:** ISO dates parsed (`"2022-05-17"` → year `2022`).
-4. **Fallback Fallthrough:** If title is missing or blank, fall back to filename without extension. If artist is blank, fall back to `"Unknown Artist"`. If album is blank, fall back to `"Unknown Album"`.
+4. **No Fabricated Metadata:** If artist, album, or title are missing from file tags, they are kept as `null` in the domain entity. In the UI presentation layer, appropriate localized fallback labels (`"Unknown Artist"`, `"Unknown Album"`, or the filename) are rendered dynamically without corrupting the database with fake strings.
 
 ---
 
 ## 10. Artwork Architecture
 
-### Content-Addressed Artwork Invariants
-1. **SHA-256 Authority:** Embedded artwork bytes extracted via `retriever.embeddedPicture` are digested with SHA-256.
-2. **Deduplication:** Multiple tracks from the same album sharing identical image bytes yield identical SHA-256 hashes. Exactly ONE image file is written to disk at `filesDir/artwork/{sha256}.bin`.
-3. **Cache Lookup:** If `File(context.filesDir, "artwork/$hash.bin").exists()`, disk write is skipped entirely.
-4. **Dimension & Memory Clamping:** Images exceeding 1024x1024 are downsampled during file write using `BitmapFactory.Options.inSampleSize` to prevent Out-Of-Memory (OOM) errors during notification or UI rendering.
-5. **Deterministic Fallback:** Missing or corrupt artwork emits `null` hash, seamlessly handled by M3's `ArtworkProvider` placeholder renderer.
+### Reconciliation with Existing M3 `ArtworkProvider`
+
+Harmonia possesses exactly ONE authoritative artwork system: the verified M3 [`ArtworkProvider`](file:///c:/Users/Hrushikesh%20Bunni/Downloads/H/PROJECTS/HARMONIA/harmonia-mobile/app/src/main/java/org/harmonia/player/data/local/ArtworkProvider.kt).
+
+### Invariants & Workflow:
+1. **Extraction:** `retriever.embeddedPicture` returns raw image bytes.
+2. **Hashing:** SHA-256 digest is computed on the raw bytes: `artworkHash = sha256(bytes)`.
+3. **Storage:** The scanner delegates directly to the existing provider:  
+   `ArtworkProvider.getInstance(context).storeArtwork(artworkHash, bytes)`.
+4. **File Format:** Files are saved strictly as `$artworkHash.jpg` in `context.filesDir/artwork` via atomic temporary file renaming (`${hash}_tmp` -> `$hash.jpg`).
+5. **Deduplication:** Multiple tracks from the same album sharing identical artwork bytes compute the same SHA-256 hash. If `$artworkHash.jpg` already exists, disk writes are skipped.
+6. **In-Memory Cache:** `ArtworkProvider` maintains an in-memory `LruCache<String, Bitmap>(60)`. Storing artwork automatically warms this cache.
+7. **Downsampling:** Embedded pictures exceeding 1024x1024 are downsampled during write to protect memory during notification and UI display.
 
 ---
 
 ## 11. Scanner Architecture
 
-### Deterministic Scanning Pipeline
+### Provider-Neutral Discovery Boundary (`MediaSourceScanner`)
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                       LOCAL MEDIA SCANNER PIPELINE                          │
-└─────────────────────────────────────────────────────────────────────────────┘
+```kotlin
+sealed interface ScanMode {
+    data object Incremental : ScanMode
+    data object FullReconciliation : ScanMode
+}
 
- [ Storage Source Discovery ]  Query MediaStore / traverse SAF DocumentTree
-             │
-             ▼
-   [ Batch Partitioning ]      Partition URIs into chunks of 50 items
-             │
-             ▼
-    [ Identity Check ]         Compare (SourceIdentity, dateModified, size)
-             │                 against existing Room records
-             ▼
-  ┌───────────────────────┐
-  │ Was item modified?    │
-  │ • NO  ─► Skip extract │
-  │ • YES ─► Proceed      │
-  └───────────────────────┘
-             │
-             ▼
-   [ Metadata & Artwork ]      Extract via MediaMetadataRetriever on Dispatchers.IO
-             │                 Compute SHA-256 hash & save artwork to cache
-             ▼
-   [ Room Batch Upsert ]       Execute atomic transaction inserting/updating:
-             │                 • mobile_tracks (Provisional)
-             │                 • mobile_albums
-             │                 • mobile_artists
-             │                 • mobile_local_files (AVAILABLE)
-             ▼
-  [ Advance Checkpoint ]       Update last generation / scan timestamp
-             │
-             ▼
-    [ Emit Progress ]          Flow<ScanProgress> (scanned, total, currentTitle)
+data class DiscoveredMediaItem(
+    val sourceId: String,
+    val locationKey: String,
+    val uri: String,
+    val displayName: String,
+    val sizeBytes: Long,
+    val dateModifiedEpochSec: Long
+)
+
+interface MediaSourceScanner {
+    val supportedSourceType: String
+    suspend fun discoverItems(source: StorageSource, mode: ScanMode): Flow<List<DiscoveredMediaItem>>
+    suspend fun reconcileSource(source: StorageSource): Flow<ReconciliationResult>
+}
 ```
 
-### Scanner Error & Failure Modes
-- **Corrupt Audio File:** `MediaMetadataRetriever` throws `RuntimeException`. Caught in `runCatching`; logs warning; falls back to MediaStore cursor columns; scanner continues without crashing.
-- **Inaccessible File (Permission Revoked mid-scan):** `SecurityException` caught; marks file `UNAVAILABLE`; scanner continues.
-- **Coroutine Cancellation:** User leaves screen or triggers cancel. Scanner cooperatively checks `coroutineContext.isActive` between batches, commits processed batches, and halts cleanly.
+### Concrete Scanner Implementations:
+1. **`MediaStoreScanner`:**
+   - Queries `ContentResolver` for `MediaStore.Audio.Media.EXTERNAL_CONTENT_URI` or volume URI.
+   - For `ScanMode.Incremental`: filters strictly by `GENERATION_MODIFIED > lastGeneration`.
+   - Emits batches of discovered items.
+2. **`SafTreeScanner`:**
+   - Recursively traverses SAF document trees using `DocumentsContract.buildChildDocumentsUriUsingTree`.
+   - Queries directory children using `ContentResolver.query` with projection `[DOCUMENT_ID, DISPLAY_NAME, MIME_TYPE, SIZE, LAST_MODIFIED]`.
+   - Filters by audio MIME types and extensions.
+   - Persists verified URI permissions; catches `SecurityException` if permission was revoked.
+   - Cooperatively checks `coroutineContext.isActive` at each directory level.
+
+### Processing Pipeline (Bounded Batch Streaming):
+1. **Discovery Stream:** Items are emitted in bounded chunks of 50 (`ScanBatch`).
+2. **Change Evaluation:** If `(sizeBytes, dateModified)` match existing `LocalFile` records, item is skipped without opening file descriptors.
+3. **Extraction & Ingestion:** New/modified items processed via `AudioMetadataReader` on `Dispatchers.IO`.
+4. **Room Batch Transaction:** Atomic transaction updates `mobile_tracks`, `mobile_albums`, `mobile_artists`, and `mobile_local_files`.
+5. **Memory Discipline:** Batched chunking guarantees memory consumption remains bounded to the size of the current batch ($O(\text{batch size})$), preventing whole-library materialization.
 
 ---
 
-## 12. Incremental Scanning Model
-
-### Generation Checkpoint Engine (`MediaStore.getGeneration()`)
-On Android 11+ (API 30+), MediaStore maintains a monotonically increasing `generation` counter per volume.
+## 12. Incremental Scanning vs Full Reconciliation
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    GENERATION CHECKPOINT ENGINE                             │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ 1. Read last committed generation from `mobile_scan_checkpoints`.           │
-│ 2. Query MediaStore with: `GENERATION_MODIFIED > lastGeneration`.           │
-│ 3. If count == 0: Incremental scan finishes in < 50ms without disk I/O.     │
-│ 4. If count > 0: Process ONLY modified/added rows.                          │
-│ 5. Advance checkpoint: Persist `newGeneration = MediaStore.getGeneration()`.│
-│ 6. Fallback (API < 30): Compare `DATE_MODIFIED > lastScanTimestamp`.        │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                 INCREMENTAL SCANNING vs FULL SOURCE RECONCILIATION                          │
+├──────────────────────────┬─────────────────────────────┬────────────────────────────────────┤
+│ Dimension                │ Incremental Scan            │ Full Source Reconciliation         │
+├──────────────────────────┼─────────────────────────────┼────────────────────────────────────┤
+│ Trigger                  │ App startup / background    │ Explicit "Rescan Library" button,  │
+│                          │ resume / on-demand trigger  │ volume remount, generation reset.  │
+├──────────────────────────┼─────────────────────────────┼────────────────────────────────────┤
+│ Query Strategy           │ GENERATION_MODIFIED > last  │ Full inventory enumeration of all  │
+│                          │ (or dateModified > last)    │ active IDs / Document IDs.         │
+├──────────────────────────┼─────────────────────────────┼────────────────────────────────────┤
+│ Scope                    │ Newly added / touched files │ Complete source inventory.         │
+├──────────────────────────┼─────────────────────────────┼────────────────────────────────────┤
+│ Disappeared Files        │ Does NOT detect deletions   │ Flags missing files as             │
+│                          │ without OS tombstones       │ availability_status = MISSING.     │
+├──────────────────────────┼─────────────────────────────┼────────────────────────────────────┤
+│ Frequency                │ Frequent / Lightweight      │ Infrequent / Maintenance-only      │
+└──────────────────────────┴─────────────────────────────┴────────────────────────────────────┘
 ```
-
-### Deleted File Reconciliation
-To detect files deleted outside Harmonia:
-1. Fast reconciliation query: select all `_ID` values from MediaStore.
-2. Compare with existing `mobile_local_files` for that volume.
-3. Missing rows are flagged `availability_status = MISSING`. Records are preserved; playlists remain intact.
 
 ---
 
@@ -463,36 +479,34 @@ When an SD card is unmounted:
 
 ## 14. Audio Lifecycle & Ergonomics
 
-### `AudioFocusCoordinator` Architecture
+### `AudioFocusCoordinator` State Machine
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        AUDIO FOCUS STATE MACHINE                            │
-└─────────────────────────────────────────────────────────────────────────────┘
-
- [ AudioFocusRequest ]
-         │
-         ├──► AUDIOFOCUS_GAIN
-         │    • Full playback volume (1.0f)
-         │
-         ├──► AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK (e.g. Navigation prompt)
-         │    • Temporarily reduce ExoPlayer volume to 0.2f
-         │    • Restore volume to 1.0f upon regain
-         │
-         ├──► AUDIOFOCUS_LOSS_TRANSIENT (e.g. Incoming phone call / Siri/Assistant)
-         │    • Pause ExoPlayer
-         │    • Automatically resume playback when call ends
-         │
-         └──► AUDIOFOCUS_LOSS (Permanent - e.g. User opened Spotify / YouTube)
-              • Pause ExoPlayer
-              • Abandon audio focus
-              • Do NOT auto-resume
+```kotlin
+enum class PlaybackFocusState {
+    IDLE,
+    PLAYING,
+    PAUSED_BY_USER,
+    PAUSED_BY_FOCUS,
+    STOPPED
+}
 ```
 
-### `BecomingNoisyReceiver` Architecture
-- Registers a dynamic `BroadcastReceiver` in `HarmoniaPlaybackService` listening for `AudioManager.ACTION_AUDIO_BECOMING_NOISY`.
-- Triggers when wired headphones are unplugged or Bluetooth audio device disconnects.
-- Action: Dispatches `pause()` to `PlaybackPort`. Protects the user from embarrassing audio blasts in public.
+### State Transitions & Auto-Resume Discipline:
+- **`AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK` (e.g. Navigation Prompt):**
+  - If state is `PLAYING`: Temporarily duck ExoPlayer volume to `0.2f`.
+  - On focus regain: Restore volume to `1.0f`.
+- **`AUDIOFOCUS_LOSS_TRANSIENT` (e.g. Incoming Phone Call):**
+  - If state is `PLAYING`: Pause ExoPlayer, transition to `PAUSED_BY_FOCUS`.
+  - If state is `PAUSED_BY_USER`: Remain `PAUSED_BY_USER`.
+  - On `AUDIOFOCUS_GAIN`:
+    - If `PAUSED_BY_FOCUS`: Automatically resume playback, transition to `PLAYING`.
+    - If `PAUSED_BY_USER`: **DO NOT RESUME**. User explicitly paused beforehand.
+- **`AUDIOFOCUS_LOSS` (Permanent - e.g. User launches YouTube):**
+  - Pause ExoPlayer, abandon audio focus, transition to `STOPPED` or `PAUSED_BY_USER`. Do not auto-resume.
+- **`BecomingNoisyReceiver` (Headphone / Bluetooth Disconnect):**
+  - Dynamic `BroadcastReceiver` listening for `AudioManager.ACTION_AUDIO_BECOMING_NOISY`.
+  - Immediately pauses playback and transitions to `PAUSED_BY_USER`.
+  - Audio device reconnection **NEVER** auto-resumes playback; requires manual user press on Play.
 
 ---
 
@@ -551,7 +565,6 @@ ALTER TABLE `mobile_tracks` ADD COLUMN `is_provisional` INTEGER NOT NULL DEFAULT
 
 ## 17. Future Sync Compatibility
 
-### Harmonious Alignment with LocalSync
 1. **Landing Pad Ready:** M4's `InternalSyncStorage` source (`filesDir/music/`) provides the exact directory where future LocalSync will deposit files pushed from desktop.
 2. **SHA-256 Bridge:** Because M4 computes SHA-256 digests on discovered files, future LocalSync will achieve $O(1)$ duplicate matching against Core's master catalog.
 3. **Event Aggregation:** M4's `mobile_listening_events` logging records factual events with `playback_source = "LOCAL_STORAGE"`, ready for append-only replication to Core in M6.
@@ -576,11 +589,10 @@ ALTER TABLE `mobile_tracks` ADD COLUMN `is_provisional` INTEGER NOT NULL DEFAULT
 
 ## 20. Performance Model
 
-### Targets & Measurement Methodology
-- **Incremental Rescan:** Target <100ms for 10,000 tracks via MediaStore Generation checkpoints.
-- **Initial Scan Throughput:** Target >100 files/sec on modern Android devices with hardware storage encryption.
-- **Memory Overhead:** Constant $O(1)$ memory footprint using 50-item batch chunking on `Dispatchers.IO`.
-- **UI Responsiveness:** 60/120fps Compose UI maintained; zero disk or ContentResolver queries on the Main thread.
+### Measurement Methodology & Invariants
+- **No Blanket Speculative Claims:** Unsubstantiated claims (such as `<100ms for 10,000 tracks`) are removed. Actual performance targets will be benchmarked on reference hardware (API 33+ real device and emulator).
+- **Bounded Memory Invariant:** Streaming cursors and batching in fixed chunks of 50 items (`ScanBatch`). No whole-library array materialization in memory ($O(\text{batch size})$ memory footprint rather than $O(\text{library size})$).
+- **Thread Isolation:** All file I/O, `ContentResolver` queries, and Room batch transactions run strictly on `Dispatchers.IO`. Compose UI thread is never blocked.
 
 ---
 
@@ -592,11 +604,13 @@ ALTER TABLE `mobile_tracks` ADD COLUMN `is_provisional` INTEGER NOT NULL DEFAULT
   - `AudioMetadataReaderTest`: Test tag normalization, ordinal parsing, and corrupt file fallback.
   - `GenerationCheckpointTest`: Test checkpoint advancement and query generation.
   - `VolumeManagerTest`: Test mount/unmount state transitions.
+  - `AudioFocusCoordinatorTest`: Verify auto-resume occurs ONLY for `PAUSED_BY_FOCUS` and never for `PAUSED_BY_USER`.
 - **Instrumented Connected Tests:**
   - `MediaStoreScannerTest`: Seed real test audio files in emulator shared storage; verify ingestion into Room.
-  - `ArtworkExtractionTest`: Verify SHA-256 content-addressed artwork writing and deduplication.
+  - `SafTreeScannerTest`: Test document tree traversal and change detection.
+  - `ArtworkExtractionTest`: Verify SHA-256 content-addressed artwork writing via `ArtworkProvider` and cache warming.
   - `RemovableStorageEjectionTest`: Simulate volume unmount; verify playlist records survive intact.
-  - `AudioFocusTest`: Verify ducking and pause behavior under audio focus changes.
+  - `AudioFocusIntegrationTest`: Verify ducking and pause behavior under real audio focus changes.
 - **Regression Invariant:**
   - Mobile JVM: 68+ tests passing.
   - Android Connected: 44+ tests passing.
@@ -605,8 +619,6 @@ ALTER TABLE `mobile_tracks` ADD COLUMN `is_provisional` INTEGER NOT NULL DEFAULT
 ---
 
 ## 22. M4 Subphases Specification
-
-### Subphase Breakdown & Gates
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -618,22 +630,23 @@ ALTER TABLE `mobile_tracks` ADD COLUMN `is_provisional` INTEGER NOT NULL DEFAULT
 │           │ • Room schema migration 2 → 3                              │
 ├───────────┼────────────────────────────────────────────────────────────┤
 │ M4-B      │ Metadata Reader & Content-Addressed Artwork Engine         │
-│           │ • AudioMetadataReader (MediaMetadataRetriever)             │
+│           │ • AudioMetadataReader (MediaMetadataRetriever, nullable)   │
 │           │ • Tag normalization (Unicode NFC, ordinals, dates)         │
-│           │ • SHA-256 artwork extractor & cache integration            │
+│           │ • SHA-256 artwork extractor & ArtworkProvider integration  │
 ├───────────┼────────────────────────────────────────────────────────────┤
-│ M4-C      │ Local Media Scanner & Incremental Generation Engine        │
-│           │ • MediaStoreAudioScanner & SAF tree crawler                │
+│ M4-C      │ Provider-Neutral Media Scanner & Incremental Engine        │
+│           │ • MediaSourceScanner (MediaStoreScanner & SafTreeScanner)  │
 │           │ • MediaStore.getGeneration() incremental checkpoint engine │
-│           │ • Batch Room upsert transaction & duplicate deduplication  │
+│           │ • Bounded batch Room upsert transaction & deduplication    │
 ├───────────┼────────────────────────────────────────────────────────────┤
 │ M4-D      │ Volume Lifecycle & Disconnected Storage Protection         │
 │           │ • VolumeManager & SD Card unmount broadcast receiver       │
 │           │ • Ejection Invariant (availability = STORAGE_UNMOUNTED)    │
-│           │ • Remount restoration & missing file reconciliation        │
+│           │ • Full Source Reconciliation engine                        │
 ├───────────┼────────────────────────────────────────────────────────────┤
 │ M4-E      │ Audio Ergonomics, Full Integration & Forensic Release Gate │
-│           │ • AudioFocusCoordinator & BecomingNoisyReceiver            │
+│           │ • AudioFocusCoordinator (strict auto-resume guard)         │
+│           │ • BecomingNoisyReceiver (auto-pause on disconnect)         │
 │           │ • Full End-to-End User Flow (Permission → Scan → Play)     │
 │           │ • Complete regression suite (68 JVM + 44 Connected + Core) │
 │           │ • Hard Forensic Release Gate & Restore Point               │
@@ -645,10 +658,10 @@ ALTER TABLE `mobile_tracks` ADD COLUMN `is_provisional` INTEGER NOT NULL DEFAULT
 ## 23. Acceptance Criteria
 
 - **M4-A Gate:** Permissions requested cleanly; Room schema migrated to v3; `StorageSource` models verified in unit tests.
-- **M4-B Gate:** `AudioMetadataReader` parses MP3, FLAC, M4A, and WAV tags accurately; artwork extracted to SHA-256 cache without leaks.
-- **M4-C Gate:** Local audio files scanned and visible in Library, Search, and Playlists; incremental scans complete sub-second via generation checkpoints.
-- **M4-D Gate:** Unmounting storage marks files `UNAVAILABLE` without dropping database records; remounting restores availability.
-- **M4-E Gate:** Headphone unplug auto-pauses; audio focus ducks/pauses; full regression suite (JVM + Connected + Core) passes with 100% success; zero production defects.
+- **M4-B Gate:** `AudioMetadataReader` parses MP3, FLAC, M4A, and WAV tags accurately; artwork extracted to `ArtworkProvider` without leaks or duplicate systems.
+- **M4-C Gate:** Local audio files scanned and visible in Library, Search, and Playlists; incremental scans process newly added/touched files without whole-library re-enumeration.
+- **M4-D Gate:** Unmounting storage marks files `STORAGE_UNMOUNTED` without dropping database records; full reconciliation cleanly flags deleted files as `MISSING`.
+- **M4-E Gate:** Headphone unplug auto-pauses (requires manual play to resume); audio focus ducks/pauses (auto-resumes ONLY if actively playing beforehand); full regression suite (JVM + Connected + Core) passes with 100% success; zero production defects.
 
 ---
 
@@ -670,17 +683,17 @@ ALTER TABLE `mobile_tracks` ADD COLUMN `is_provisional` INTEGER NOT NULL DEFAULT
    *Mitigation:* Educational empty state explaining why audio permission is needed, with deep-link to app system settings.
 2. **Risk:** Corrupt audio files crash `MediaMetadataRetriever`.  
    *Mitigation:* Isolate extractor calls in `runCatching`; fall back to filename and MediaStore columns on failure.
-3. **Risk:** Slow scans on massive 100,000-track SD cards.  
-   *Mitigation:* Chunked 50-item batches on `Dispatchers.IO`; `MediaStore.getGeneration()` checkpoints for all subsequent scans.
+3. **Risk:** Slow scans on massive SD cards.  
+   *Mitigation:* Bounded 50-item batches on `Dispatchers.IO`; `MediaStore.getGeneration()` checkpoints for subsequent scans.
 4. **Risk:** Memory bloat from embedded high-res artwork.  
-   *Mitigation:* Automatic downsampling to 1024x1024 during file write.
+   *Mitigation:* Automatic downsampling to 1024x1024 during write into `ArtworkProvider`.
 
 ---
 
 ## 26. Open Questions & Architectural Decisions
 
 1. **Question:** Should scanning run automatically on application startup?  
-   *Decision:* Yes, execute an ultra-fast generation check (`MediaStore.getGeneration()`) at startup. If generation hasn't changed, scan terminates in <50ms with zero user disruption. Provide manual "Rescan Library" button in Settings.
+   *Decision:* Yes, execute an ultra-fast generation check (`MediaStore.getGeneration()`) at startup. If generation hasn't changed, scan terminates with zero user disruption. Provide manual "Full Rescan" button in Settings.
 2. **Question:** Should Harmonia split multi-artist tags (e.g. `"Artist A feat. Artist B"`) in M4?  
    *Decision:* No, preserve composite string for M4 local ingestion to maintain clean 1:1 parity with the audio file tags. Core will perform advanced multi-artist parsing during sync.
 
@@ -688,30 +701,28 @@ ALTER TABLE `mobile_tracks` ADD COLUMN `is_provisional` INTEGER NOT NULL DEFAULT
 
 ## 27. Architectural Decision Records (ADRs)
 
-The following ADRs are established for Milestone M4, numbered sequentially following existing records ADR-001 through ADR-025:
+### **ADR-026: Multi-Tier Identity Model & Provisional Track Reification**
+- **Decision:** Distinguish Content Identity (SHA-256 + size), Location Identity (`SourceIdentity`), Runtime Locator (`contentUri` / `documentUri`), and Discovery Locator (`MediaStore._ID`). Reify provisional tracks using composite keys `local:sha256(fileHash + metadata)` rather than metadata-only slugs.
+- **Reason:** Prevents collisions between distinct masterings, remasters, or live tracks that share identical tags, while allowing byte-identical duplicates to link to the same track.
 
-### **ADR-026: Android Media Ingestion Identity Model & Provisional Track Reification**
-- **Decision:** When an unindexed audio file is discovered on Android storage, Mobile generates a content-addressed `LocalFile` and creates a provisional `Track` identified by a deterministic UUIDv5 derived from normalized metadata slugs.
-- **Reason:** Enables instant, fully functional offline library browsing and playback without requiring a connection to Desktop Core, while maintaining a clean reconciliation path for future sync.
+### **ADR-027: Provider-Neutral Storage Architecture (`MediaSourceScanner`)**
+- **Decision:** Ingest media via a provider-neutral `MediaSourceScanner` contract with concrete implementations for `MediaStoreScanner` and `SafTreeScanner`.
+- **Reason:** Provides a unified pipeline for both platform MediaStore indexing and custom user SAF folder trees with persisted URI permissions.
 
-### **ADR-027: Scoped Storage Dual-Provider Architecture (`MEDIA_STORE` + `SAF_DOCUMENT_TREE`)**
-- **Decision:** Ingest media via Android's `MediaStore` by default, while supporting user-selected custom directories via Storage Access Framework (`ACTION_OPEN_DOCUMENT_TREE`) with persisted URI permissions.
-- **Reason:** Complies with Android 13–16 Scoped Storage guidelines without requesting invasive `MANAGE_EXTERNAL_STORAGE` permissions, while supporting audiophiles with custom SD card directory structures.
+### **ADR-028: Decoupled Incremental Change Detection & Full Reconciliation**
+- **Decision:** Decouple incremental change detection via `MediaStore.getGeneration()` from full source reconciliation.
+- **Reason:** Prevents unnecessary whole-library materialization on routine scans while reserving full inventory passes for manual rescans, storage remounts, and generation counter resets.
 
-### **ADR-028: Incremental MediaStore Discovery via Generation Checkpoints (`getGeneration`)**
-- **Decision:** Persist the latest `MediaStore.getGeneration()` value in Room SQLite, querying exclusively rows with `GENERATION_MODIFIED > lastGeneration` during incremental scans.
-- **Reason:** Eliminates expensive full-library file-by-file rescanning, reducing incremental scan durations from tens of seconds to milliseconds.
-
-### **ADR-029: Zero-NDK Clean-Room Metadata Extraction via `MediaMetadataRetriever`**
-- **Decision:** Extract audio metadata and embedded artwork exclusively using Android platform `MediaMetadataRetriever`, rejecting NDK-compiled TagLib binaries.
-- **Reason:** Guarantees clean-room compliance, eliminates 12MB of native C++ `.so` binaries, and avoids GPL/LGPL copyleft licensing contagion.
+### **ADR-029: Qualified Best-Effort Metadata Extraction & M3 ArtworkProvider Integration**
+- **Decision:** Extract metadata on a best-effort basis with strictly nullable fields using platform `MediaMetadataRetriever`, and route all extracted artwork directly into the existing M3 `ArtworkProvider` as `$artworkHash.jpg`.
+- **Reason:** Guarantees clean-room zero-NDK compliance, avoids fabricating metadata, and maintains a single authoritative artwork cache.
 
 ### **ADR-030: Removable Storage Volume Lifecycle & Ejection Invariant**
 - **Decision:** When an external SD card or USB volume is unmounted, associated `LocalFile` entities are marked `STORAGE_UNMOUNTED`, but ZERO records are deleted from playlists, tracks, or listening history.
 - **Reason:** Protects user library curation and playlist integrity from accidental data destruction when removable storage is temporarily detached.
 
-### **ADR-031: Peripheral Audio Ergonomics & Audio Focus State Machine**
-- **Decision:** Integrate `AudioFocusCoordinator` (managing transient loss, ducking, and permanent loss) and `BecomingNoisyReceiver` (auto-pausing on headphone unplug or Bluetooth disconnect) directly into `HarmoniaPlaybackService`.
-- **Reason:** Enforces standard mobile audio etiquette, preventing disruptive audio playback in public environments and during phone calls.
+### **ADR-031: Audio Focus State Machine with Auto-Resume Guard & Becoming Noisy**
+- **Decision:** Implement `AudioFocusCoordinator` with distinct states (`PLAYING`, `PAUSED_BY_USER`, `PAUSED_BY_FOCUS`, `STOPPED`). Auto-resume on focus regain occurs ONLY if state was `PAUSED_BY_FOCUS`. Becoming Noisy transitions to `PAUSED_BY_USER`.
+- **Reason:** Prevents accidental or embarrassing auto-resume when the user had intentionally paused playback beforehand or unplugged headphones.
 
 ---
