@@ -15,15 +15,18 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.lifecycle.viewmodel.compose.viewModel
 import org.harmonia.player.design.theme.AcousticCharcoal
 import org.harmonia.player.design.theme.AcousticTeal
-import org.harmonia.player.design.theme.BorderSlate
 import org.harmonia.player.design.theme.HarmoniaIcons
 import org.harmonia.player.design.theme.HarmoniaTheme
 import org.harmonia.player.design.theme.MutedSlate
@@ -33,6 +36,9 @@ import org.harmonia.player.design.theme.StudioSlate
 import org.harmonia.player.presentation.home.HomeScreen
 import org.harmonia.player.presentation.library.LibraryScreen
 import org.harmonia.player.presentation.navigation.HarmoniaNavDestination
+import org.harmonia.player.presentation.playback.MiniPlayer
+import org.harmonia.player.presentation.playback.NowPlayingSheet
+import org.harmonia.player.presentation.playback.PlaybackViewModel
 import org.harmonia.player.presentation.settings.SettingsScreen
 
 class MainActivity : ComponentActivity() {
@@ -59,8 +65,12 @@ enum class NavigationTab(
 }
 
 @Composable
-fun MainAppContainer() {
+fun MainAppContainer(
+    playbackViewModel: PlaybackViewModel = viewModel()
+) {
     var selectedTab by rememberSaveable { mutableStateOf(NavigationTab.HOME) }
+    var showNowPlayingSheet by remember { mutableStateOf(false) }
+    val playerUiState by playbackViewModel.uiState.collectAsState()
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -105,8 +115,51 @@ fun MainAppContainer() {
                 NavigationTab.HOME -> HomeScreen(
                     onNavigateToLibrary = { selectedTab = NavigationTab.LIBRARY }
                 )
-                NavigationTab.LIBRARY -> LibraryScreen()
+                NavigationTab.LIBRARY -> LibraryScreen(
+                    onTrackClick = { tracks, clickedIndex ->
+                        playbackViewModel.playTrackList(tracks, clickedIndex)
+                    }
+                )
                 NavigationTab.SETTINGS -> SettingsScreen()
+            }
+
+            // Docked MiniPlayer above navigation
+            MiniPlayer(
+                playbackState = playerUiState.playbackState,
+                currentTrack = playerUiState.currentTrack,
+                onPlayPause = {
+                    if (playerUiState.playbackState.isPlaying) {
+                        playbackViewModel.pause()
+                    } else {
+                        playbackViewModel.play()
+                    }
+                },
+                onNext = { playbackViewModel.next() },
+                onClick = { showNowPlayingSheet = true },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+
+            // Now Playing Sheet
+            if (showNowPlayingSheet) {
+                NowPlayingSheet(
+                    playbackState = playerUiState.playbackState,
+                    currentTrack = playerUiState.currentTrack,
+                    queue = playerUiState.queue,
+                    onPlayPause = {
+                        if (playerUiState.playbackState.isPlaying) {
+                            playbackViewModel.pause()
+                        } else {
+                            playbackViewModel.play()
+                        }
+                    },
+                    onNext = { playbackViewModel.next() },
+                    onPrevious = { playbackViewModel.previous() },
+                    onSeekTo = { posMs -> playbackViewModel.seekTo(posMs) },
+                    onQueueItemClick = { idx -> playbackViewModel.jumpToQueueIndex(idx) },
+                    onToggleShuffle = { playbackViewModel.toggleShuffle() },
+                    onCycleRepeat = { playbackViewModel.cycleRepeat() },
+                    onDismiss = { showNowPlayingSheet = false }
+                )
             }
         }
     }

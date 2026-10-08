@@ -2,9 +2,12 @@ package org.harmonia.player.core.di
 
 import android.content.Context
 import org.harmonia.player.data.local.HarmoniaDatabase
+import org.harmonia.player.data.local.OfflineListeningEventRepository
 import org.harmonia.player.data.local.OfflineLocalFileRepository
 import org.harmonia.player.data.local.OfflinePlaybackStateRepository
 import org.harmonia.player.data.local.OfflineTrackRepository
+import org.harmonia.player.domain.playback.PlaybackPort
+import org.harmonia.player.domain.repository.ListeningEventRepository
 import org.harmonia.player.domain.repository.LocalFileRepository
 import org.harmonia.player.domain.repository.PlaybackStateRepository
 import org.harmonia.player.domain.repository.TrackRepository
@@ -26,6 +29,12 @@ object ServiceLocator {
     @Volatile
     private var playbackStateRepositoryInstance: PlaybackStateRepository? = null
 
+    @Volatile
+    private var listeningEventRepositoryInstance: ListeningEventRepository? = null
+
+    @Volatile
+    private var playbackPortInstance: PlaybackPort? = null
+
     fun initialize(context: Context) {
         if (database == null) {
             database = HarmoniaDatabase.getInstance(context)
@@ -40,6 +49,8 @@ object ServiceLocator {
         trackRepositoryInstance = null
         localFileRepositoryInstance = null
         playbackStateRepositoryInstance = null
+        listeningEventRepositoryInstance = null
+        playbackPortInstance = null
     }
 
     fun getDatabase(): HarmoniaDatabase {
@@ -70,11 +81,29 @@ object ServiceLocator {
         }
     }
 
+    fun getListeningEventRepository(): ListeningEventRepository {
+        return listeningEventRepositoryInstance ?: synchronized(this) {
+            listeningEventRepositoryInstance ?: OfflineListeningEventRepository(getDatabase().listeningEventDao()).also {
+                listeningEventRepositoryInstance = it
+            }
+        }
+    }
+
+    fun getPlaybackPort(): PlaybackPort {
+        return playbackPortInstance ?: error("PlaybackPort has not been registered in ServiceLocator!")
+    }
+
+    fun setPlaybackPort(port: PlaybackPort) {
+        playbackPortInstance = port
+    }
+
     fun reset() {
         database?.close()
         database = null
         trackRepositoryInstance = null
         localFileRepositoryInstance = null
         playbackStateRepositoryInstance = null
+        listeningEventRepositoryInstance = null
+        playbackPortInstance = null
     }
 }

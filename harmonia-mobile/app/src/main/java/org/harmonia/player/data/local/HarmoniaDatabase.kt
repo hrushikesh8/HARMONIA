@@ -6,11 +6,13 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import org.harmonia.player.data.local.dao.AlbumDao
 import org.harmonia.player.data.local.dao.ArtistDao
+import org.harmonia.player.data.local.dao.ListeningEventDao
 import org.harmonia.player.data.local.dao.LocalFileDao
 import org.harmonia.player.data.local.dao.PlaybackStateDao
 import org.harmonia.player.data.local.dao.TrackDao
 import org.harmonia.player.data.local.entity.AlbumEntity
 import org.harmonia.player.data.local.entity.ArtistEntity
+import org.harmonia.player.data.local.entity.ListeningEventEntity
 import org.harmonia.player.data.local.entity.LocalFileEntity
 import org.harmonia.player.data.local.entity.PlaybackStateEntity
 import org.harmonia.player.data.local.entity.QueueItemEntity
@@ -27,7 +29,8 @@ import org.harmonia.player.data.local.entity.TrackEntity
         TrackEntity::class,
         LocalFileEntity::class,
         PlaybackStateEntity::class,
-        QueueItemEntity::class
+        QueueItemEntity::class,
+        ListeningEventEntity::class
     ],
     version = 1,
     exportSchema = false
@@ -39,6 +42,7 @@ abstract class HarmoniaDatabase : RoomDatabase() {
     abstract fun playbackStateDao(): PlaybackStateDao
     abstract fun artistDao(): ArtistDao
     abstract fun albumDao(): AlbumDao
+    abstract fun listeningEventDao(): ListeningEventDao
 
     companion object {
         const val DATABASE_NAME = "harmonia_library.db"

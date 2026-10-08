@@ -136,4 +136,149 @@ object HarmoniaIcons {
             close()
         }
     }.build()
+
+    val Play: ImageVector = ImageVector.Builder(
+        name = "Play",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(8f, 5f)
+            verticalLineToRelative(14f)
+            lineToRelative(11f, -7f)
+            close()
+        }
+    }.build()
+
+    val Pause: ImageVector = ImageVector.Builder(
+        name = "Pause",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(6f, 19f)
+            horizontalLineToRelative(4f)
+            verticalLineTo(5f)
+            horizontalLineTo(6f)
+            verticalLineToRelative(14f)
+            close()
+            moveTo(14f, 5f)
+            verticalLineToRelative(14f)
+            horizontalLineToRelative(4f)
+            verticalLineTo(5f)
+            horizontalLineToRelative(-4f)
+            close()
+        }
+    }.build()
+
+    val SkipNext: ImageVector = ImageVector.Builder(
+        name = "SkipNext",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(6f, 18f)
+            lineToRelative(8.5f, -6f)
+            lineTo(6f, 6f)
+            verticalLineToRelative(12f)
+            close()
+            moveTo(16f, 6f)
+            verticalLineToRelative(12f)
+            horizontalLineToRelative(2f)
+            verticalLineTo(6f)
+            horizontalLineToRelative(-2f)
+            close()
+        }
+    }.build()
+
+    val SkipPrevious: ImageVector = ImageVector.Builder(
+        name = "SkipPrevious",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(6f, 6f)
+            horizontalLineToRelative(2f)
+            verticalLineToRelative(12f)
+            horizontalLineTo(6f)
+            close()
+            moveTo(9.5f, 12f)
+            lineToRelative(8.5f, 6f)
+            verticalLineTo(6f)
+            lineToRelative(-8.5f, 6f)
+            close()
+        }
+    }.build()
+
+    val QueueMusic: ImageVector = ImageVector.Builder(
+        name = "QueueMusic",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(15f, 6f)
+            horizontalLineTo(3f)
+            verticalLineToRelative(2f)
+            horizontalLineToRelative(12f)
+            verticalLineTo(6f)
+            close()
+            moveTo(15f, 10f)
+            horizontalLineTo(3f)
+            verticalLineToRelative(2f)
+            horizontalLineToRelative(12f)
+            verticalLineToRelative(-2f)
+            close()
+            moveTo(3f, 16f)
+            horizontalLineToRelative(8f)
+            verticalLineToRelative(-2f)
+            horizontalLineTo(3f)
+            verticalLineToRelative(2f)
+            close()
+            moveTo(17f, 6f)
+            verticalLineToRelative(8.18f)
+            curveToRelative(-0.31f, -0.11f, -0.65f, -0.18f, -1f, -0.18f)
+            curveToRelative(-1.66f, 0f, -3f, 1.34f, -3f, 3f)
+            reflectiveCurveToRelative(1.34f, 3f, 3f, 3f)
+            reflectiveCurveToRelative(3f, -1.34f, 3f, -3f)
+            verticalLineTo(8f)
+            horizontalLineToRelative(3f)
+            verticalLineTo(6f)
+            horizontalLineToRelative(-5f)
+            close()
+        }
+    }.build()
+
+    val Close: ImageVector = ImageVector.Builder(
+        name = "Close",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(19f, 6.41f)
+            lineTo(17.59f, 5f)
+            lineTo(12f, 10.59f)
+            lineTo(6.41f, 5f)
+            lineTo(5f, 6.41f)
+            lineTo(10.59f, 12f)
+            lineTo(5f, 17.59f)
+            lineTo(6.41f, 19f)
+            lineTo(12f, 13.41f)
+            lineTo(17.59f, 19f)
+            lineTo(19f, 17.59f)
+            lineTo(13.41f, 12f)
+            close()
+        }
+    }.build()
 }

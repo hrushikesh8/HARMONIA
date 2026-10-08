@@ -11,13 +11,19 @@ enum class RepeatMode {
 
 /**
  * Pure domain model representing the current playback engine state.
+ * Contains no Android platform classes.
  */
 data class PlaybackState(
     val currentTrackId: String? = null,
+    val currentLocalFileId: String? = null,
     val currentPositionMs: Long = 0L,
+    val durationMs: Long = 0L,
     val isPlaying: Boolean = false,
+    val status: PlaybackStatus = PlaybackStatus.IDLE,
+    val activeQueueIndex: Int = -1,
     val shuffleMode: Boolean = false,
     val repeatMode: RepeatMode = RepeatMode.OFF,
     val volumeScalar: Float = 1.0f,
+    val errorMessage: String? = null,
     val updatedAt: Long = System.currentTimeMillis()
 )

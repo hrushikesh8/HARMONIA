@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -54,7 +54,8 @@ import java.util.Locale
 @Composable
 fun LibraryScreen(
     modifier: Modifier = Modifier,
-    viewModel: LibraryViewModel = viewModel()
+    viewModel: LibraryViewModel = viewModel(),
+    onTrackClick: (List<Track>, Int) -> Unit = { _, _ -> }
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -185,10 +186,13 @@ fun LibraryScreen(
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(bottom = 24.dp)
+                contentPadding = PaddingValues(bottom = 96.dp)
             ) {
-                items(uiState.tracks, key = { it.id }) { track ->
-                    LibraryTrackCard(track = track)
+                itemsIndexed(uiState.tracks, key = { _, track -> track.id }) { index, track ->
+                    LibraryTrackCard(
+                        track = track,
+                        onClick = { onTrackClick(uiState.tracks, index) }
+                    )
                 }
             }
         }
@@ -196,11 +200,15 @@ fun LibraryScreen(
 }
 
 @Composable
-private fun LibraryTrackCard(track: Track) {
+private fun LibraryTrackCard(
+    track: Track,
+    onClick: () -> Unit = {}
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, BorderSlate, RoundedCornerShape(12.dp)),
+            .border(1.dp, BorderSlate, RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = AcousticCharcoal)
     ) {
