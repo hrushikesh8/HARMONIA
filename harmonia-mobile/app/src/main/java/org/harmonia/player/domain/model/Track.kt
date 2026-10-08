@@ -21,6 +21,7 @@ data class Track(
     val truePeakDbtp: Double? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
+    val artworkHash: String? = null,
     // Decoupled bitstream presence per ADR-025
     val localFile: LocalFile? = null,
     val availability: LocalFileAvailability = localFile?.let {

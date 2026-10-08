@@ -83,23 +83,16 @@ fun MiniPlayer(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 14.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Track Art / Placeholder
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(StudioSlate),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "♪",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = AcousticTeal
-                )
-            }
+            // Track Art via sandboxed HarmoniaArtwork
+            org.harmonia.player.presentation.components.HarmoniaArtwork(
+                artworkHash = currentTrack?.artworkHash,
+                size = 44.dp,
+                cornerRadius = 8.dp,
+                contentDescription = "Artwork for $title"
+            )
 
             Spacer(modifier = Modifier.width(12.dp))
 
@@ -123,22 +116,28 @@ fun MiniPlayer(
                 )
             }
 
-            // Transport controls
-            IconButton(onClick = onPlayPause) {
+            // Transport controls (48dp accessible touch targets)
+            IconButton(
+                onClick = onPlayPause,
+                modifier = Modifier.size(48.dp)
+            ) {
                 Icon(
                     imageVector = if (playbackState.isPlaying) HarmoniaIcons.Pause else HarmoniaIcons.Play,
                     contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
                     tint = PureSignalWhite,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(26.dp)
                 )
             }
 
-            IconButton(onClick = onNext) {
+            IconButton(
+                onClick = onNext,
+                modifier = Modifier.size(48.dp)
+            ) {
                 Icon(
                     imageVector = HarmoniaIcons.SkipNext,
                     contentDescription = "Next Track",
                     tint = PureSignalWhite,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(26.dp)
                 )
             }
         }

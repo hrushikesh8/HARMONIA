@@ -54,6 +54,7 @@ import org.harmonia.player.domain.model.PlaybackState
 import org.harmonia.player.domain.model.QueueItem
 import org.harmonia.player.domain.model.RepeatMode
 import org.harmonia.player.domain.model.Track
+import org.harmonia.player.presentation.components.HarmoniaArtwork
 import java.util.Locale
 
 /**
@@ -107,7 +108,7 @@ fun NowPlayingSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = if (showQueue) "PLAYING QUEUE" else "NOW PLAYING",
+                    text = if (showQueue) "PLAYING QUEUE (${queue.size})" else "NOW PLAYING",
                     style = MaterialTheme.typography.labelMedium.copy(
                         letterSpacing = 2.sp,
                         fontWeight = FontWeight.Bold
@@ -117,7 +118,7 @@ fun NowPlayingSheet(
                 IconButton(onClick = { showQueue = !showQueue }) {
                     Icon(
                         imageVector = HarmoniaIcons.QueueMusic,
-                        contentDescription = "Toggle Queue",
+                        contentDescription = if (showQueue) "Show Now Playing" else "Show Queue",
                         tint = if (showQueue) AcousticTeal else MutedSlate
                     )
                 }
@@ -134,22 +135,16 @@ fun NowPlayingSheet(
                     modifier = Modifier.height(380.dp)
                 )
             } else {
-                // Large Artwork Placeholder
-                Box(
+                // Large Artwork
+                HarmoniaArtwork(
+                    artworkHash = currentTrack?.artworkHash,
                     modifier = Modifier
                         .fillMaxWidth(0.85f)
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(AcousticCharcoal)
-                        .border(1.dp, BorderSlate, RoundedCornerShape(20.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "♪",
-                        style = MaterialTheme.typography.displayLarge.copy(fontSize = 72.sp),
-                        color = AcousticTeal.copy(alpha = 0.5f)
-                    )
-                }
+                        .aspectRatio(1f),
+                    size = 280.dp,
+                    cornerRadius = 20.dp,
+                    contentDescription = currentTrack?.let { "${it.title} Artwork" } ?: "Album Artwork"
+                )
 
                 Spacer(modifier = Modifier.height(24.dp))
 
@@ -328,6 +323,13 @@ private fun QueueView(
                         color = if (isCurrent) AcousticTeal else MutedSlate,
                         modifier = Modifier.width(28.dp)
                     )
+                    HarmoniaArtwork(
+                        artworkHash = item.track?.artworkHash,
+                        size = 36.dp,
+                        cornerRadius = 6.dp,
+                        contentDescription = null
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = item.track?.title ?: item.trackId,

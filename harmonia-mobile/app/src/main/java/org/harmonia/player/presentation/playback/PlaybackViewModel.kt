@@ -53,12 +53,12 @@ class PlaybackViewModel(
     fun jumpToQueueIndex(index: Int) = playbackPort.jumpToQueueIndex(index)
 
     fun toggleShuffle() {
-        val current = uiState.value.playbackState.shuffleMode
+        val current = playbackPort.playbackState.value.shuffleMode
         playbackPort.setShuffleMode(!current)
     }
 
     fun cycleRepeat() {
-        val nextMode = when (uiState.value.playbackState.repeatMode) {
+        val nextMode = when (playbackPort.playbackState.value.repeatMode) {
             RepeatMode.OFF -> RepeatMode.ALL
             RepeatMode.ALL -> RepeatMode.ONE
             RepeatMode.ONE -> RepeatMode.OFF

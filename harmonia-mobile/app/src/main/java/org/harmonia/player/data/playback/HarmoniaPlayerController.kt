@@ -11,11 +11,14 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.harmonia.player.domain.model.ListeningEvent
 import org.harmonia.player.domain.model.ListeningEventType
@@ -59,6 +62,31 @@ class HarmoniaPlayerController(
     private var activeTrackStartTime: Long = 0L
     private var activeTrackDurationSec: Double = 0.0
     private var hasRecordedCompletion: Boolean = false
+
+    // Real-time authoritative position polling while playing
+    private var positionPollingJob: Job? = null
+
+    private fun startPositionPolling(controller: Player) {
+        positionPollingJob?.cancel()
+        positionPollingJob = scope.launch {
+            while (isActive) {
+                if (controller.isPlaying) {
+                    val pos = controller.currentPosition.coerceAtLeast(0L)
+                    val dur = if (controller.duration > 0) controller.duration else _playbackState.value.durationMs
+                    _playbackState.value = _playbackState.value.copy(
+                        currentPositionMs = pos,
+                        durationMs = dur
+                    )
+                }
+                delay(250L)
+            }
+        }
+    }
+
+    private fun stopPositionPolling() {
+        positionPollingJob?.cancel()
+        positionPollingJob = null
+    }
 
     init {
         initializeSessionConnection()
@@ -170,6 +198,13 @@ class HarmoniaPlayerController(
                 else -> RepeatMode.OFF
             }
         )
+        if (controller.isPlaying) {
+            if (positionPollingJob == null || positionPollingJob?.isActive == false) {
+                startPositionPolling(controller)
+            }
+        } else {
+            stopPositionPolling()
+        }
         persistCurrentState()
     }
 
@@ -255,6 +290,7 @@ class HarmoniaPlayerController(
     }
 
     override fun stop() {
+        stopPositionPolling()
         mediaController?.let { controller ->
             recordEvent(ListeningEventType.STOPPED)
             controller.stop()
@@ -379,6 +415,7 @@ class HarmoniaPlayerController(
     }
 
     fun release() {
+        stopPositionPolling()
         controllerFuture?.let { MediaController.releaseFuture(it) }
         mediaController = null
     }

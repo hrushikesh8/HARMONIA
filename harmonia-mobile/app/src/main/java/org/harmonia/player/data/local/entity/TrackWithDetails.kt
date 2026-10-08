@@ -83,6 +83,7 @@ data class TrackWithDetails(
             truePeakDbtp = track.truePeakDbtp,
             createdAt = track.createdAt,
             updatedAt = track.updatedAt,
+            artworkHash = album?.artworkHash,
             localFile = domainLocalFile,
             availability = availability
         )
