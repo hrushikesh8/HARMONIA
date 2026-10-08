@@ -10,8 +10,6 @@ from typing import TYPE_CHECKING
 
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
-
-from harmonia.application.import_service import ImportService
 from harmonia.core.logging import get_logger
 from harmonia.infrastructure.persistence.track_repo import SqliteTrackRepository
 
@@ -166,6 +164,8 @@ class LibraryWatcher:
 
         Uses an independent database session so the playback thread is never blocked.
         """
+        from harmonia.application.import_service import ImportService
+
         logger.info("Processing coalesced batch of %d filesystem changes", len(paths))
         with self._session_factory() as session:
             import_service = ImportService(

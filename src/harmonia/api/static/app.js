@@ -91,11 +91,13 @@
     playerThumbFallback: document.getElementById('playerThumbFallback'),
     playerTitle: document.getElementById('playerTitle'),
     playerArtist: document.getElementById('playerArtist'),
+    shuffleBtn: document.getElementById('shuffleBtn'),
     prevBtn: document.getElementById('prevBtn'),
     playPauseBtn: document.getElementById('playPauseBtn'),
     playIcon: document.getElementById('playIcon'),
     pauseIcon: document.getElementById('pauseIcon'),
     nextBtn: document.getElementById('nextBtn'),
+    repeatBtn: document.getElementById('repeatBtn'),
     currentTimeDisplay: document.getElementById('currentTimeDisplay'),
     totalDurationDisplay: document.getElementById('totalDurationDisplay'),
     progressBarWrap: document.getElementById('progressBarWrap'),
@@ -624,6 +626,16 @@
       showToast('Audio playback could not start automatically', 'error');
     });
 
+    // Sync queue and playback state with Phase 4 Core API
+    fetch('/api/v1/queue/set', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        track_ids: state.filteredTracks.map((t) => t.id),
+        play_index: state.filteredTracks.findIndex((t) => t.id === track.id) || 0,
+      }),
+    }).catch(console.debug);
+
     // Highlight row in table
     document.querySelectorAll('.track-row').forEach((r) => {
       r.classList.toggle('playing', r.dataset.trackId === track.id);
@@ -635,12 +647,14 @@
     state.isPlaying = true;
     elements.playIcon.style.display = 'none';
     elements.pauseIcon.style.display = 'block';
+    fetch('/api/v1/playback/play', { method: 'POST' }).catch(console.debug);
   });
 
   elements.audioElement.addEventListener('pause', () => {
     state.isPlaying = false;
     elements.playIcon.style.display = 'block';
     elements.pauseIcon.style.display = 'none';
+    fetch('/api/v1/playback/pause', { method: 'POST' }).catch(console.debug);
   });
 
   elements.audioElement.addEventListener('timeupdate', () => {
@@ -673,6 +687,7 @@
     state.isPlaying = false;
     elements.playIcon.style.display = 'block';
     elements.pauseIcon.style.display = 'none';
+    fetch('/api/v1/playback/next', { method: 'POST' }).catch(console.debug);
     // Auto-advance to next track in library list
     playNextTrack();
   });
@@ -712,6 +727,7 @@
     if (!state.playingTrack || state.filteredTracks.length === 0) return;
     const currentIndex = state.filteredTracks.findIndex((t) => t.id === state.playingTrack.id);
     const nextIndex = (currentIndex + 1) % state.filteredTracks.length;
+    fetch('/api/v1/playback/next', { method: 'POST' }).catch(console.debug);
     selectAndPlayTrack(state.filteredTracks[nextIndex].id);
   }
 
@@ -720,11 +736,49 @@
     // If playing for more than 3 seconds, replay current track
     if (elements.audioElement.currentTime > 3) {
       elements.audioElement.currentTime = 0;
+      fetch('/api/v1/playback/seek', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ position_seconds: 0.0 }),
+      }).catch(console.debug);
       return;
     }
     const currentIndex = state.filteredTracks.findIndex((t) => t.id === state.playingTrack.id);
     const prevIndex = (currentIndex - 1 + state.filteredTracks.length) % state.filteredTracks.length;
+    fetch('/api/v1/playback/previous', { method: 'POST' }).catch(console.debug);
     selectAndPlayTrack(state.filteredTracks[prevIndex].id);
+  }
+
+  // Shuffle & Repeat Controls
+  if (elements.shuffleBtn) {
+    elements.shuffleBtn.addEventListener('click', () => {
+      fetch('/api/v1/playback/shuffle', { method: 'POST' })
+        .then((res) => res.json())
+        .then((data) => {
+          elements.shuffleBtn.classList.toggle('active', data.shuffle_enabled);
+          showToast(`Shuffle ${data.shuffle_enabled ? 'enabled' : 'disabled'}`, 'info');
+        })
+        .catch(console.error);
+    });
+  }
+
+  let repeatState = 'off';
+  if (elements.repeatBtn) {
+    elements.repeatBtn.addEventListener('click', () => {
+      const nextMode = repeatState === 'off' ? 'all' : repeatState === 'all' ? 'one' : 'off';
+      fetch('/api/v1/playback/repeat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: nextMode }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          repeatState = data.repeat_mode;
+          elements.repeatBtn.classList.toggle('active', repeatState !== 'off');
+          showToast(`Repeat mode: ${repeatState.toUpperCase()}`, 'info');
+        })
+        .catch(console.error);
+    });
   }
 
   // Seeking Scrub Bar (utilizes HTTP 206 Partial Content byte ranges)
@@ -741,7 +795,13 @@
     const pct = parseFloat(e.target.value);
     const duration = elements.audioElement.duration || 0;
     if (duration > 0) {
-      elements.audioElement.currentTime = (pct / 100) * duration;
+      const targetSec = (pct / 100) * duration;
+      elements.audioElement.currentTime = targetSec;
+      fetch('/api/v1/playback/seek', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ position_seconds: targetSec }),
+      }).catch(console.debug);
     }
   });
 
@@ -751,6 +811,11 @@
     elements.audioElement.volume = vol;
     elements.audioElement.muted = (vol === 0);
     updateVolumeIcon();
+    fetch('/api/v1/playback/volume', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ volume: vol }),
+    }).catch(console.debug);
   });
 
   elements.muteBtn.addEventListener('click', () => {
