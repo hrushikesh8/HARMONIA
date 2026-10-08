@@ -1,4 +1,4 @@
-"""Domain ports (repository interfaces).
+"""Domain ports (repository and service interfaces).
 
 These are Python Protocols — structural subtyping contracts that
 infrastructure implementations must satisfy.  No ABCs, no inheritance.
@@ -13,8 +13,11 @@ from harmonia.domain.ports.audio_analyzer import (
     TechnicalAudioProperties,
 )
 from harmonia.domain.ports.duplicate_candidate_repository import DuplicateCandidateRepository
+from harmonia.domain.ports.listening_event_repository import ListeningEventRepository
 from harmonia.domain.ports.metadata_field_repository import MetadataFieldRepository
 from harmonia.domain.ports.metadata_provider import MetadataProvider
+from harmonia.domain.ports.playback_port import PlaybackPort
+from harmonia.domain.ports.playback_snapshot_repository import PlaybackSnapshotRepository
 from harmonia.domain.ports.search_repository import SearchRepository
 from harmonia.domain.ports.track_repository import TrackRepository
 
@@ -24,11 +27,13 @@ __all__ = [
     "AudioAnalysisRepository",
     "AudioAnalyzer",
     "DuplicateCandidateRepository",
+    "ListeningEventRepository",
     "MetadataFieldRepository",
     "MetadataProvider",
+    "PlaybackPort",
+    "PlaybackSnapshotRepository",
     "SearchRepository",
     "SignalAnalysisResult",
     "TechnicalAudioProperties",
     "TrackRepository",
 ]
-
