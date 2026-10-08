@@ -281,4 +281,205 @@ object HarmoniaIcons {
             close()
         }
     }.build()
+
+    val Playlists: ImageVector = ImageVector.Builder(
+        name = "Playlists",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(14f, 10f)
+            horizontalLineTo(2f)
+            verticalLineToRelative(2f)
+            horizontalLineToRelative(12f)
+            verticalLineToRelative(-2f)
+            close()
+            moveTo(14f, 6f)
+            horizontalLineTo(2f)
+            verticalLineToRelative(2f)
+            horizontalLineToRelative(12f)
+            verticalLineTo(6f)
+            close()
+            moveTo(18f, 14f)
+            verticalLineToRelative(-4f)
+            horizontalLineToRelative(-2f)
+            verticalLineToRelative(4f)
+            horizontalLineToRelative(-4f)
+            verticalLineToRelative(2f)
+            horizontalLineToRelative(4f)
+            verticalLineToRelative(4f)
+            horizontalLineToRelative(2f)
+            verticalLineToRelative(-4f)
+            horizontalLineToRelative(4f)
+            verticalLineToRelative(-2f)
+            horizontalLineToRelative(-4f)
+            close()
+            moveTo(2f, 16f)
+            horizontalLineToRelative(8f)
+            verticalLineToRelative(-2f)
+            horizontalLineTo(2f)
+            verticalLineToRelative(2f)
+            close()
+        }
+    }.build()
+
+    val Search: ImageVector = ImageVector.Builder(
+        name = "Search",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(15.5f, 14f)
+            horizontalLineToRelative(-0.79f)
+            lineToRelative(-0.28f, -0.27f)
+            curveTo(15.41f, 12.59f, 16f, 11.11f, 16f, 9.5f)
+            curveTo(16f, 5.91f, 13.09f, 3f, 9.5f, 3f)
+            reflectiveCurveTo(3f, 5.91f, 3f, 9.5f)
+            reflectiveCurveTo(5.91f, 16f, 9.5f, 16f)
+            curveToRelative(1.61f, 0f, 3.09f, -0.59f, 4.23f, -1.57f)
+            lineToRelative(0.27f, 0.28f)
+            verticalLineToRelative(0.79f)
+            lineToRelative(5f, 4.99f)
+            lineTo(20.49f, 19f)
+            lineToRelative(-4.99f, -5f)
+            close()
+            moveTo(9.5f, 14f)
+            curveTo(7.01f, 14f, 5f, 11.99f, 5f, 9.5f)
+            reflectiveCurveTo(7.01f, 5f, 9.5f, 5f)
+            reflectiveCurveTo(14f, 7.01f, 14f, 9.5f)
+            reflectiveCurveTo(11.99f, 14f, 9.5f, 14f)
+            close()
+        }
+    }.build()
+
+    val Sort: ImageVector = ImageVector.Builder(
+        name = "Sort",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(3f, 18f)
+            horizontalLineToRelative(6f)
+            verticalLineToRelative(-2f)
+            horizontalLineTo(3f)
+            verticalLineToRelative(2f)
+            close()
+            moveTo(3f, 6f)
+            verticalLineToRelative(2f)
+            horizontalLineToRelative(18f)
+            verticalLineTo(6f)
+            horizontalLineTo(3f)
+            close()
+            moveTo(3f, 13f)
+            horizontalLineToRelative(12f)
+            verticalLineToRelative(-2f)
+            horizontalLineTo(3f)
+            verticalLineToRelative(2f)
+            close()
+        }
+    }.build()
+
+    val MoreVert: ImageVector = ImageVector.Builder(
+        name = "MoreVert",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(12f, 8f)
+            curveToRelative(1.1f, 0f, 2f, -0.9f, 2f, -2f)
+            reflectiveCurveToRelative(-0.9f, -2f, -2f, -2f)
+            reflectiveCurveToRelative(-2f, 0.9f, -2f, 2f)
+            reflectiveCurveToRelative(0.9f, 2f, 2f, 2f)
+            close()
+            moveTo(12f, 10f)
+            curveToRelative(-1.1f, 0f, -2f, 0.9f, -2f, 2f)
+            reflectiveCurveToRelative(0.9f, 2f, 2f, 2f)
+            reflectiveCurveToRelative(2f, -0.9f, 2f, -2f)
+            reflectiveCurveToRelative(-0.9f, -2f, -2f, -2f)
+            close()
+            moveTo(12f, 16f)
+            curveToRelative(-1.1f, 0f, -2f, 0.9f, -2f, 2f)
+            reflectiveCurveToRelative(0.9f, 2f, 2f, 2f)
+            reflectiveCurveToRelative(2f, -0.9f, 2f, -2f)
+            reflectiveCurveToRelative(-0.9f, -2f, -2f, -2f)
+            close()
+        }
+    }.build()
+
+    val MusicNote: ImageVector = ImageVector.Builder(
+        name = "MusicNote",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(12f, 3f)
+            verticalLineToRelative(10.55f)
+            curveToRelative(-0.59f, -0.34f, -1.27f, -0.55f, -2f, -0.55f)
+            curveToRelative(-2.21f, 0f, -4f, 1.79f, -4f, 4f)
+            reflectiveCurveToRelative(1.79f, 4f, 4f, 4f)
+            reflectiveCurveToRelative(4f, -1.79f, 4f, -4f)
+            verticalLineTo(7f)
+            horizontalLineToRelative(4f)
+            verticalLineTo(3f)
+            horizontalLineToRelative(-6f)
+            close()
+        }
+    }.build()
+
+    val Album: ImageVector = ImageVector.Builder(
+        name = "Album",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(12f, 2f)
+            curveTo(6.48f, 2f, 2f, 6.48f, 2f, 12f)
+            reflectiveCurveToRelative(4.48f, 10f, 10f, 10f)
+            reflectiveCurveToRelative(10f, -4.48f, 10f, -10f)
+            reflectiveCurveTo(17.52f, 2f, 12f, 2f)
+            close()
+            moveTo(12f, 14.5f)
+            curveToRelative(-1.38f, 0f, -2.5f, -1.12f, -2.5f, -2.5f)
+            reflectiveCurveToRelative(1.12f, -2.5f, 2.5f, -2.5f)
+            reflectiveCurveToRelative(2.5f, 1.12f, 2.5f, 2.5f)
+            reflectiveCurveToRelative(-1.12f, 2.5f, -2.5f, 2.5f)
+            close()
+        }
+    }.build()
+
+    val Person: ImageVector = ImageVector.Builder(
+        name = "Person",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(12f, 12f)
+            curveToRelative(2.21f, 0f, 4f, -1.79f, 4f, -4f)
+            reflectiveCurveToRelative(-1.79f, -4f, -4f, -4f)
+            reflectiveCurveToRelative(-4f, 1.79f, -4f, 4f)
+            reflectiveCurveToRelative(1.79f, 4f, 4f, 4f)
+            close()
+            moveTo(12f, 14f)
+            curveToRelative(-2.67f, 0f, -8f, 1.34f, -8f, 4f)
+            verticalLineToRelative(2f)
+            horizontalLineToRelative(16f)
+            verticalLineToRelative(-2f)
+            curveToRelative(0f, -2.66f, -5.33f, -4f, -8f, -4f)
+            close()
+        }
+    }.build()
 }

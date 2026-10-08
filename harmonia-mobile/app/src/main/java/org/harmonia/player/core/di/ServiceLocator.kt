@@ -33,6 +33,18 @@ object ServiceLocator {
     private var listeningEventRepositoryInstance: ListeningEventRepository? = null
 
     @Volatile
+    private var playlistRepositoryInstance: org.harmonia.player.domain.repository.PlaylistRepository? = null
+
+    @Volatile
+    private var albumRepositoryInstance: org.harmonia.player.domain.repository.AlbumRepository? = null
+
+    @Volatile
+    private var artistRepositoryInstance: org.harmonia.player.domain.repository.ArtistRepository? = null
+
+    @Volatile
+    private var searchRepositoryInstance: org.harmonia.player.domain.repository.SearchRepository? = null
+
+    @Volatile
     private var playbackPortInstance: PlaybackPort? = null
 
     fun initialize(context: Context) {
@@ -50,6 +62,10 @@ object ServiceLocator {
         localFileRepositoryInstance = null
         playbackStateRepositoryInstance = null
         listeningEventRepositoryInstance = null
+        playlistRepositoryInstance = null
+        albumRepositoryInstance = null
+        artistRepositoryInstance = null
+        searchRepositoryInstance = null
         playbackPortInstance = null
     }
 
@@ -89,6 +105,43 @@ object ServiceLocator {
         }
     }
 
+    fun getPlaylistRepository(): org.harmonia.player.domain.repository.PlaylistRepository {
+        return playlistRepositoryInstance ?: synchronized(this) {
+            playlistRepositoryInstance ?: org.harmonia.player.data.local.OfflinePlaylistRepository(
+                getDatabase().playlistDao(),
+                getDatabase().trackDao()
+            ).also { playlistRepositoryInstance = it }
+        }
+    }
+
+    fun getAlbumRepository(): org.harmonia.player.domain.repository.AlbumRepository {
+        return albumRepositoryInstance ?: synchronized(this) {
+            albumRepositoryInstance ?: org.harmonia.player.data.local.OfflineAlbumRepository(
+                getDatabase().albumDao(),
+                getDatabase().artistDao()
+            ).also { albumRepositoryInstance = it }
+        }
+    }
+
+    fun getArtistRepository(): org.harmonia.player.domain.repository.ArtistRepository {
+        return artistRepositoryInstance ?: synchronized(this) {
+            artistRepositoryInstance ?: org.harmonia.player.data.local.OfflineArtistRepository(
+                getDatabase().artistDao()
+            ).also { artistRepositoryInstance = it }
+        }
+    }
+
+    fun getSearchRepository(): org.harmonia.player.domain.repository.SearchRepository {
+        return searchRepositoryInstance ?: synchronized(this) {
+            searchRepositoryInstance ?: org.harmonia.player.data.local.OfflineSearchRepository(
+                getDatabase().trackDao(),
+                getDatabase().albumDao(),
+                getDatabase().artistDao(),
+                getDatabase().playlistDao()
+            ).also { searchRepositoryInstance = it }
+        }
+    }
+
     fun getPlaybackPort(): PlaybackPort {
         return playbackPortInstance ?: error("PlaybackPort has not been registered in ServiceLocator!")
     }
@@ -104,6 +157,10 @@ object ServiceLocator {
         localFileRepositoryInstance = null
         playbackStateRepositoryInstance = null
         listeningEventRepositoryInstance = null
+        playlistRepositoryInstance = null
+        albumRepositoryInstance = null
+        artistRepositoryInstance = null
+        searchRepositoryInstance = null
         playbackPortInstance = null
     }
 }

@@ -18,6 +18,9 @@ interface AlbumDao {
     @Query("SELECT * FROM mobile_albums WHERE artist_id = :artistId ORDER BY year DESC, title ASC")
     fun observeAlbumsByArtist(artistId: String): Flow<List<AlbumEntity>>
 
+    @Query("SELECT * FROM mobile_albums WHERE title LIKE '%' || :query || '%' ORDER BY title COLLATE NOCASE ASC")
+    fun searchAlbums(query: String): Flow<List<AlbumEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAlbums(albums: List<AlbumEntity>)
 

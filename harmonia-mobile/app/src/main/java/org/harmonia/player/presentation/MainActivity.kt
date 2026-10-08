@@ -61,6 +61,8 @@ enum class NavigationTab(
 ) {
     HOME("Home", HarmoniaIcons.Home, HarmoniaNavDestination.Home),
     LIBRARY("Library", HarmoniaIcons.Library, HarmoniaNavDestination.Library),
+    PLAYLISTS("Playlists", HarmoniaIcons.Playlists, HarmoniaNavDestination.Playlists),
+    SEARCH("Search", HarmoniaIcons.Search, HarmoniaNavDestination.Search),
     SETTINGS("Settings", HarmoniaIcons.Settings, HarmoniaNavDestination.Settings)
 }
 
@@ -91,7 +93,7 @@ fun MainAppContainer(
                             )
                         },
                         label = {
-                            Text(text = tab.title)
+                            Text(text = tab.title, maxLines = 1)
                         },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = AcousticTeal,
@@ -112,12 +114,27 @@ fun MainAppContainer(
                 .padding(innerPadding)
         ) {
             when (selectedTab) {
-                NavigationTab.HOME -> HomeScreen(
-                    onNavigateToLibrary = { selectedTab = NavigationTab.LIBRARY }
+                NavigationTab.HOME -> org.harmonia.player.presentation.home.HomeScreen(
+                    onNavigateToLibrary = { selectedTab = NavigationTab.LIBRARY },
+                    onNavigateToPlaylists = { selectedTab = NavigationTab.PLAYLISTS },
+                    onTrackClick = { track ->
+                        playbackViewModel.playTrackList(listOf(track), 0)
+                    },
+                    onResumeClick = { playbackViewModel.play() },
+                    onShuffleAllClick = {
+                        // Shuffle all tracks
+                        playbackViewModel.play()
+                    }
                 )
                 NavigationTab.LIBRARY -> LibraryScreen(
                     onTrackClick = { tracks, clickedIndex ->
                         playbackViewModel.playTrackList(tracks, clickedIndex)
+                    }
+                )
+                NavigationTab.PLAYLISTS -> org.harmonia.player.presentation.playlists.PlaylistsScreen()
+                NavigationTab.SEARCH -> org.harmonia.player.presentation.search.SearchScreen(
+                    onTrackClick = { track ->
+                        playbackViewModel.playTrackList(listOf(track), 0)
                     }
                 )
                 NavigationTab.SETTINGS -> SettingsScreen()

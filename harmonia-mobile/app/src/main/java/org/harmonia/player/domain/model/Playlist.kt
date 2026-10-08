@@ -5,7 +5,7 @@ package org.harmonia.player.domain.model
  */
 data class Playlist(
     val id: String,
-    val title: String,
+    val name: String,
     val description: String? = null,
     val artworkHash: String? = null,
     val isSmart: Boolean = false,
@@ -13,12 +13,15 @@ data class Playlist(
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val versionVector: String = "1"
-)
+) {
+    val title: String get() = name
+}
 
 data class PlaylistItem(
     val id: String,
     val playlistId: String,
     val trackId: String,
     val position: Int,
-    val addedAt: Long = System.currentTimeMillis()
+    val addedAt: Long = System.currentTimeMillis(),
+    val track: Track? = null
 )
