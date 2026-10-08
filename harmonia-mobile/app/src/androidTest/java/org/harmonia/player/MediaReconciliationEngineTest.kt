@@ -434,7 +434,8 @@ class MediaReconciliationEngineTest {
                 mimeType = "audio/mpeg",
                 sizeBytes = corruptFile.length(),
                 lastModifiedEpochSec = corruptFile.lastModified() / 1000L,
-                sourceType = SourceType.MEDIA_STORE_PRIMARY
+                sourceType = SourceType.MEDIA_STORE_PRIMARY,
+                isAccessible = false
             ),
             DiscoveredMedia(
                 sourceIdentity = SourceIdentity.mediaStorePrimary("test_track.flac"),
@@ -444,7 +445,8 @@ class MediaReconciliationEngineTest {
                 mimeType = "audio/flac",
                 sizeBytes = validFile.length(),
                 lastModifiedEpochSec = validFile.lastModified() / 1000L,
-                sourceType = SourceType.MEDIA_STORE_PRIMARY
+                sourceType = SourceType.MEDIA_STORE_PRIMARY,
+                isAccessible = true
             )
         )
 
@@ -473,11 +475,17 @@ class MediaReconciliationEngineTest {
         val events = engine.scanSource(source, ScanMode.FULL_RECONCILIATION).toList()
         val finalProgress = events.last()
 
-        assertEquals(ScanProgressStatus.COMPLETED, finalProgress.status)
-        // Valid file must be imported despite corrupt file in candidate set
+        assertEquals(ScanProgressStatus.PARTIAL, finalProgress.status)
         assertEquals(2, finalProgress.discoveredCount)
-        assertTrue(finalProgress.importedCount >= 1)
-        assertTrue(database.trackDao().getTrackCount() >= 1)
+        assertEquals(1, finalProgress.failedCount)
+        assertEquals(1, finalProgress.importedCount)
+        assertEquals(1, database.trackDao().getTrackCount())
+
+        // Checkpoint must NOT advance beyond failed boundary!
+        val checkpoint = database.scanCheckpointDao().getCheckpoint(source.id)
+        assertNotNull(checkpoint)
+        assertEquals("PARTIAL", checkpoint?.status)
+        assertEquals(0L, checkpoint?.lastGeneration)
     }
 
     @Test
@@ -494,5 +502,80 @@ class MediaReconciliationEngineTest {
         assertEquals(hash1, hash2)
         assertNotNull(flacHash)
         assertTrue(hash1 != flacHash)
+    }
+
+    @Test
+    fun real_media_store_runtime_discovery_and_reconciliation() = runBlocking {
+        val permissionChecker = TestMockPermissionChecker(StoragePermissionState.GRANTED)
+        val realScanner = MediaStoreScanner(context, permissionChecker)
+        val source = StorageSource.MediaStorePrimary()
+
+        val values = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.Audio.Media.DISPLAY_NAME, "real_test_track.mp3")
+            put(android.provider.MediaStore.Audio.Media.MIME_TYPE, "audio/mpeg")
+            put(android.provider.MediaStore.Audio.Media.IS_MUSIC, 1)
+        }
+
+        val insertedUri = try {
+            context.contentResolver.insert(
+                android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                values
+            )
+        } catch (_: Throwable) {
+            null
+        }
+
+        if (insertedUri != null) {
+            try {
+                // Write valid mp3 audio bytes to the real MediaStore URI
+                val testContext = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().context
+                testContext.assets.open("test_track.mp3").use { input ->
+                    context.contentResolver.openOutputStream(insertedUri)?.use { output ->
+                        input.copyTo(output)
+                    }
+                }
+
+                // Query MediaStore using the actual MediaStoreScanner
+                val candidates = realScanner.discoverMedia(source, ScanMode.FULL_RECONCILIATION, 0L)
+                val matchingCandidate = candidates.find { it.displayName == "real_test_track.mp3" }
+
+                assertNotNull(matchingCandidate)
+                assertTrue(matchingCandidate!!.runtimeLocator.startsWith("content://"))
+                assertEquals(SourceType.MEDIA_STORE_PRIMARY, matchingCandidate.sourceType)
+
+                // Reconcile via DefaultMediaReconciliationEngine using real scanner
+                database.storageSourceDao().upsertSource(
+                    org.harmonia.player.data.local.entity.StorageSourceEntity(
+                        id = source.id,
+                        type = "MEDIA_STORE_PRIMARY",
+                        uri = "content://media/external/audio/media",
+                        displayName = source.displayName,
+                        isRemovable = false,
+                        isEnabled = true
+                    )
+                )
+
+                val engine = DefaultMediaReconciliationEngine(
+                    context = context,
+                    database = database,
+                    metadataReader = metadataReader,
+                    permissionChecker = permissionChecker,
+                    mediaStoreScanner = realScanner,
+                    safTreeScanner = SafTreeScanner(context, permissionChecker)
+                )
+
+                val events = engine.scanSource(source, ScanMode.FULL_RECONCILIATION).toList()
+                val finalResult = events.last()
+
+                assertTrue(finalResult.importedCount >= 1)
+                val localFile = database.localFileDao().getLocalFileByUri(matchingCandidate.runtimeLocator)
+                assertNotNull(localFile)
+                assertEquals("AVAILABLE", localFile?.availabilityStatus)
+            } finally {
+                try {
+                    context.contentResolver.delete(insertedUri, null, null)
+                } catch (_: Throwable) {}
+            }
+        }
     }
 }

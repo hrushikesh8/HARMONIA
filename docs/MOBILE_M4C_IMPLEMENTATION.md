@@ -93,7 +93,7 @@ Android MediaStore / SAF Tree
 | Test Suite | Total Tests | Passed | Failed | Skipped | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Mobile JVM Unit Tests** | 100 | 100 | 0 | 0 | **PASS** |
-| **Android Connected Tests (API 36)** | 64 | 64 | 0 | 0 | **PASS** |
+| **Android Connected Tests (API 36)** | 65 | 65 | 0 | 0 | **PASS** |
 | **Core Regression Suite (Python)** | 173 | 173 | 0 | 0 | **PASS** |
 | **Debug APK Assembly** | 1 | 1 | 0 | 0 | **PASS** |
 
@@ -120,12 +120,12 @@ Android MediaStore / SAF Tree
 - `LibrarySortingTest`: 8 tests
 - `NavigationDestinationTest`: 2 tests
 
-### 5.3 Android Connected Test Breakdown (10 Classes / 64 Tests on `medium_phone(AVD) - 16`)
+### 5.3 Android Connected Test Breakdown (10 Classes / 65 Tests on `medium_phone(AVD) - 16`)
 - `AndroidAudioMetadataReaderTest`: 7 tests
 - `ArtworkProviderTest`: 4 tests
 - `HarmoniaNavigationAndLibraryUiTest`: 8 tests
 - `M3EndToEndIntegrationTest`: 5 tests
-- `MediaReconciliationEngineTest`: 8 tests
+- `MediaReconciliationEngineTest`: 9 tests
   - `initial_scan_discovers_and_imports_new_tracks_and_local_files`
   - `incremental_scan_recognizes_unchanged_files_and_skips_reprocessing`
   - `scan_with_embedded_artwork_stores_artwork_in_m3_artwork_provider`
@@ -134,11 +134,18 @@ Android MediaStore / SAF Tree
   - `moved_or_renamed_file_reconciles_by_content_hash_without_creating_duplicate_track`
   - `corrupt_or_unreadable_file_is_isolated_and_scan_continues`
   - `content_hasher_computes_deterministic_sha256_hash`
+  - `real_media_store_runtime_discovery_and_reconciliation`
 - `NowPlayingAndMiniPlayerUiTest`: 4 tests
 - `PlaylistsFlowUiTest`: 4 tests
 - `RealAndroidPlaybackTest`: 7 tests
 - `RoomMigrationAndPlaylistDaoTest`: 12 tests
 - `RoomMigrationV2ToV3AndStorageDaoTest`: 5 tests
+
+### 5.4 Platform Runtime vs Synthetic Classification
+1. **Real MediaStore Discovery & Reconciliation:** Authoritatively verified on Android API 36 emulator via `real_media_store_runtime_discovery_and_reconciliation`. Inserts audio to Android MediaStore, discovers it via `MediaStoreScanner`, resolves `content://` URI, hashes bitstream, extracts M4-B metadata, and reconciles into Room.
+2. **SAF DocumentTree Traversal:** Structurally verified via native `DocumentsContract` implementation; covered by unit/synthetic tests (`SafTreeScanner`). Establishing real user-granted SAF document trees on the emulator requires interactive system picker UI, which cannot be invoked headlessly in CI without UI interaction.
+3. **Moved / Renamed Content Identity:** Verified via `moved_or_renamed_file_reconciles_by_content_hash_without_creating_duplicate_track`. Proves that when content hash is identical across different file paths, Room updates the existing `LocalFileEntity` and preserves the original `TrackEntity` without creating duplicates.
+4. **Checkpoint Failure Safety:** Verified via `corrupt_or_unreadable_file_is_isolated_and_scan_continues`. Proves that upon encountering an inaccessible/corrupt file, the scan isolates the error, imports valid candidates, emits `ScanProgressStatus.PARTIAL`, and retains the previous checkpoint `lastGeneration` without advancing beyond the failed scan boundary.
 
 ---
 

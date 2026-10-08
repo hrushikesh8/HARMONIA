@@ -96,6 +96,9 @@ class DefaultMediaReconciliationEngine(
         for (candidate in candidates) {
             activeUris.add(candidate.runtimeLocator)
             try {
+                if (!candidate.isAccessible) {
+                    throw IllegalStateException("Candidate bitstream is not accessible: ${candidate.runtimeLocator}")
+                }
                 val existingFile = database.localFileDao().getLocalFileByUri(candidate.runtimeLocator)
 
                 if (existingFile != null) {
@@ -288,22 +291,43 @@ class DefaultMediaReconciliationEngine(
             }
         }
 
-        // 5. Advance Checkpoint on Successful Scan
-        val maxLastMod = candidates.maxOfOrNull { it.lastModifiedEpochSec } ?: System.currentTimeMillis()
-        val completedCheckpoint = ScanCheckpointEntity(
-            sourceId = source.id,
-            volumeName = source.id,
-            lastGeneration = maxLastMod,
-            lastScanTimestamp = System.currentTimeMillis(),
-            scannedFileCount = imported + updated + unchanged + moved,
-            status = "COMPLETED"
-        )
-        database.scanCheckpointDao().upsertCheckpoint(completedCheckpoint)
+        // 5. Checkpoint Handling
+        if (failed == 0) {
+            val maxLastMod = candidates.maxOfOrNull { it.lastModifiedEpochSec } ?: System.currentTimeMillis()
+            val completedCheckpoint = ScanCheckpointEntity(
+                sourceId = source.id,
+                volumeName = source.id,
+                lastGeneration = maxLastMod,
+                lastScanTimestamp = System.currentTimeMillis(),
+                scannedFileCount = imported + updated + unchanged + moved,
+                status = "COMPLETED"
+            )
+            database.scanCheckpointDao().upsertCheckpoint(completedCheckpoint)
 
-        progress = progress.copy(
-            status = ScanProgressStatus.COMPLETED,
-            unavailableCount = unavailable
-        )
-        emit(progress)
+            progress = progress.copy(
+                status = ScanProgressStatus.COMPLETED,
+                unavailableCount = unavailable
+            )
+            emit(progress)
+        } else {
+            // Partial scan: do NOT advance lastGeneration beyond failed scan boundary!
+            val previousCheckpoint = database.scanCheckpointDao().getCheckpoint(source.id)
+            val partialCheckpoint = ScanCheckpointEntity(
+                sourceId = source.id,
+                volumeName = source.id,
+                lastGeneration = previousCheckpoint?.lastGeneration ?: 0L,
+                lastScanTimestamp = System.currentTimeMillis(),
+                scannedFileCount = imported + updated + unchanged + moved,
+                status = "PARTIAL"
+            )
+            database.scanCheckpointDao().upsertCheckpoint(partialCheckpoint)
+
+            progress = progress.copy(
+                status = ScanProgressStatus.PARTIAL,
+                unavailableCount = unavailable,
+                errorMessage = "$failed file(s) failed during reconciliation"
+            )
+            emit(progress)
+        }
     }.flowOn(Dispatchers.IO)
 }
