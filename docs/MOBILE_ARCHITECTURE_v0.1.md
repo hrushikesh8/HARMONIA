@@ -1,10 +1,11 @@
 # Harmonia Mobile v0.1 — Architecture Design Document
 
-**Status:** Proposed Architecture  
-**Version:** 0.1.0  
+**Status:** Proposed Architecture (Subject to M0.1 Reconciliation)  
+**Version:** 0.1.1  
 **Date:** October 2026  
 **Document Author:** Harmonia Engineering Architecture Group  
 **Classification:** Core System Specification  
+**Architecture Reconciliation:** See [`docs/MOBILE_ARCHITECTURE_RECONCILIATION.md`](file:///c:/Users/Hrushikesh%20Bunni/Downloads/H/PROJECTS/HARMONIA/docs/MOBILE_ARCHITECTURE_RECONCILIATION.md) for authoritative M0.1 decisions (Room SQLite, Android-First Native, SwiftUI on iOS, Media3 Extractor, and MediaLibraryService for Android Auto).
 
 ---
 
@@ -86,13 +87,13 @@ To determine the optimal engineering foundation, four primary technical paths we
      - **Preserved iOS Portability:** When targeting iOS, KMP compiles down to native Objective-C/Swift frameworks via Kotlin/Native. The shared domain, SQLDelight SQLite database, and sync engine run natively on iOS without code duplication. The audio playback engine wraps native `AVQueuePlayer` / `AVAudioEngine` behind the shared `PlaybackEngine` interface.
      - **Unified Modern UI:** Compose Multiplatform shares the UI design system between Android and iOS while maintaining platform-specific escape hatches.
 
-### 3.2 Architectural Decision: Kotlin Multiplatform (KMP) with Native Media3 Engine
+### 3.2 Architectural Decision: Android-First Native Architecture
 
-**Harmonia Mobile selects Kotlin Multiplatform (KMP)** as the core architectural framework, paired with **AndroidX Media3** for the Android playback engine.
+**Harmonia Mobile selects an Android-First Native Architecture: Kotlin, Jetpack Compose, AndroidX Media3 (`MediaLibraryService` + ExoPlayer), and Android Room (SQLite WAL Mode).**
 
-- **Shared Domain & Data (KMP Common):** Domain logic, SQLDelight persistence, sync engine, conflict resolution, repository interfaces, and MVI state controllers.
-- **Android Target:** AndroidX Media3 (`MediaSessionService`, `ExoPlayer`), Android Scoped Storage / Storage Access Framework (SAF), Android Auto (`androidx.car.app`).
-- **iOS Target (Future):** Native audio adapter wrapping `AVAudioEngine` / `AVQueuePlayer` and `MPNowPlayingInfoCenter`, bound to the shared KMP core.
+- **Native Android Priority:** Maximum platform quality, background playback resilience, low battery consumption, and seamless system media session integration on Android.
+- **Portability Guardrail:** Clean Architecture separation ensuring domain entities, value objects, queue state machine logic, and repository interfaces are written in **Pure Kotlin** without `android.*` framework dependencies where practical.
+- **iOS Strategy:** Dedicated native iOS implementation using Swift, SwiftUI, and AVFoundation in a subsequent phase, rather than compromising platform quality through premature cross-platform abstraction layers.
 
 ---
 
@@ -103,12 +104,11 @@ To determine the optimal engineering foundation, four primary technical paths we
 ```
 Option A: Monorepo                             Option B: Dedicated Polyrepo (Recommended)
 harmonia/                                      harmonia/                 harmonia-mobile/
-├── src/harmonia/ (Core Python)                └── (Core Python)         ├── shared/ (KMP Common)
-├── tests/                                                               ├── androidApp/
-├── docs/                                                                ├── iosApp/ (Future)
-└── mobile/                                                              └── docs/
-    ├── shared/ (KMP)
-    └── androidApp/
+├── src/harmonia/ (Core Python)                └── (Core Python)         ├── app/ (Android App)
+├── tests/                                                               └── docs/
+├── docs/
+└── mobile/
+    └── app/
 ```
 
 - **Analysis of Monorepo (`harmonia/mobile`):**
@@ -136,7 +136,7 @@ Harmonia Mobile implements Clean Architecture with strict unidirectional data fl
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │                        PRESENTATION LAYER                              │
-│         Compose Multiplatform UI (Screens, Components, Theme)          │
+│             Jetpack Compose UI (Screens, Components, Theme)            │
 │               NowPlaying  │  Library  │  Search  │  Queue              │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │ UI Events / Intents
@@ -150,17 +150,17 @@ Harmonia Mobile implements Clean Architecture with strict unidirectional data fl
                   ▼                                   ▼
 ┌───────────────────────────────────┐ ┌──────────────────────────────────┐
 │       PLAYBACK SUBSYSTEM          │ │        DOMAIN LAYER              │
-│    PlaybackService (Android Svc)  │ │ Entities (Track, Album, Playlist)│
-│    MediaSession (Android Auto/OS) │ │ UseCases (Import, Enqueue, Rate) │
-│    NativeAudioEngine (Media3/Exo) │ │ Repositories (Interfaces)        │
+│ HarmoniaPlaybackService (Media3)  │ │ Entities (Track, Album, Playlist)│
+│ MediaLibraryService (Android Auto)│ │ UseCases (Import, Enqueue, Rate) │
+│ NativeAudioEngine (ExoPlayer)     │ │ Repositories (Pure Kotlin Ports) │
 └─────────────────┬─────────────────┘ └──────────────────┬───────────────┘
                   │ Read Local File                      │
                   ▼                                      ▼
 ┌───────────────────────────────────┐ ┌──────────────────────────────────┐
 │       DEVICE AUDIO HARDWARE       │ │      INFRASTRUCTURE LAYER        │
-│   HAL / AudioTrack / Bluetooth    │ │ SQLDelight SQLite DB (WAL Mode)  │
+│   HAL / AudioTrack / Bluetooth    │ │ Android Room SQLite DB (WAL Mode)│
 │                                   │ │ Scoped Storage / SAF Scanner     │
-│                                   │ │ Ktor HTTP Client (Desktop Sync)  │
+│                                   │ │ Ktor / OkHttp (Desktop Sync)     │
 └───────────────────────────────────┘ └──────────────────────────────────┘
 ```
 
@@ -358,7 +358,7 @@ Harmonia Mobile does not assume files originate from a desktop computer. The app
 
 1. **Direct On-Device Import (Android Storage Access Framework):**
    - The user selects any directory or file tree on their device storage or SD card via Android's document picker (`ACTION_OPEN_DOCUMENT_TREE`).
-   - The app persists URI permissions (`takePersistableUriPermission`) and indexes embedded ID3/Vorbis/MP4 tags directly on-device using a pure Kotlin/native metadata reader.
+   - The app persists URI permissions (`takePersistableUriPermission`) and indexes basic container tags directly on-device using the Android platform's built-in `android.media.MediaMetadataRetriever` (strictly read-only and provisional).
 2. **Synchronized Storage (Harmonia Managed Sandbox):**
    - Files transferred from Harmonia Desktop are saved into app-specific external storage (`/Android/data/org.harmonia.player/files/music/`) or user-selected shared Music folder (`/Music/Harmonia/`).
    - Files are stored using a deterministic content-addressed or path-sanitized naming scheme: `Music/Harmonia/{Artist}/{Album}/{TrackNumber} - {Title}.{ext}`.
@@ -412,10 +412,11 @@ Harmonia Mobile does not assume files originate from a desktop computer. The app
    - Exposes an immutable `StateFlow<PlayerSnapshot>` to all UI components.
    - Manages queue indices, playback history stack, and shuffle sequence generation.
    - Persists playback state (current track ID, elapsed ms) to SQLite whenever playback pauses, tracks transition, or periodically every 5 seconds.
-2. **`HarmoniaPlaybackService` (`androidx.media3.session.MediaSessionService`):**
+2. **`HarmoniaPlaybackService` (`androidx.media3.session.MediaLibraryService`):**
    - Executes as an Android Foreground Service with `foregroundServiceType="mediaPlayback"`.
-   - Owns the active `MediaSession`. Bridges player state to the Android OS, lock-screen media controls, wearable devices, and Bluetooth controllers.
+   - Extends `MediaLibraryService` to establish the architectural integration boundary for Android Auto and system media sessions (`MediaLibrarySession.Callback`).
    - Manages the ongoing playback notification with full transport controls, elapsed time scrubbing, and album artwork bitmap rendering.
+   *(Note: Full Android Auto automotive manifest declarations and DHU testing are scheduled for Phase M8).*
 3. **`NativeAudioEngine` (`androidx.media3.exoplayer.ExoPlayer`):**
    - Configures audio attributes with `AudioAttributes.USAGE_MEDIA` and `AudioAttributes.CONTENT_TYPE_MUSIC`.
    - Implements **Gapless Playback**: Pre-loads the next media item in the playlist queue into memory buffer 10 seconds before the current track terminates, achieving zero-millisecond cross-track silence for classical pieces and live concert recordings.
@@ -738,8 +739,8 @@ Harmonia Mobile preserves strict adherence to the ecosystem boundary:
 ## 18. Large Library Performance Architecture (10,000 to 100,000+ Tracks)
 
 ### 18.1 Database & Query Optimization
-- **Index Optimization:** B-Tree indices covering `(album_id, track_number)`, `(artist_id, title)`, and lowercase collation indexes (`NOCASE`) ensure query response times remain under 4ms on a 100,000-track database.
-- **Cursor-Based Windowing:** Compose `LazyColumn` couples directly with SQLDelight query pagination. Never are more than 100 entity objects held in active memory during rapid scrolling.
+- **Index Optimization:** B-Tree indices covering `(album_id, track_number)`, `(artist_id, title)`, and lowercase collation indexes (`NOCASE`) optimize lookup performance for large music collections.
+- **Cursor-Based Windowing:** Compose `LazyColumn` couples directly with Android Room and AndroidX Paging 3 (`PagingSource`), streaming windowed chunks into memory to prevent memory pressure during rapid scrolling.
 - **SQLite Pragmas:** Configured with `PRAGMA journal_mode = WAL`, `PRAGMA synchronous = NORMAL`, `PRAGMA cache_size = -16000` (16MB memory cache), and `PRAGMA temp_store = MEMORY`.
 
 ### 18.2 Two-Tier Artwork Caching Pipeline
@@ -832,59 +833,59 @@ Continuing Harmonia's architectural decision record discipline from the Core fou
 
 ---
 
-### ADR-020: Mobile Technology Stack — Kotlin Multiplatform (KMP) Core with AndroidX Media3 Audio Subsystem
+### ADR-020: Mobile Technology Stack — Android-First Native Architecture (Kotlin + Media3)
 
-- **Status:** Proposed
+- **Status:** Accepted (M0.1 Reconciled)
 - **Date:** October 2026
 - **Context:** Harmonia requires a native mobile application prioritizing offline playback reliability, low-latency background audio, and Android media integration, while preventing long-term architectural lock-in against future iOS support.
-- **Decision:** Build Harmonia Mobile using Kotlin Multiplatform (KMP) for shared domain logic, persistence, and synchronization, paired with AndroidX Media3 (`ExoPlayer`, `MediaSessionService`) for the native Android playback engine.
-- **Rationale:** React Native and Flutter introduce bridge/isolate serialization latency and fragile background service lifecycles. KMP compiles directly to JVM bytecode on Android, enabling zero-overhead integration with Google's canonical Media3 APIs while allowing up to 80% of business and database logic to be reused when targeting iOS via Kotlin/Native.
+- **Decision:** Build Harmonia Mobile as an Android-First Native application: Kotlin, Jetpack Compose, AndroidX Media3 (`MediaLibraryService` + ExoPlayer), and Android Room SQLite.
+- **Rationale:** Audio players require uncompromising background stability, precise audio focus handling, and seamless system media session integration. Domain contracts are maintained in pure Kotlin without `android.*` dependencies to facilitate future iOS development, without prematurely imposing multiplatform Gradle complexity during early foundation phases.
 - **Alternatives Considered:**
-  - *Pure Kotlin / Jetpack Compose:* Excellent on Android, but forces a 100% rewrite of all domain and database logic on iOS.
-  - *Flutter:* Fast cross-platform UI, but complex background isolate audio management and poor Android Auto template integration.
-  - *React Native:* Unacceptable memory overhead on 100k libraries and non-deterministic JS event loop latency during audio interrupts.
-- **Consequences:** Requires maintaining KMP project structures and Gradle multiplatform configurations.
+  - *Kotlin Multiplatform (KMP) at M1:* Premature build complexity on CI and tooling friction during early Android foundation development.
+  - *Flutter / React Native:* Audio focus latency, isolate bridging overhead, and fragile background service lifecycles.
+- **Consequences:** Focuses Phase M1–M8 strictly on native Android excellence.
 
 ---
 
-### ADR-021: Mobile Local Persistence — SQLDelight SQLite Architecture
+### ADR-021: Mobile Local Persistence — Android Room with SQLite WAL Mode
 
-- **Status:** Proposed
+- **Status:** Accepted (M0.1 Reconciled)
 - **Date:** October 2026
-- **Context:** The mobile player must manage large libraries (up to 100,000 tracks) with sub-5ms query times, support SQLite FTS5 search, and run identically across Android and future iOS targets without ORM overhead.
-- **Decision:** Adopt SQLDelight as the mobile persistence engine with SQLite WAL mode.
-- **Rationale:** SQLDelight generates type-safe Kotlin code directly from pure SQLite statements at compile time. It has zero reflection overhead, supports multiplatform compilation (Android SQLite driver and iOS native SQLite driver), and provides reactive `Flow` queries for instant UI updates.
+- **Context:** The mobile player must manage large libraries with responsive query performance, support SQLite FTS5 search, provide seamless Android Studio debugging, and integrate natively with list paging.
+- **Decision:** Adopt Android Room (SQLite 3 with WAL mode) with AndroidX Paging 3 integration.
+- **Rationale:** Room provides compile-time query verification via KSP, first-party Android Studio Database Inspector support for real-time device debugging, and seamless integration with Paging 3 (`PagingSource`) for smooth virtualized scrolling. Room also provides an official KMP evolution path (Room 2.7+).
 - **Alternatives Considered:**
-  - *Room (Android Jetpack):* Android-only; prevents code sharing with iOS.
-  - *Realm / ObjectBox:* Proprietary query engines with high binary size overhead and non-standard persistence semantics.
-- **Consequences:** Schema migrations must be written in pure SQL migration files (`.sqm`) and verified via SQLDelight compiler verification tasks.
+  - *SQLDelight:* Lacks first-party Android Studio Database Inspector integration and native Paging 3 support.
+  - *Realm / ObjectBox:* Proprietary query engines with binary size overhead.
+- **Consequences:** Schema migrations use Room schema JSON verification (`schemas/1.json`).
 
 ---
 
-### ADR-022: Playback Decoupling — Foreground MediaSessionService with Unidirectional PlayerController
+### ADR-022: Playback Decoupling — Foreground MediaLibraryService with Unidirectional PlayerController
 
-- **Status:** Proposed
+- **Status:** Accepted (M0.1 Reconciled)
 - **Date:** October 2026
 - **Context:** Mobile operating systems aggressively terminate background audio processes that fail to integrate properly with OS foreground service lifecycles. Furthermore, UI components must never directly mutate low-level player hardware state.
-- **Decision:** Isolate all playback logic inside an Android `MediaSessionService` (`HarmoniaPlaybackService`). Mediate all UI interactions through a unidirectional `PlayerController` exposing immutable `StateFlow<PlayerSnapshot>` states.
-- **Rationale:** Decouples UI component lifecycles from audio playback. If the UI activity is destroyed to reclaim memory, playback continues uninterrupted in the foreground service. MediaSession handles lock-screen controls, Bluetooth AVRCP, and Android Auto out of the box.
+- **Decision:** Isolate all playback logic inside an Android `MediaLibraryService` (`HarmoniaPlaybackService`). Mediate all UI interactions through a unidirectional `PlayerController` exposing immutable `StateFlow<PlayerSnapshot>` states.
+- **Rationale:** Decouples UI component lifecycles from audio playback. If the UI activity is destroyed to reclaim memory, playback continues uninterrupted in the foreground service. `MediaLibraryService` also reserves the architectural integration boundary for Android Auto browsing.
 - **Alternatives Considered:**
   - *In-Activity MediaPlayer:* Prone to immediate process death when screen turns off.
-  - *Custom Bound Service without MediaSession:* Fails to integrate with system media controls, volume rocker events, and Bluetooth headsets.
-- **Consequences:** Requires strict IPC/Binder communication patterns and serialization of player intents.
+  - *Bare MediaSessionService:* Lacks standard MediaLibrarySession hierarchical browsing for automotive integration.
+- **Consequences:** Requires implementing `MediaLibrarySession.Callback` methods.
 
 ---
 
-### ADR-023: Sovereign Local File Ownership & Multi-Source Storage Abstraction
+### ADR-023: Sovereign Local Storage & Android Platform MediaMetadataRetriever Tag Reading
 
-- **Status:** Proposed
+- **Status:** Accepted (M0.1 Reconciled)
 - **Date:** October 2026
 - **Context:** Harmonia Mobile must function as an independent personal music player, allowing users to play music imported directly on their device via filesystems or SD cards without ever connecting to a Harmonia Desktop instance.
-- **Decision:** Implement a multi-source `StorageSource` abstraction supporting direct SAF on-device imports, USB/MTP transfers, and desktop synchronization.
-- **Rationale:** Enforces the core product philosophy that the user owns their music. The phone does not treat desktop files as master records; local files imported on-device have equal first-class status in the local SQLite database.
+- **Decision:** Implement a multi-source `StorageSource` abstraction supporting direct SAF on-device imports, USB/MTP transfers, and desktop synchronization. Use the Android platform's built-in `android.media.MediaMetadataRetriever` for provisional on-device tag reading.
+- **Rationale:** Adds zero dependency overhead (0 KB APK size), uses stable public Android APIs, and handles MP3, FLAC, M4A, Vorbis, and embedded artwork natively. Mobile parsing is strictly read-only and provisional; Harmonia Desktop remains the sole authoritative metadata source.
 - **Alternatives Considered:**
-  - *Desktop-Only Sync Mirror:* Disallows playing local device files not present on the desktop workstation.
-- **Consequences:** The application must parse audio metadata on-device for imported files rather than relying solely on desktop-provided JSON.
+  - *androidx.media3:media3-extractor:* Heavily marked with `@UnstableApi` annotations; intended for playback demuxing rather than metadata inspection.
+  - *Heavy C++ TagLib JNI:* Adds unnecessary binary size (2–5 MB) and NDK toolchain complexity.
+- **Consequences:** Mobile parsing is restricted to provisional read-only inspection. Desktop sync unconditionally supersedes mobile tags.
 
 ---
 
