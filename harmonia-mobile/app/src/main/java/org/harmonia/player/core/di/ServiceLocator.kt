@@ -54,6 +54,9 @@ object ServiceLocator {
     private var storagePermissionCheckerInstance: org.harmonia.player.domain.model.storage.permission.StoragePermissionChecker? = null
 
     @Volatile
+    private var audioMetadataReaderInstance: org.harmonia.player.domain.metadata.AudioMetadataReader? = null
+
+    @Volatile
     private var playbackPortInstance: PlaybackPort? = null
 
     fun initialize(context: Context) {
@@ -62,6 +65,9 @@ object ServiceLocator {
         }
         if (storagePermissionCheckerInstance == null) {
             storagePermissionCheckerInstance = org.harmonia.player.data.local.permission.AndroidStoragePermissionChecker(context.applicationContext)
+        }
+        if (audioMetadataReaderInstance == null) {
+            audioMetadataReaderInstance = org.harmonia.player.data.local.metadata.AndroidAudioMetadataReader(context.applicationContext)
         }
     }
 
@@ -180,6 +186,14 @@ object ServiceLocator {
         return storagePermissionCheckerInstance ?: error("StoragePermissionChecker has not been initialized in ServiceLocator!")
     }
 
+    fun getAudioMetadataReader(): org.harmonia.player.domain.metadata.AudioMetadataReader {
+        return audioMetadataReaderInstance ?: error("AudioMetadataReader has not been initialized in ServiceLocator!")
+    }
+
+    fun setAudioMetadataReaderForTesting(reader: org.harmonia.player.domain.metadata.AudioMetadataReader) {
+        audioMetadataReaderInstance = reader
+    }
+
     fun getPlaybackPort(): PlaybackPort {
         return playbackPortInstance ?: error("PlaybackPort has not been registered in ServiceLocator!")
     }
@@ -202,6 +216,7 @@ object ServiceLocator {
         storageSourceRepositoryInstance = null
         scanCheckpointRepositoryInstance = null
         storagePermissionCheckerInstance = null
+        audioMetadataReaderInstance = null
         playbackPortInstance = null
     }
 }
