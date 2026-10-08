@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
+
 from harmonia.core.logging import get_logger
 from harmonia.infrastructure.persistence.track_repo import SqliteTrackRepository
 
