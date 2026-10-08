@@ -121,7 +121,7 @@ harmonia-mobile/
 - **Foreign Keys & Indices:** Implemented foreign keys with cascading delete for queue and local files, alongside indexed queries for album, artist, and case-insensitive title search.
 
 ### ADR-023: On-Device Tag Reading Strategy
-- **Implemented:** Tag reader boundary established. Domain models incorporate audio telemetry (`integratedLufs`, `truePeakDbtp`, bit depth, sample rate). Platform `android.media.MediaMetadataRetriever` is ready for Phase M2 local file ingestion without external dependencies.
+- **Implemented:** Tag reader boundary established. Domain models incorporate audio telemetry metadata (`integratedLufs`, `truePeakDbtp`, bit depth, sample rate) as passive schema fields received from catalog data (ADR-023). No audio analysis or DSP calculation exists on mobile. Platform `android.media.MediaMetadataRetriever` is slated for Phase M2 local file ingestion without external dependencies.
 
 ### ADR-025: Two-Tier Identity Model (Decoupled Metadata vs. Local Bitstream)
 - **Implemented:** `Track` represents canonical catalog metadata, while `LocalFile` represents the physical file on device storage.
@@ -134,23 +134,28 @@ harmonia-mobile/
 
 ### 5.1 Unit Test Suite
 The unit test suite runs completely isolated on the JVM:
-- `TrackDomainTest`: Verifies domain entity creation, availability status derivation, and offline readiness flags.
-- `OfflineTrackRepositoryTest`: Tests track upserts, queries, deletions, and offline-only bitstream filtering.
-- `OfflinePlaybackStateRepositoryTest`: Tests persistent playback state serialization, volume scalars, repeat modes, and active queue replacement.
+- `TrackDomainTest`: 4 tests (Verifies domain entity creation, availability status derivation, and offline readiness flags).
+- `OfflineTrackRepositoryTest`: 3 tests (Tests track upserts, queries, deletions, and offline-only bitstream filtering).
+- `OfflinePlaybackStateRepositoryTest`: 2 tests (Tests persistent playback state serialization, volume scalars, repeat modes, and active queue replacement).
 
 **Command Executed:**
 ```bash
 ./gradlew.bat test
 ```
-**Result:** `BUILD SUCCESSFUL` (all tests passing).
+**Exact Result:** 9 tests executed, 9 passed, 0 failed, 0 skipped.
+**Instrumentation Tests:** None (JVM unit tests only; no emulator required for foundation).
 
-### 5.2 Build & Packaging
+### 5.2 Device Runtime Verification
+- **Status:** `DEVICE VERIFICATION: NOT AVAILABLE`
+- **Details:** Checked via `adb devices`. No physical Android device or running Android Virtual Device (AVD) is attached to the host environment. Runtime verification will be performed when an emulator or physical device is provisioned.
+
+### 5.3 Build & Packaging
 The Android application builds cleanly to a signed debug APK:
 **Command Executed:**
 ```bash
 ./gradlew.bat assembleDebug
 ```
-**Output Artifact:** `harmonia-mobile/app/build/outputs/apk/debug/app-debug.apk` (12.3 MB).  
+**Output Artifact:** `harmonia-mobile/app/build/outputs/apk/debug/app-debug.apk` (12,336,667 bytes / 11.76 MB).  
 **Result:** `BUILD SUCCESSFUL` with clean DEX generation and resource processing.
 
 ---
