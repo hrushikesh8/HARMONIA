@@ -9,9 +9,13 @@ from fastapi import Depends, Header, HTTPException, Request
 
 from harmonia.application.audio_analysis_service import AudioAnalysisService
 from harmonia.application.library_service import LibraryService
+from harmonia.application.playback_service import PlaybackService
 from harmonia.application.search_service import SearchService
 from harmonia.application.streaming_service import StreamingService
 from harmonia.core.config import HarmoniaConfig
+from harmonia.infrastructure.persistence.listening_event_repo import (
+    SqliteListeningEventRepository,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -84,3 +88,20 @@ def get_streaming_service(
 ) -> StreamingService:
     """Provide StreamingService instance."""
     return StreamingService(session_factory=session_factory)
+
+
+def get_playback_service(request: Request) -> PlaybackService:
+    """Retrieve shared PlaybackService attached to application state."""
+    service = getattr(request.app.state, "playback_service", None)
+    if service is None:
+        raise RuntimeError("PlaybackService not initialized on app.state")
+    return service
+
+
+def get_listening_event_repo(
+    session_factory: Callable[[], Session] = Depends(get_session_factory),
+) -> Generator[SqliteListeningEventRepository, None, None]:
+    """Provide SqliteListeningEventRepository with scoped session."""
+    with session_factory() as session:
+        yield SqliteListeningEventRepository(session)
+

@@ -15,6 +15,18 @@ from harmonia.api.schemas.file import (
     AudioAnalysisResponse,
     TrackAnalysisMultiFileResponse,
 )
+from harmonia.api.schemas.playback import (
+    ListeningEventResponse,
+    ListeningStatsResponse,
+    PlaybackStateResponse,
+    QueueItemResponse,
+    QueueTrackRequest,
+    RepeatRequest,
+    SeekRequest,
+    SetQueueRequest,
+    ShuffleRequest,
+    VolumeRequest,
+)
 from harmonia.api.schemas.search import SearchItemResponse, SearchResponse
 from harmonia.api.schemas.track import (
     TagResponse,
@@ -32,13 +44,23 @@ __all__ = [
     "DuplicateCandidateResponse",
     "HealthResponse",
     "LibraryInfoResponse",
+    "ListeningEventResponse",
+    "ListeningStatsResponse",
     "PaginatedResponse",
+    "PlaybackStateResponse",
+    "QueueItemResponse",
+    "QueueTrackRequest",
+    "RepeatRequest",
     "ResolveDuplicateRequest",
     "SearchItemResponse",
     "SearchResponse",
+    "SeekRequest",
+    "SetQueueRequest",
+    "ShuffleRequest",
     "TagResponse",
     "TrackAnalysisMultiFileResponse",
     "TrackDetailResponse",
     "TrackFileResponse",
     "TrackResponse",
+    "VolumeRequest",
 ]

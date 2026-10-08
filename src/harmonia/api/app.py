@@ -19,14 +19,25 @@ from harmonia.api.routers import (
     duplicates_router,
     files_router,
     health_router,
+    listening_events_router,
+    playback_router,
+    queue_router,
     search_router,
     stream_router,
     tracks_router,
 )
 from harmonia.application.audio_analysis_service import AudioAnalysisService
+from harmonia.application.playback_service import PlaybackService
 from harmonia.core.config import HarmoniaConfig
 from harmonia.core.database import create_database_engine, create_session_factory, init_database
 from harmonia.core.exceptions import HarmoniaError
+from harmonia.infrastructure.persistence.listening_event_repo import (
+    SqliteListeningEventRepository,
+)
+from harmonia.infrastructure.persistence.playback_snapshot_repo import (
+    SqlitePlaybackSnapshotRepository,
+)
+from harmonia.infrastructure.persistence.track_repo import SqliteTrackRepository
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable
@@ -59,6 +70,16 @@ def create_app(
             max_workers=app_config.analysis.max_workers,
         )
 
+    # Configure core playback service with state snapshot restoration
+    playback_session = effective_session_factory()
+    playback_service = PlaybackService(
+        track_repo=SqliteTrackRepository(playback_session),
+        listening_event_repo=SqliteListeningEventRepository(playback_session),
+        snapshot_repo=SqlitePlaybackSnapshotRepository(playback_session),
+        session=playback_session,
+    )
+    playback_service.restore_snapshot()
+
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Startup: Recover stale jobs from previous unexpected terminations and start workers
@@ -70,7 +91,10 @@ def create_app(
 
         yield
 
-        # Shutdown: Gracefully stop worker threads and dispose engine
+        # Shutdown: Gracefully stop workers, playback, and close db resources
+        playback_service.stop()
+        playback_session.close()
+
         if effective_analysis_service:
             effective_analysis_service.stop_worker()
         if engine:
@@ -87,6 +111,7 @@ def create_app(
     app.state.config = app_config
     app.state.session_factory = effective_session_factory
     app.state.analysis_service = effective_analysis_service
+    app.state.playback_service = playback_service
 
     # Local CORS policy strictly allowing loopback clients
     app.add_middleware(
@@ -115,6 +140,9 @@ def create_app(
     app.include_router(artwork_router, prefix="/api/v1")
     app.include_router(duplicates_router, prefix="/api/v1")
     app.include_router(stream_router, prefix="/api/v1")
+    app.include_router(playback_router, prefix="/api/v1")
+    app.include_router(queue_router, prefix="/api/v1")
+    app.include_router(listening_events_router, prefix="/api/v1")
 
     # Static assets and UI serving
     static_dir = Path(__file__).parent / "static"
