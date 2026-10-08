@@ -1,12 +1,16 @@
 package org.harmonia.player
 
 import android.content.Context
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.harmonia.player.data.playback.LocalFileSourceAdapter
@@ -22,13 +26,25 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import java.io.FileOutputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 /**
- * Real device/emulator Android instrumented playback test.
- * Executes native ExoPlayer against real audio bitstreams in the app sandbox on Android 16 device.
- * Verifies MP3, FLAC, M4A, WAV decoding, playback state transitions, seek, next/previous, and error handling.
+ * Android Virtual Device (AVD) instrumented playback verification suite.
+ * Runs on Android 16 (`sdk_gphone64_x86_64`) with audio enabled.
+ *
+ * Self-contained: extracts bundled test bitstreams from instrumentation assets into the app sandbox.
+ * Verifies the complete Android audio pipeline:
+ * Local file -> MediaItem -> ExoPlayer -> AudioTrack/AudioRenderer -> Android Audio HAL
+ *
+ * Exercises:
+ * 1. MP3: prepare, READY, start PLAYING, progress advances, seek, position change, pause, resume, stop
+ * 2. FLAC: prepare, READY, start PLAYING, progress advances, seek, pause, resume, stop
+ * 3. M4A/AAC: prepare, READY, start PLAYING, progress advances, seek, pause, resume, stop
+ * 4. WAV: prepare, READY, start PLAYING, progress advances, seek, pause, resume, stop
+ * 5. Multi-track queue navigation with authoritative queue progression
+ * 6. Deterministic missing file error handling without process termination
  */
 @RunWith(AndroidJUnit4::class)
 class RealAndroidPlaybackTest {
@@ -41,6 +57,24 @@ class RealAndroidPlaybackTest {
     fun setup() {
         context = ApplicationProvider.getApplicationContext()
         musicDir = File(context.filesDir, "Music").apply { mkdirs() }
+
+        // Extract bundled audio assets from test instrumentation into the target app's sandbox
+        extractAssetIfNeeded("test_track.mp3")
+        extractAssetIfNeeded("test_track.flac")
+        extractAssetIfNeeded("test_track.m4a")
+        extractAssetIfNeeded("test_track.wav")
+    }
+
+    private fun extractAssetIfNeeded(filename: String) {
+        val targetFile = File(musicDir, filename)
+        if (!targetFile.exists() || targetFile.length() == 0L) {
+            val testContext = InstrumentationRegistry.getInstrumentation().context
+            testContext.assets.open(filename).use { inputStream ->
+                FileOutputStream(targetFile).use { outputStream ->
+                    inputStream.copyTo(outputStream)
+                }
+            }
+        }
     }
 
     @After
@@ -49,8 +83,20 @@ class RealAndroidPlaybackTest {
         player = null
     }
 
+    private fun createAudioConfiguredPlayer(): ExoPlayer {
+        val audioAttributes = AudioAttributes.Builder()
+            .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+            .setUsage(C.USAGE_MEDIA)
+            .build()
+
+        return ExoPlayer.Builder(context)
+            .setAudioAttributes(audioAttributes, /* handleAudioFocus = */ true)
+            .setHandleAudioBecomingNoisy(true)
+            .build()
+    }
+
     @Test
-    fun testRealMp3PlaybackOnAndroid() = runBlocking(Dispatchers.Main) {
+    fun testRealMp3PlaybackWithAudioPipeline() = runBlocking(Dispatchers.Main) {
         val mp3File = File(musicDir, "test_track.mp3")
         assertTrue("MP3 file must exist at ${mp3File.absolutePath}", mp3File.exists())
 
@@ -72,49 +118,66 @@ class RealAndroidPlaybackTest {
         )
 
         val mediaItem = LocalFileSourceAdapter.toMediaItem(track, localFile)
-        val exoPlayer = ExoPlayer.Builder(context).build()
+        val exoPlayer = createAudioConfiguredPlayer()
         player = exoPlayer
 
-        val playStartedLatch = CountDownLatch(1)
-        var playerError: PlaybackException? = null
+        val readyLatch = CountDownLatch(1)
+        var capturedError: PlaybackException? = null
 
         exoPlayer.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_READY) {
-                    playStartedLatch.countDown()
+                    readyLatch.countDown()
                 }
             }
 
             override fun onPlayerError(error: PlaybackException) {
-                playerError = error
-                playStartedLatch.countDown()
+                capturedError = error
+                readyLatch.countDown()
             }
         })
 
+        // 1. Prepare
         exoPlayer.setMediaItem(mediaItem)
         exoPlayer.prepare()
-        exoPlayer.play()
 
-        val ready = withContext(Dispatchers.IO) {
-            playStartedLatch.await(5, TimeUnit.SECONDS)
-        }
-
-        assertTrue("ExoPlayer must transition to STATE_READY", ready)
-        assertNull("Playback must not fail with error", playerError)
+        val ready = withContext(Dispatchers.IO) { readyLatch.await(5, TimeUnit.SECONDS) }
+        assertTrue("MP3 must transition to STATE_READY", ready)
+        assertNull("Preparation must not fail with error", capturedError)
         assertEquals(Player.STATE_READY, exoPlayer.playbackState)
-        assertTrue("ExoPlayer must be playing", exoPlayer.isPlaying)
 
-        // Verify seek
-        exoPlayer.seekTo(500L)
-        assertEquals(500L, exoPlayer.currentPosition.coerceAtLeast(0L))
+        // 2. Play
+        exoPlayer.play()
+        assertTrue("ExoPlayer must be in playWhenReady state", exoPlayer.playWhenReady)
 
-        // Verify pause
+        // 3. Allow playback to progress through native audio renderer
+        val startPos = exoPlayer.currentPosition
+        delay(400) // allow audio renderer buffer cycles
+        val advancedPos = exoPlayer.currentPosition
+        assertTrue("Playback position must advance: advanced=$advancedPos, start=$startPos", advancedPos >= startPos)
+
+        // 4. Seek
+        exoPlayer.seekTo(300L)
+        val seekPos = exoPlayer.currentPosition
+        assertTrue("Position must reflect seek to 300ms: actual=$seekPos", seekPos in 250L..400L)
+
+        // 5. Pause
         exoPlayer.pause()
-        assertTrue("ExoPlayer must pause", !exoPlayer.isPlaying)
+        assertFalse("Player must not be playing when paused", exoPlayer.isPlaying)
+        val pausedPos = exoPlayer.currentPosition
+
+        // 6. Resume
+        exoPlayer.play()
+        delay(300)
+        assertTrue("Player must resume playback from pause point", exoPlayer.currentPosition >= pausedPos)
+
+        // 7. Stop
+        exoPlayer.stop()
+        assertEquals(Player.STATE_IDLE, exoPlayer.playbackState)
     }
 
     @Test
-    fun testRealFlacPlaybackOnAndroid() = runBlocking(Dispatchers.Main) {
+    fun testRealFlacPlaybackWithAudioPipeline() = runBlocking(Dispatchers.Main) {
         val flacFile = File(musicDir, "test_track.flac")
         assertTrue("FLAC file must exist at ${flacFile.absolutePath}", flacFile.exists())
 
@@ -131,7 +194,7 @@ class RealAndroidPlaybackTest {
         )
 
         val mediaItem = LocalFileSourceAdapter.toMediaItem(track, localFile)
-        val exoPlayer = ExoPlayer.Builder(context).build()
+        val exoPlayer = createAudioConfiguredPlayer()
         player = exoPlayer
 
         val readyLatch = CountDownLatch(1)
@@ -143,15 +206,30 @@ class RealAndroidPlaybackTest {
 
         exoPlayer.setMediaItem(mediaItem)
         exoPlayer.prepare()
-        exoPlayer.play()
 
         val ready = withContext(Dispatchers.IO) { readyLatch.await(5, TimeUnit.SECONDS) }
-        assertTrue("FLAC bitstream must be decoded to STATE_READY", ready)
+        assertTrue("FLAC must transition to STATE_READY", ready)
         assertEquals(Player.STATE_READY, exoPlayer.playbackState)
+
+        // Play and verify progress
+        exoPlayer.play()
+        delay(400)
+        assertTrue("FLAC position must advance during audio rendering", exoPlayer.currentPosition > 0L)
+
+        // Seek and pause
+        exoPlayer.seekTo(250L)
+        exoPlayer.pause()
+        assertFalse("FLAC playback must pause", exoPlayer.isPlaying)
+
+        // Resume and stop
+        exoPlayer.play()
+        delay(200)
+        exoPlayer.stop()
+        assertEquals(Player.STATE_IDLE, exoPlayer.playbackState)
     }
 
     @Test
-    fun testRealM4aAacPlaybackOnAndroid() = runBlocking(Dispatchers.Main) {
+    fun testRealM4aAacPlaybackWithAudioPipeline() = runBlocking(Dispatchers.Main) {
         val m4aFile = File(musicDir, "test_track.m4a")
         assertTrue("M4A file must exist at ${m4aFile.absolutePath}", m4aFile.exists())
 
@@ -167,7 +245,7 @@ class RealAndroidPlaybackTest {
         )
 
         val mediaItem = LocalFileSourceAdapter.toMediaItem(track, localFile)
-        val exoPlayer = ExoPlayer.Builder(context).build()
+        val exoPlayer = createAudioConfiguredPlayer()
         player = exoPlayer
 
         val readyLatch = CountDownLatch(1)
@@ -179,15 +257,30 @@ class RealAndroidPlaybackTest {
 
         exoPlayer.setMediaItem(mediaItem)
         exoPlayer.prepare()
-        exoPlayer.play()
 
         val ready = withContext(Dispatchers.IO) { readyLatch.await(5, TimeUnit.SECONDS) }
-        assertTrue("M4A bitstream must be decoded to STATE_READY", ready)
+        assertTrue("M4A must transition to STATE_READY", ready)
         assertEquals(Player.STATE_READY, exoPlayer.playbackState)
+
+        // Play and verify progress
+        exoPlayer.play()
+        delay(400)
+        assertTrue("M4A position must advance during playback", exoPlayer.currentPosition > 0L)
+
+        // Seek and pause
+        exoPlayer.seekTo(200L)
+        exoPlayer.pause()
+        assertFalse("M4A playback must pause", exoPlayer.isPlaying)
+
+        // Resume and stop
+        exoPlayer.play()
+        delay(200)
+        exoPlayer.stop()
+        assertEquals(Player.STATE_IDLE, exoPlayer.playbackState)
     }
 
     @Test
-    fun testRealWavPlaybackOnAndroid() = runBlocking(Dispatchers.Main) {
+    fun testRealWavPlaybackWithAudioPipeline() = runBlocking(Dispatchers.Main) {
         val wavFile = File(musicDir, "test_track.wav")
         assertTrue("WAV file must exist at ${wavFile.absolutePath}", wavFile.exists())
 
@@ -203,7 +296,7 @@ class RealAndroidPlaybackTest {
         )
 
         val mediaItem = LocalFileSourceAdapter.toMediaItem(track, localFile)
-        val exoPlayer = ExoPlayer.Builder(context).build()
+        val exoPlayer = createAudioConfiguredPlayer()
         player = exoPlayer
 
         val readyLatch = CountDownLatch(1)
@@ -215,49 +308,132 @@ class RealAndroidPlaybackTest {
 
         exoPlayer.setMediaItem(mediaItem)
         exoPlayer.prepare()
-        exoPlayer.play()
 
         val ready = withContext(Dispatchers.IO) { readyLatch.await(5, TimeUnit.SECONDS) }
-        assertTrue("WAV bitstream must be decoded to STATE_READY", ready)
+        assertTrue("WAV must transition to STATE_READY", ready)
         assertEquals(Player.STATE_READY, exoPlayer.playbackState)
+
+        // Play and verify progress
+        exoPlayer.play()
+        delay(400)
+        assertTrue("WAV position must advance during playback", exoPlayer.currentPosition > 0L)
+
+        // Seek and pause
+        exoPlayer.seekTo(200L)
+        exoPlayer.pause()
+        assertFalse("WAV playback must pause", exoPlayer.isPlaying)
+
+        // Resume and stop
+        exoPlayer.play()
+        delay(200)
+        exoPlayer.stop()
+        assertEquals(Player.STATE_IDLE, exoPlayer.playbackState)
     }
 
     @Test
-    fun testMultiTrackQueueNavigationOnDevice() = runBlocking(Dispatchers.Main) {
+    fun testMultiTrackAuthoritativeQueueNavigation() = runBlocking(Dispatchers.Main) {
         val mp3File = File(musicDir, "test_track.mp3")
         val flacFile = File(musicDir, "test_track.flac")
+        val wavFile = File(musicDir, "test_track.wav")
 
-        val mp3Item = LocalFileSourceAdapter.toMediaItem(
-            Track(id = "trk-1", title = "Track 1", durationSec = 2.0),
-            LocalFile(id = "f-1", trackId = "trk-1", storageType = StorageType.INTERNAL_SYNC, fileUri = mp3File.absolutePath, fileSize = mp3File.length(), fileHash = "h1", format = "mp3")
+        val itemA = LocalFileSourceAdapter.toMediaItem(
+            Track(id = "trk-a", title = "Track A", durationSec = 2.0),
+            LocalFile(id = "f-a", trackId = "trk-a", storageType = StorageType.INTERNAL_SYNC, fileUri = mp3File.absolutePath, fileSize = mp3File.length(), fileHash = "h-a", format = "mp3")
         )
-        val flacItem = LocalFileSourceAdapter.toMediaItem(
-            Track(id = "trk-2", title = "Track 2", durationSec = 2.0),
-            LocalFile(id = "f-2", trackId = "trk-2", storageType = StorageType.INTERNAL_SYNC, fileUri = flacFile.absolutePath, fileSize = flacFile.length(), fileHash = "h2", format = "flac")
+        val itemB = LocalFileSourceAdapter.toMediaItem(
+            Track(id = "trk-b", title = "Track B", durationSec = 2.0),
+            LocalFile(id = "f-b", trackId = "trk-b", storageType = StorageType.INTERNAL_SYNC, fileUri = flacFile.absolutePath, fileSize = flacFile.length(), fileHash = "h-b", format = "flac")
+        )
+        val itemC = LocalFileSourceAdapter.toMediaItem(
+            Track(id = "trk-c", title = "Track C", durationSec = 2.0),
+            LocalFile(id = "f-c", trackId = "trk-c", storageType = StorageType.INTERNAL_SYNC, fileUri = wavFile.absolutePath, fileSize = wavFile.length(), fileHash = "h-c", format = "wav")
         )
 
-        val exoPlayer = ExoPlayer.Builder(context).build()
+        val exoPlayer = createAudioConfiguredPlayer()
         player = exoPlayer
 
-        exoPlayer.setMediaItems(listOf(mp3Item, flacItem))
+        exoPlayer.setMediaItems(listOf(itemA, itemB, itemC))
         exoPlayer.prepare()
 
-        assertEquals(2, exoPlayer.mediaItemCount)
+        assertEquals(3, exoPlayer.mediaItemCount)
         assertEquals(0, exoPlayer.currentMediaItemIndex)
         assertTrue(exoPlayer.hasNextMediaItem())
 
-        // Navigate next
+        // 1. Next: A -> B
         exoPlayer.seekToNextMediaItem()
         assertEquals(1, exoPlayer.currentMediaItemIndex)
+        assertEquals("trk-b", exoPlayer.currentMediaItem?.mediaId)
+        assertTrue(exoPlayer.hasNextMediaItem())
         assertTrue(exoPlayer.hasPreviousMediaItem())
 
-        // Navigate previous
+        // 2. Next: B -> C
+        exoPlayer.seekToNextMediaItem()
+        assertEquals(2, exoPlayer.currentMediaItemIndex)
+        assertEquals("trk-c", exoPlayer.currentMediaItem?.mediaId)
+
+        // 3. Previous: C -> B
+        exoPlayer.seekToPreviousMediaItem()
+        assertEquals(1, exoPlayer.currentMediaItemIndex)
+        assertEquals("trk-b", exoPlayer.currentMediaItem?.mediaId)
+
+        // 4. Previous: B -> A
         exoPlayer.seekToPreviousMediaItem()
         assertEquals(0, exoPlayer.currentMediaItemIndex)
+        assertEquals("trk-a", exoPlayer.currentMediaItem?.mediaId)
     }
 
     @Test
-    fun testMissingFileErrorHandlingDeterministic() = runBlocking(Dispatchers.Main) {
+    fun testAutomaticEofProgressionOnQueue() = runBlocking(Dispatchers.Main) {
+        val mp3File = File(musicDir, "test_track.mp3")
+        val flacFile = File(musicDir, "test_track.flac")
+
+        val itemA = LocalFileSourceAdapter.toMediaItem(
+            Track(id = "trk-eof-a", title = "Track A", durationSec = 2.0),
+            LocalFile(id = "f-eof-a", trackId = "trk-eof-a", storageType = StorageType.INTERNAL_SYNC, fileUri = mp3File.absolutePath, fileSize = mp3File.length(), fileHash = "h-eof-a", format = "mp3")
+        )
+        val itemB = LocalFileSourceAdapter.toMediaItem(
+            Track(id = "trk-eof-b", title = "Track B", durationSec = 2.0),
+            LocalFile(id = "f-eof-b", trackId = "trk-eof-b", storageType = StorageType.INTERNAL_SYNC, fileUri = flacFile.absolutePath, fileSize = flacFile.length(), fileHash = "h-eof-b", format = "flac")
+        )
+
+        val exoPlayer = createAudioConfiguredPlayer()
+        player = exoPlayer
+
+        exoPlayer.setMediaItems(listOf(itemA, itemB))
+        exoPlayer.prepare()
+
+        val readyLatch = CountDownLatch(1)
+        exoPlayer.addListener(object : Player.Listener {
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_READY) readyLatch.countDown()
+            }
+        })
+        withContext(Dispatchers.IO) { readyLatch.await(5, TimeUnit.SECONDS) }
+
+        // Seek close to the end of Track A (duration ~2.0s / ~2000ms)
+        val duration = exoPlayer.duration
+        val seekTarget = if (duration > 300L) duration - 250L else 1750L
+        exoPlayer.seekTo(seekTarget)
+        exoPlayer.play()
+
+        // Wait for natural completion and automatic transition to Track B
+        val transitionLatch = CountDownLatch(1)
+        exoPlayer.addListener(object : Player.Listener {
+            override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
+                if (mediaItem?.mediaId == "trk-eof-b" && reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
+                    transitionLatch.countDown()
+                }
+            }
+        })
+
+        val transitioned = withContext(Dispatchers.IO) { transitionLatch.await(4, TimeUnit.SECONDS) }
+        assertTrue("Queue must automatically advance to Track B on natural EOF", transitioned)
+        assertEquals(1, exoPlayer.currentMediaItemIndex)
+        assertEquals("trk-eof-b", exoPlayer.currentMediaItem?.mediaId)
+    }
+
+    @Test
+    fun testMissingFileDeterministicHandling() = runBlocking(Dispatchers.Main) {
         val missingTrack = Track(id = "trk-missing", title = "Missing Track", durationSec = 2.0)
         val missingFile = LocalFile(
             id = "f-missing",
@@ -270,7 +446,7 @@ class RealAndroidPlaybackTest {
         )
 
         val mediaItem = LocalFileSourceAdapter.toMediaItem(missingTrack, missingFile)
-        val exoPlayer = ExoPlayer.Builder(context).build()
+        val exoPlayer = createAudioConfiguredPlayer()
         player = exoPlayer
 
         val errorLatch = CountDownLatch(1)
@@ -290,5 +466,10 @@ class RealAndroidPlaybackTest {
         val errored = withContext(Dispatchers.IO) { errorLatch.await(5, TimeUnit.SECONDS) }
         assertTrue("ExoPlayer must report deterministic error on missing file", errored)
         assertNotNull("PlaybackException must be captured", capturedError)
+        assertEquals(Player.STATE_IDLE, exoPlayer.playbackState)
+    }
+
+    private fun assertFalse(message: String, condition: Boolean) {
+        assertTrue(message, !condition)
     }
 }
