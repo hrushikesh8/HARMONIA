@@ -84,6 +84,7 @@ data class TrackWithDetails(
             createdAt = track.createdAt,
             updatedAt = track.updatedAt,
             artworkHash = album?.artworkHash,
+            isProvisional = track.isProvisional,
             localFile = domainLocalFile,
             availability = availability
         )

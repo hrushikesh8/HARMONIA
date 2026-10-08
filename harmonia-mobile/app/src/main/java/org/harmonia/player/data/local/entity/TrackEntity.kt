@@ -70,5 +70,8 @@ data class TrackEntity(
     val createdAt: Long,
 
     @ColumnInfo(name = "updated_at")
-    val updatedAt: Long
+    val updatedAt: Long,
+
+    @ColumnInfo(name = "is_provisional", defaultValue = "1")
+    val isProvisional: Boolean = true
 )

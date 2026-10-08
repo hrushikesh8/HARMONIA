@@ -45,11 +45,23 @@ object ServiceLocator {
     private var searchRepositoryInstance: org.harmonia.player.domain.repository.SearchRepository? = null
 
     @Volatile
+    private var storageSourceRepositoryInstance: org.harmonia.player.domain.repository.StorageSourceRepository? = null
+
+    @Volatile
+    private var scanCheckpointRepositoryInstance: org.harmonia.player.domain.repository.ScanCheckpointRepository? = null
+
+    @Volatile
+    private var storagePermissionCheckerInstance: org.harmonia.player.domain.model.storage.permission.StoragePermissionChecker? = null
+
+    @Volatile
     private var playbackPortInstance: PlaybackPort? = null
 
     fun initialize(context: Context) {
         if (database == null) {
             database = HarmoniaDatabase.getInstance(context)
+        }
+        if (storagePermissionCheckerInstance == null) {
+            storagePermissionCheckerInstance = org.harmonia.player.data.local.permission.AndroidStoragePermissionChecker(context.applicationContext)
         }
     }
 
@@ -66,7 +78,13 @@ object ServiceLocator {
         albumRepositoryInstance = null
         artistRepositoryInstance = null
         searchRepositoryInstance = null
+        storageSourceRepositoryInstance = null
+        scanCheckpointRepositoryInstance = null
         playbackPortInstance = null
+    }
+
+    fun setStoragePermissionCheckerForTesting(checker: org.harmonia.player.domain.model.storage.permission.StoragePermissionChecker) {
+        storagePermissionCheckerInstance = checker
     }
 
     fun getDatabase(): HarmoniaDatabase {
@@ -142,6 +160,26 @@ object ServiceLocator {
         }
     }
 
+    fun getStorageSourceRepository(): org.harmonia.player.domain.repository.StorageSourceRepository {
+        return storageSourceRepositoryInstance ?: synchronized(this) {
+            storageSourceRepositoryInstance ?: org.harmonia.player.data.local.OfflineStorageSourceRepository(
+                getDatabase().storageSourceDao()
+            ).also { storageSourceRepositoryInstance = it }
+        }
+    }
+
+    fun getScanCheckpointRepository(): org.harmonia.player.domain.repository.ScanCheckpointRepository {
+        return scanCheckpointRepositoryInstance ?: synchronized(this) {
+            scanCheckpointRepositoryInstance ?: org.harmonia.player.data.local.OfflineScanCheckpointRepository(
+                getDatabase().scanCheckpointDao()
+            ).also { scanCheckpointRepositoryInstance = it }
+        }
+    }
+
+    fun getStoragePermissionChecker(): org.harmonia.player.domain.model.storage.permission.StoragePermissionChecker {
+        return storagePermissionCheckerInstance ?: error("StoragePermissionChecker has not been initialized in ServiceLocator!")
+    }
+
     fun getPlaybackPort(): PlaybackPort {
         return playbackPortInstance ?: error("PlaybackPort has not been registered in ServiceLocator!")
     }
@@ -161,6 +199,9 @@ object ServiceLocator {
         albumRepositoryInstance = null
         artistRepositoryInstance = null
         searchRepositoryInstance = null
+        storageSourceRepositoryInstance = null
+        scanCheckpointRepositoryInstance = null
+        storagePermissionCheckerInstance = null
         playbackPortInstance = null
     }
 }

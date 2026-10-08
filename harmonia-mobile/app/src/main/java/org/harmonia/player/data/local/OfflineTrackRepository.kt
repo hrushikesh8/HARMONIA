@@ -52,7 +52,8 @@ class OfflineTrackRepository(
                 integratedLufs = track.integratedLufs,
                 truePeakDbtp = track.truePeakDbtp,
                 createdAt = track.createdAt,
-                updatedAt = track.updatedAt
+                updatedAt = track.updatedAt,
+                isProvisional = track.isProvisional
             )
         }
         trackDao.upsertTracks(entities)

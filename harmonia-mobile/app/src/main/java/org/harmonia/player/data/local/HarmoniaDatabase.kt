@@ -12,6 +12,8 @@ import org.harmonia.player.data.local.dao.ListeningEventDao
 import org.harmonia.player.data.local.dao.LocalFileDao
 import org.harmonia.player.data.local.dao.PlaybackStateDao
 import org.harmonia.player.data.local.dao.PlaylistDao
+import org.harmonia.player.data.local.dao.ScanCheckpointDao
+import org.harmonia.player.data.local.dao.StorageSourceDao
 import org.harmonia.player.data.local.dao.TrackDao
 import org.harmonia.player.data.local.entity.AlbumEntity
 import org.harmonia.player.data.local.entity.ArtistEntity
@@ -21,12 +23,15 @@ import org.harmonia.player.data.local.entity.PlaybackStateEntity
 import org.harmonia.player.data.local.entity.PlaylistEntity
 import org.harmonia.player.data.local.entity.PlaylistItemEntity
 import org.harmonia.player.data.local.entity.QueueItemEntity
+import org.harmonia.player.data.local.entity.ScanCheckpointEntity
+import org.harmonia.player.data.local.entity.StorageSourceEntity
 import org.harmonia.player.data.local.entity.TrackEntity
 
 /**
  * Primary persistent Room database for Harmonia Mobile.
  * Configured with SQLite WAL (Write-Ahead Logging) mode per ADR-021.
- * Schema v2 introduces local playlist management (`mobile_playlists`, `mobile_playlist_items`).
+ * Schema v2 introduced local playlist management (`mobile_playlists`, `mobile_playlist_items`).
+ * Schema v3 introduces storage sources and scan checkpoints (`mobile_storage_sources`, `mobile_scan_checkpoints`).
  */
 @Database(
     entities = [
@@ -38,9 +43,11 @@ import org.harmonia.player.data.local.entity.TrackEntity
         QueueItemEntity::class,
         ListeningEventEntity::class,
         PlaylistEntity::class,
-        PlaylistItemEntity::class
+        PlaylistItemEntity::class,
+        StorageSourceEntity::class,
+        ScanCheckpointEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class HarmoniaDatabase : RoomDatabase() {
@@ -52,6 +59,8 @@ abstract class HarmoniaDatabase : RoomDatabase() {
     abstract fun albumDao(): AlbumDao
     abstract fun listeningEventDao(): ListeningEventDao
     abstract fun playlistDao(): PlaylistDao
+    abstract fun storageSourceDao(): StorageSourceDao
+    abstract fun scanCheckpointDao(): ScanCheckpointDao
 
     companion object {
         const val DATABASE_NAME = "harmonia_library.db"
@@ -89,6 +98,40 @@ abstract class HarmoniaDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_2_3: Migration = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `mobile_storage_sources` (
+                        `id` TEXT NOT NULL,
+                        `type` TEXT NOT NULL,
+                        `uri` TEXT NOT NULL,
+                        `display_name` TEXT NOT NULL,
+                        `is_removable` INTEGER NOT NULL,
+                        `is_enabled` INTEGER NOT NULL,
+                        `last_scanned_at` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                """.trimIndent())
+
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `mobile_scan_checkpoints` (
+                        `source_id` TEXT NOT NULL,
+                        `volume_name` TEXT NOT NULL,
+                        `last_generation` INTEGER NOT NULL,
+                        `last_scan_timestamp` INTEGER NOT NULL,
+                        `scanned_file_count` INTEGER NOT NULL,
+                        `status` TEXT NOT NULL,
+                        PRIMARY KEY(`source_id`),
+                        FOREIGN KEY(`source_id`) REFERENCES `mobile_storage_sources`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                """.trimIndent())
+
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_mobile_scan_checkpoints_source_id` ON `mobile_scan_checkpoints` (`source_id`)")
+
+                db.execSQL("ALTER TABLE `mobile_tracks` ADD COLUMN `is_provisional` INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
         @Volatile
         private var INSTANCE: HarmoniaDatabase? = null
 
@@ -105,7 +148,7 @@ abstract class HarmoniaDatabase : RoomDatabase() {
                 DATABASE_NAME
             )
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .fallbackToDestructiveMigration(false)
                 .build()
         }
