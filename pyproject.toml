@@ -13,6 +13,7 @@ dependencies = [
     "pydantic-settings>=2.0",
     "alembic>=1.13",
     "rich>=13.0",
+    "watchdog>=4.0",
 ]
 
 [project.optional-dependencies]

@@ -175,6 +175,14 @@ class SqliteTrackRepository:
         model.verified_at = track_file.verified_at
         self._session.flush()
 
+    def delete_file(self, file_id: UUID) -> bool:
+        model = self._session.get(TrackFileModel, file_id)
+        if model is None:
+            return False
+        self._session.delete(model)
+        self._session.flush()
+        return True
+
     # ── Tags ──────────────────────────────────────────────────────────────
 
     def add_tag(self, tag: Tag) -> None:

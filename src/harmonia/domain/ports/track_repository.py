@@ -93,6 +93,10 @@ class TrackRepository(Protocol):
         """Update properties of an existing track file."""
         ...
 
+    def delete_file(self, file_id: UUID) -> bool:
+        """Delete a physical track file record."""
+        ...
+
     # ── Tags ──────────────────────────────────────────────────────────────
 
     def add_tag(self, tag: Tag) -> None:
