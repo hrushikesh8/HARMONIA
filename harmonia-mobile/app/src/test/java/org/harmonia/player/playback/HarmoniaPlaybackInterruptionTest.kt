@@ -23,6 +23,9 @@ import org.harmonia.player.domain.model.PlaybackStatus
 import org.harmonia.player.domain.model.QueueItem
 import org.harmonia.player.domain.model.RepeatMode
 import org.harmonia.player.domain.model.Track
+import org.harmonia.player.domain.model.storage.StorageSource
+import org.harmonia.player.domain.model.storage.lifecycle.SourceRuntimeState
+import org.harmonia.player.domain.model.storage.lifecycle.StorageVolumeLifecycleCoordinator
 import org.harmonia.player.domain.repository.ListeningEventRepository
 import org.harmonia.player.domain.repository.LocalFileRepository
 import org.harmonia.player.domain.repository.PlaybackStateRepository
@@ -31,18 +34,21 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import kotlinx.coroutines.flow.StateFlow
 
 /**
- * M4-D2 Regression Test Suite verifying:
+ * M4-D2 & M4-D3 Regression Test Suite verifying:
  * 1. Distinction between user intent (playWhenReady) and transient system suppression (playbackSuppressionReason).
  * 2. Accurate playback status exposure (PLAYING, PAUSED, SUPPRESSED, BUFFERING, ERROR, ENDED).
  * 3. Factual listening telemetry without false PAUSED/RESUMED events during transient suppression or buffering.
  * 4. Preservation of explicit user pauses during and after system interruptions.
  * 5. Media3-driven becoming-noisy (headphone disconnect) semantics.
- * 6. Queue, seeking, and error resilience.
+ * 6. Storage disconnection handling, non-resumption invariant, error exposure, and context preservation.
+ * 7. File-not-found error discrimination and lifecycle observation safety.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HarmoniaPlaybackInterruptionTest {
@@ -57,11 +63,23 @@ class HarmoniaPlaybackInterruptionTest {
     private lateinit var fakeEventRepo: FakeListeningEventRepository
     private lateinit var fakeTrackRepo: FakeTrackRepository
     private lateinit var fakeFileRepo: FakeLocalFileRepository
+    private lateinit var fakeCoordinator: FakeStorageVolumeLifecycleCoordinator
 
     private lateinit var controller: HarmoniaPlayerController
 
     private val track1 = Track(id = "trk-1", title = "Track One", durationSec = 180.0)
     private val track2 = Track(id = "trk-2", title = "Track Two", durationSec = 240.0)
+
+    private val localFile1 = LocalFile(
+        id = "file-1",
+        trackId = "trk-1",
+        sourceId = "src-sdcard-1",
+        storageType = org.harmonia.player.domain.model.StorageType.EXTERNAL_SD,
+        fileUri = "file:///storage/sdcard1/Music/track1.mp3",
+        fileSize = 5000000L,
+        fileHash = "hash1",
+        format = "mp3"
+    )
 
     @Before
     fun setup() {
@@ -72,6 +90,7 @@ class HarmoniaPlaybackInterruptionTest {
         fakeEventRepo = FakeListeningEventRepository()
         fakeTrackRepo = FakeTrackRepository(listOf(track1, track2))
         fakeFileRepo = FakeLocalFileRepository()
+        fakeCoordinator = FakeStorageVolumeLifecycleCoordinator()
 
         controller = HarmoniaPlayerController(
             context = null,
@@ -79,6 +98,7 @@ class HarmoniaPlaybackInterruptionTest {
             listeningEventRepository = fakeEventRepo,
             trackRepository = fakeTrackRepo,
             localFileRepository = fakeFileRepo,
+            storageVolumeLifecycleCoordinator = fakeCoordinator,
             scope = testScope,
             playerOverride = player,
             enablePositionPolling = false
@@ -96,6 +116,28 @@ class HarmoniaPlaybackInterruptionTest {
         fakePlayerHandler.playbackState = Player.STATE_READY
         fakePlayerHandler.playWhenReady = true
         fakePlayerHandler.isPlaying = true
+        fakePlayerHandler.playbackSuppressionReason = Player.PLAYBACK_SUPPRESSION_REASON_NONE
+
+        fakePlayerHandler.fireMediaItemTransition(mediaItem, Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED)
+        testDispatcher.scheduler.runCurrent()
+
+        fakePlayerHandler.firePlayWhenReadyChanged(true, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
+        fakePlayerHandler.firePlaybackStateChanged(Player.STATE_READY)
+        fakePlayerHandler.fireIsPlayingChanged(true)
+        testDispatcher.scheduler.runCurrent()
+    }
+
+    private fun startTrack1WithSource(sourceId: String = "src-sdcard-1", positionMs: Long = 30000L) {
+        fakeFileRepo.files.clear()
+        fakeFileRepo.files.add(localFile1.copy(sourceId = sourceId))
+        fakeCoordinator.setSourceAvailable(sourceId, true)
+
+        val mediaItem = MediaItem.Builder().setMediaId("trk-1").build()
+        fakePlayerHandler.currentMediaItemIndex = 0
+        fakePlayerHandler.playbackState = Player.STATE_READY
+        fakePlayerHandler.playWhenReady = true
+        fakePlayerHandler.isPlaying = true
+        fakePlayerHandler.currentPosition = positionMs
         fakePlayerHandler.playbackSuppressionReason = Player.PLAYBACK_SUPPRESSION_REASON_NONE
 
         fakePlayerHandler.fireMediaItemTransition(mediaItem, Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED)
@@ -436,6 +478,216 @@ class HarmoniaPlaybackInterruptionTest {
         pollingController.release()
         testDispatcher.scheduler.runCurrent()
     }
+
+    @Test
+    fun `scenario 12 - active track storage source becomes unavailable halts playback and sets storage disconnected error`() = runTest(testDispatcher) {
+        startTrack1WithSource("src-sdcard-1")
+
+        assertEquals(PlaybackStatus.PLAYING, controller.playbackState.value.status)
+        assertTrue(controller.playbackState.value.isPlaying)
+        assertNull(controller.playbackState.value.errorMessage)
+
+        // Storage source becomes unavailable
+        fakeCoordinator.setSourceAvailable("src-sdcard-1", false)
+        testDispatcher.scheduler.runCurrent()
+
+        assertFalse(controller.playbackState.value.isPlaying)
+        assertFalse(fakePlayerHandler.playWhenReady)
+        assertEquals(PlaybackStatus.PAUSED, controller.playbackState.value.status)
+        assertEquals(HarmoniaPlayerController.STORAGE_DISCONNECTED_MESSAGE, controller.playbackState.value.errorMessage)
+    }
+
+    @Test
+    fun `scenario 13 - track ID, local file identity, queue, ordering, and position are preserved on storage disconnect`() = runTest(testDispatcher) {
+        startTrack1WithSource("src-sdcard-1", positionMs = 45000L)
+
+        // Verify active track details before disconnect
+        assertEquals("trk-1", controller.playbackState.value.currentTrackId)
+        assertEquals("file-1", controller.playbackState.value.currentLocalFileId)
+        assertEquals(45000L, controller.playbackState.value.currentPositionMs)
+
+        // Storage disconnects
+        fakeCoordinator.setSourceAvailable("src-sdcard-1", false)
+        testDispatcher.scheduler.runCurrent()
+
+        // Verify all context preserved
+        assertEquals("trk-1", controller.playbackState.value.currentTrackId)
+        assertEquals("file-1", controller.playbackState.value.currentLocalFileId)
+        assertEquals(45000L, controller.playbackState.value.currentPositionMs)
+        assertEquals(0, controller.playbackState.value.activeQueueIndex)
+        assertEquals(HarmoniaPlayerController.STORAGE_DISCONNECTED_MESSAGE, controller.playbackState.value.errorMessage)
+    }
+
+    @Test
+    fun `scenario 14 - storage becomes available again but playback remains paused with zero auto-resume`() = runTest(testDispatcher) {
+        startTrack1WithSource("src-sdcard-1")
+
+        // Volume disconnects
+        fakeCoordinator.setSourceAvailable("src-sdcard-1", false)
+        testDispatcher.scheduler.runCurrent()
+
+        assertFalse(controller.playbackState.value.isPlaying)
+        assertEquals(PlaybackStatus.PAUSED, controller.playbackState.value.status)
+
+        // Storage source returns to available
+        fakeCoordinator.setSourceAvailable("src-sdcard-1", true)
+        testDispatcher.scheduler.runCurrent()
+
+        // Strict auto-resume invariant: player must remain paused
+        assertFalse(controller.playbackState.value.isPlaying)
+        assertFalse(fakePlayerHandler.playWhenReady)
+        assertEquals(PlaybackStatus.PAUSED, controller.playbackState.value.status)
+        assertEquals(HarmoniaPlayerController.STORAGE_DISCONNECTED_MESSAGE, controller.playbackState.value.errorMessage)
+    }
+
+    @Test
+    fun `scenario 15 - explicit user play action resumes playback and clears storage disconnected error`() = runTest(testDispatcher) {
+        startTrack1WithSource("src-sdcard-1")
+
+        // Disconnect volume
+        fakeCoordinator.setSourceAvailable("src-sdcard-1", false)
+        testDispatcher.scheduler.runCurrent()
+        assertEquals(HarmoniaPlayerController.STORAGE_DISCONNECTED_MESSAGE, controller.playbackState.value.errorMessage)
+
+        // Storage volume remounted
+        fakeCoordinator.setSourceAvailable("src-sdcard-1", true)
+        testDispatcher.scheduler.runCurrent()
+
+        // Explicit user Play action
+        controller.play()
+        testDispatcher.scheduler.runCurrent()
+
+        assertTrue(fakePlayerHandler.playWhenReady)
+        assertTrue(controller.playbackState.value.isPlaying)
+        assertEquals(PlaybackStatus.PLAYING, controller.playbackState.value.status)
+        assertNull(controller.playbackState.value.errorMessage)
+    }
+
+    @Test
+    fun `scenario 16 - unrelated storage source disappears while active track remains accessible`() = runTest(testDispatcher) {
+        startTrack1WithSource("src-sdcard-1")
+
+        // Unrelated storage source disappears
+        fakeCoordinator.setSourceAvailable("src-unrelated-sd2", false)
+        testDispatcher.scheduler.runCurrent()
+
+        // Active playback should NOT be interrupted
+        assertTrue(controller.playbackState.value.isPlaying)
+        assertTrue(fakePlayerHandler.playWhenReady)
+        assertEquals(PlaybackStatus.PLAYING, controller.playbackState.value.status)
+        assertNull(controller.playbackState.value.errorMessage)
+    }
+
+    @Test
+    fun `scenario 17 - repeated or reordered availability callbacks do not duplicate effects or telemetry`() = runTest(testDispatcher) {
+        startTrack1WithSource("src-sdcard-1")
+
+        // Fire unmounted repeatedly
+        fakeCoordinator.setSourceAvailable("src-sdcard-1", false)
+        testDispatcher.scheduler.runCurrent()
+        fakeCoordinator.setSourceAvailable("src-sdcard-1", false)
+        testDispatcher.scheduler.runCurrent()
+        fakeCoordinator.setSourceAvailable("src-sdcard-1", false)
+        testDispatcher.scheduler.runCurrent()
+
+        assertEquals(HarmoniaPlayerController.STORAGE_DISCONNECTED_MESSAGE, controller.playbackState.value.errorMessage)
+
+        // Exactly one PAUSED event should have been recorded
+        val pausedEvents = fakeEventRepo.events.filter { it.eventType == ListeningEventType.PAUSED }
+        assertEquals(1, pausedEvents.size)
+    }
+
+    @Test
+    fun `scenario 18 - file-not-found occurs before lifecycle notification transitions cleanly to storage disconnected`() = runTest(testDispatcher) {
+        startTrack1WithSource("src-sdcard-1")
+
+        // ExoPlayer encounters file-not-found before OS broadcast reaches coordinator
+        val ioError = PlaybackException("File not found on disk", null, PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND)
+        fakePlayerHandler.playerError = ioError
+        fakePlayerHandler.playbackState = Player.STATE_IDLE
+        fakePlayerHandler.isPlaying = false
+        fakePlayerHandler.firePlayerError(ioError)
+        fakePlayerHandler.firePlaybackStateChanged(Player.STATE_IDLE)
+        testDispatcher.scheduler.runCurrent()
+
+        // Initially classified as standard playback error because source was not yet known to be unavailable
+        assertEquals(PlaybackStatus.ERROR, controller.playbackState.value.status)
+        assertTrue(controller.playbackState.value.errorMessage!!.contains("ERROR_CODE_IO_FILE_NOT_FOUND"))
+
+        // Now lifecycle notification arrives indicating storage source was ejected
+        fakeCoordinator.setSourceAvailable("src-sdcard-1", false)
+        testDispatcher.scheduler.runCurrent()
+
+        // Transitions cleanly to Storage volume disconnected
+        assertEquals(PlaybackStatus.ERROR, controller.playbackState.value.status)
+        assertEquals(HarmoniaPlayerController.STORAGE_DISCONNECTED_MESSAGE, controller.playbackState.value.errorMessage)
+        assertEquals("trk-1", controller.playbackState.value.currentTrackId)
+    }
+
+    @Test
+    fun `scenario 19 - lifecycle notification occurs before file-not-found error and is not overwritten`() = runTest(testDispatcher) {
+        startTrack1WithSource("src-sdcard-1")
+
+        // Lifecycle notification arrives first
+        fakeCoordinator.setSourceAvailable("src-sdcard-1", false)
+        testDispatcher.scheduler.runCurrent()
+
+        assertEquals(HarmoniaPlayerController.STORAGE_DISCONNECTED_MESSAGE, controller.playbackState.value.errorMessage)
+
+        // Subsequent file-not-found error from ExoPlayer read pipeline
+        val ioError = PlaybackException("Underlying file disappeared", null, PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND)
+        fakePlayerHandler.playerError = ioError
+        fakePlayerHandler.firePlayerError(ioError)
+        testDispatcher.scheduler.runCurrent()
+
+        // Error message must remain 'Storage volume disconnected' rather than being overwritten with generic error
+        assertEquals(PlaybackStatus.ERROR, controller.playbackState.value.status)
+        assertEquals(HarmoniaPlayerController.STORAGE_DISCONNECTED_MESSAGE, controller.playbackState.value.errorMessage)
+    }
+
+    @Test
+    fun `scenario 20 - storage volume disconnected error is not cleared by ordinary availability update`() = runTest(testDispatcher) {
+        startTrack1WithSource("src-sdcard-1")
+
+        // Volume disconnects
+        fakeCoordinator.setSourceAvailable("src-sdcard-1", false)
+        testDispatcher.scheduler.runCurrent()
+        assertEquals(HarmoniaPlayerController.STORAGE_DISCONNECTED_MESSAGE, controller.playbackState.value.errorMessage)
+
+        // Remount occurs: coordinator state transitions to isAvailable = true
+        fakeCoordinator.setSourceAvailable("src-sdcard-1", true)
+        testDispatcher.scheduler.runCurrent()
+
+        // Error message must NOT be cleared by ordinary background availability update
+        assertEquals(HarmoniaPlayerController.STORAGE_DISCONNECTED_MESSAGE, controller.playbackState.value.errorMessage)
+        assertFalse(controller.playbackState.value.isPlaying)
+    }
+
+    @Test
+    fun `scenario 21 - controller release cancels lifecycle observation and does not leak jobs`() = runTest(testDispatcher) {
+        assertTrue(controller.isStorageObservationActive())
+
+        controller.release()
+        testDispatcher.scheduler.runCurrent()
+
+        assertFalse(controller.isStorageObservationActive())
+    }
+
+    @Test
+    fun `scenario 22 - unrelated file-not-found error preserves ordinary error semantics`() = runTest(testDispatcher) {
+        startTrack1WithSource("src-sdcard-1")
+
+        // Unrelated I/O file not found when storage source IS available
+        val ioError = PlaybackException("Missing file", null, PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND)
+        fakePlayerHandler.playerError = ioError
+        fakePlayerHandler.firePlayerError(ioError)
+        testDispatcher.scheduler.runCurrent()
+
+        // Should not be falsely classified as storage volume ejection
+        assertEquals(PlaybackStatus.ERROR, controller.playbackState.value.status)
+        assertTrue(controller.playbackState.value.errorMessage!!.contains("ERROR_CODE_IO_FILE_NOT_FOUND"))
+        assertFalse(controller.playbackState.value.errorMessage == HarmoniaPlayerController.STORAGE_DISCONNECTED_MESSAGE)
+    }
 }
 
 // ---- Test Doubles ----
@@ -653,11 +905,48 @@ class FakeTrackRepository(private val tracks: List<Track>) : TrackRepository {
     override suspend fun deleteTrack(id: String) {}
 }
 
-class FakeLocalFileRepository : LocalFileRepository {
-    override fun observeLocalFilesForTrack(trackId: String): Flow<List<LocalFile>> = MutableStateFlow(emptyList())
-    override suspend fun getLocalFileById(id: String): LocalFile? = null
-    override suspend fun getLocalFileByUri(fileUri: String): LocalFile? = null
-    override suspend fun upsertLocalFile(localFile: LocalFile) {}
+class FakeLocalFileRepository(
+    val files: MutableList<LocalFile> = mutableListOf()
+) : LocalFileRepository {
+    override fun observeLocalFilesForTrack(trackId: String): Flow<List<LocalFile>> =
+        MutableStateFlow(files.filter { it.trackId == trackId })
+    override suspend fun getLocalFileById(id: String): LocalFile? = files.find { it.id == id }
+    override suspend fun getLocalFileByUri(fileUri: String): LocalFile? = files.find { it.fileUri == fileUri }
+    override suspend fun upsertLocalFile(localFile: LocalFile) {
+        files.removeAll { it.id == localFile.id }
+        files.add(localFile)
+    }
     override suspend fun updateVerificationStatus(id: String, isVerified: Boolean, verifiedAt: Long) {}
-    override suspend fun deleteLocalFile(id: String) {}
+    override suspend fun deleteLocalFile(id: String) { files.removeAll { it.id == id } }
+}
+
+class FakeStorageVolumeLifecycleCoordinator(
+    initialStates: Map<String, SourceRuntimeState> = emptyMap()
+) : StorageVolumeLifecycleCoordinator {
+    val statesFlow = MutableStateFlow(initialStates)
+    override val runtimeStates: StateFlow<Map<String, SourceRuntimeState>> = statesFlow
+
+    override fun isSourceAvailable(sourceId: String): Boolean =
+        statesFlow.value[sourceId]?.isAvailable ?: true
+
+    fun setSourceAvailable(sourceId: String, isAvailable: Boolean) {
+        val current = statesFlow.value.toMutableMap()
+        current[sourceId] = SourceRuntimeState(
+            sourceId = sourceId,
+            isAvailable = isAvailable,
+            isMounted = isAvailable,
+            hasPermission = true
+        )
+        statesFlow.value = current
+    }
+
+    override fun onVolumeMounted(volumeId: String) {}
+    override fun onVolumeUnmounted(volumeId: String) {}
+    override fun onSafPermissionRevoked(treeUri: String) {}
+    override fun onSafPermissionGranted(treeUri: String) {}
+    override suspend fun revalidateAllSources(): Map<String, SourceRuntimeState> = statesFlow.value
+    override suspend fun revalidateSource(source: StorageSource): SourceRuntimeState =
+        statesFlow.value[source.id] ?: SourceRuntimeState(source.id, true, true, true)
+    override fun startMonitoring() {}
+    override fun stopMonitoring() {}
 }

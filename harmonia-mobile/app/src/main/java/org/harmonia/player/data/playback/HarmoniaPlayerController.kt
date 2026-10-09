@@ -28,6 +28,8 @@ import org.harmonia.player.domain.model.PlaybackStatus
 import org.harmonia.player.domain.model.QueueItem
 import org.harmonia.player.domain.model.RepeatMode
 import org.harmonia.player.domain.model.Track
+import org.harmonia.player.domain.model.storage.lifecycle.SourceRuntimeState
+import org.harmonia.player.domain.model.storage.lifecycle.StorageVolumeLifecycleCoordinator
 import org.harmonia.player.domain.playback.PlaybackPort
 import org.harmonia.player.domain.repository.ListeningEventRepository
 import org.harmonia.player.domain.repository.LocalFileRepository
@@ -46,6 +48,7 @@ class HarmoniaPlayerController(
     private val listeningEventRepository: ListeningEventRepository,
     private val trackRepository: TrackRepository,
     private val localFileRepository: LocalFileRepository,
+    private val storageVolumeLifecycleCoordinator: StorageVolumeLifecycleCoordinator? = null,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob()),
     private val playerOverride: Player? = null,
     private val enablePositionPolling: Boolean = true
@@ -69,6 +72,14 @@ class HarmoniaPlayerController(
 
     // Real-time authoritative position polling while playing
     private var positionPollingJob: Job? = null
+
+    // Storage lifecycle tracking
+    private var currentSourceId: String? = null
+    private var storageObservationJob: Job? = null
+
+    companion object {
+        const val STORAGE_DISCONNECTED_MESSAGE = "Storage volume disconnected"
+    }
 
     private fun startPositionPolling(controller: Player) {
         if (!enablePositionPolling) return
@@ -94,6 +105,7 @@ class HarmoniaPlayerController(
     }
 
     init {
+        observeStorageLifecycle()
         if (playerOverride != null) {
             mediaController = playerOverride
             setupPlayerListener(playerOverride)
@@ -102,6 +114,60 @@ class HarmoniaPlayerController(
             initializeSessionConnection()
         }
         restorePersistedState()
+    }
+
+    private fun observeStorageLifecycle() {
+        val coordinator = storageVolumeLifecycleCoordinator ?: return
+        storageObservationJob?.cancel()
+        storageObservationJob = scope.launch {
+            coordinator.runtimeStates.collect { states ->
+                handleStorageRuntimeStates(states)
+            }
+        }
+    }
+
+    private suspend fun getOrResolveSourceId(): String? {
+        if (currentSourceId != null) return currentSourceId
+        val fileId = _playbackState.value.currentLocalFileId ?: return null
+        val file = localFileRepository.getLocalFileById(fileId)
+        currentSourceId = file?.sourceId
+        return currentSourceId
+    }
+
+    private suspend fun handleStorageRuntimeStates(states: Map<String, SourceRuntimeState>) {
+        val activeFileId = _playbackState.value.currentLocalFileId ?: return
+        val activeSourceId = getOrResolveSourceId() ?: return
+
+        val sourceState = states[activeSourceId] ?: return
+        if (!sourceState.isAvailable) {
+            handleStorageDisconnection()
+        }
+    }
+
+    private fun handleStorageDisconnection() {
+        val alreadyDisconnected = _playbackState.value.errorMessage == STORAGE_DISCONNECTED_MESSAGE
+        val isPaused = mediaController?.playWhenReady == false
+
+        if (alreadyDisconnected && isPaused) {
+            return
+        }
+
+        mediaController?.pause()
+        wasExplicitlyPaused = true
+
+        val currentPos = mediaController?.currentPosition?.coerceAtLeast(0L) ?: _playbackState.value.currentPositionMs
+        val dur = if ((mediaController?.duration ?: 0L) > 0L) mediaController!!.duration else _playbackState.value.durationMs
+        val status = if (mediaController?.playerError != null) PlaybackStatus.ERROR else PlaybackStatus.PAUSED
+
+        _playbackState.value = _playbackState.value.copy(
+            isPlaying = false,
+            status = status,
+            playWhenReady = false,
+            currentPositionMs = currentPos,
+            durationMs = dur,
+            errorMessage = STORAGE_DISCONNECTED_MESSAGE
+        )
+        persistCurrentState()
     }
 
     private fun initializeSessionConnection() {
@@ -184,6 +250,9 @@ class HarmoniaPlayerController(
                         val localFile = localFiles.firstOrNull() ?: track?.localFile
                         activeTrackDurationSec = track?.durationSec ?: 0.0
 
+                        val resolvedSourceId = localFile?.sourceId ?: localFile?.let { localFileRepository.getLocalFileById(it.id)?.sourceId }
+                        currentSourceId = resolvedSourceId
+
                         _playbackState.value = _playbackState.value.copy(
                             currentTrackId = trackId,
                             currentLocalFileId = localFile?.id,
@@ -192,15 +261,35 @@ class HarmoniaPlayerController(
                         )
                         recordEvent(ListeningEventType.STARTED)
                         persistCurrentState()
+
+                        if (resolvedSourceId != null && storageVolumeLifecycleCoordinator?.isSourceAvailable(resolvedSourceId) == false) {
+                            handleStorageDisconnection()
+                        }
                     }
                 }
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                val isFileNotFound = error.errorCode == PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND
+                val activeSource = currentSourceId
+                val isSourceConfirmedUnavailable = activeSource != null && storageVolumeLifecycleCoordinator?.isSourceAvailable(activeSource) == false
+                val isAlreadyMarkedDisconnected = _playbackState.value.errorMessage == STORAGE_DISCONNECTED_MESSAGE
+
+                val errMessage = if (isFileNotFound && (isSourceConfirmedUnavailable || isAlreadyMarkedDisconnected)) {
+                    wasExplicitlyPaused = true
+                    STORAGE_DISCONNECTED_MESSAGE
+                } else if (isAlreadyMarkedDisconnected) {
+                    STORAGE_DISCONNECTED_MESSAGE
+                } else {
+                    "Playback error [${error.errorCodeName}]: ${error.message}"
+                }
+
                 _playbackState.value = _playbackState.value.copy(
                     status = PlaybackStatus.ERROR,
-                    errorMessage = "Playback error [${error.errorCodeName}]: ${error.message}"
+                    isPlaying = false,
+                    errorMessage = errMessage
                 )
+                persistCurrentState()
             }
         }
         controller.addListener(listener)
@@ -264,6 +353,10 @@ class HarmoniaPlayerController(
                     playWhenReady = false,
                     playbackSuppressionReason = 0
                 )
+                val fileId = savedState.currentLocalFileId
+                if (fileId != null) {
+                    currentSourceId = localFileRepository.getLocalFileById(fileId)?.sourceId
+                }
             }
         }
     }
@@ -324,6 +417,18 @@ class HarmoniaPlayerController(
     }
 
     override fun play() {
+        val srcId = currentSourceId
+        if (srcId != null && storageVolumeLifecycleCoordinator?.isSourceAvailable(srcId) == false) {
+            _playbackState.value = _playbackState.value.copy(
+                errorMessage = STORAGE_DISCONNECTED_MESSAGE
+            )
+            return
+        }
+
+        if (_playbackState.value.errorMessage == STORAGE_DISCONNECTED_MESSAGE) {
+            _playbackState.value = _playbackState.value.copy(errorMessage = null)
+        }
+
         mediaController?.let { controller ->
             if (controller.playbackState == Player.STATE_IDLE && controller.mediaItemCount > 0) {
                 controller.prepare()
@@ -464,10 +569,15 @@ class HarmoniaPlayerController(
 
     fun release() {
         stopPositionPolling()
+        storageObservationJob?.cancel()
+        storageObservationJob = null
         activePlayerListener?.let { mediaController?.removeListener(it) }
         activePlayerListener = null
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controllerFuture = null
         mediaController = null
     }
+
+    internal fun isStorageObservationActive(): Boolean = storageObservationJob?.isActive == true
+    internal fun setCurrentSourceIdForTesting(sourceId: String?) { currentSourceId = sourceId }
 }
