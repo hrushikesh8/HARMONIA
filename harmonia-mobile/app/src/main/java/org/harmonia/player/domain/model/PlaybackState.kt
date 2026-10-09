@@ -20,6 +20,8 @@ data class PlaybackState(
     val durationMs: Long = 0L,
     val isPlaying: Boolean = false,
     val status: PlaybackStatus = PlaybackStatus.IDLE,
+    val playWhenReady: Boolean = false,
+    val playbackSuppressionReason: Int = 0,
     val activeQueueIndex: Int = -1,
     val shuffleMode: Boolean = false,
     val repeatMode: RepeatMode = RepeatMode.OFF,

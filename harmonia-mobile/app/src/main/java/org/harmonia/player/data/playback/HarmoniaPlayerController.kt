@@ -41,12 +41,14 @@ import org.harmonia.player.service.HarmoniaPlaybackService
  * and logs factual [ListeningEvent]s to [ListeningEventRepository].
  */
 class HarmoniaPlayerController(
-    private val context: Context,
+    private val context: Context? = null,
     private val playbackStateRepository: PlaybackStateRepository,
     private val listeningEventRepository: ListeningEventRepository,
     private val trackRepository: TrackRepository,
     private val localFileRepository: LocalFileRepository,
-    private val scope: CoroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private val scope: CoroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob()),
+    private val playerOverride: Player? = null,
+    private val enablePositionPolling: Boolean = true
 ) : PlaybackPort {
 
     private val _playbackState = MutableStateFlow(PlaybackState())
@@ -56,17 +58,20 @@ class HarmoniaPlayerController(
     override val queue: StateFlow<List<QueueItem>> = _queue.asStateFlow()
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
-    private var mediaController: MediaController? = null
+    private var mediaController: Player? = null
+    private var activePlayerListener: Player.Listener? = null
 
     // Tracking for factual ListeningEvent telemetry
     private var activeTrackStartTime: Long = 0L
     private var activeTrackDurationSec: Double = 0.0
     private var hasRecordedCompletion: Boolean = false
+    private var wasExplicitlyPaused: Boolean = false
 
     // Real-time authoritative position polling while playing
     private var positionPollingJob: Job? = null
 
     private fun startPositionPolling(controller: Player) {
+        if (!enablePositionPolling) return
         positionPollingJob?.cancel()
         positionPollingJob = scope.launch {
             while (isActive) {
@@ -89,16 +94,23 @@ class HarmoniaPlayerController(
     }
 
     init {
-        initializeSessionConnection()
+        if (playerOverride != null) {
+            mediaController = playerOverride
+            setupPlayerListener(playerOverride)
+            syncControllerWithQueue(playerOverride)
+        } else {
+            initializeSessionConnection()
+        }
         restorePersistedState()
     }
 
     private fun initializeSessionConnection() {
+        val ctx = context ?: return
         val sessionToken = SessionToken(
-            context,
-            ComponentName(context, HarmoniaPlaybackService::class.java)
+            ctx,
+            ComponentName(ctx, HarmoniaPlaybackService::class.java)
         )
-        controllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
+        controllerFuture = MediaController.Builder(ctx, sessionToken).buildAsync()
         controllerFuture?.addListener(
             {
                 try {
@@ -117,16 +129,34 @@ class HarmoniaPlayerController(
         )
     }
 
-    private fun setupPlayerListener(controller: MediaController) {
-        controller.addListener(object : Player.Listener {
+    private fun setupPlayerListener(controller: Player) {
+        val listener = object : Player.Listener {
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                updateStateFromController(controller)
+                if (!playWhenReady) {
+                    if (reason != Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM &&
+                        controller.playbackState != Player.STATE_ENDED &&
+                        _playbackState.value.currentTrackId != null
+                    ) {
+                        if (!wasExplicitlyPaused) {
+                            wasExplicitlyPaused = true
+                            recordEvent(ListeningEventType.PAUSED)
+                        }
+                    }
+                }
+            }
+
+            override fun onPlaybackSuppressionReasonChanged(playbackSuppressionReason: Int) {
+                updateStateFromController(controller)
+            }
+
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 updateStateFromController(controller)
                 val currentTrackId = _playbackState.value.currentTrackId
-                if (currentTrackId != null) {
-                    if (isPlaying) {
+                if (currentTrackId != null && isPlaying) {
+                    if (wasExplicitlyPaused) {
+                        wasExplicitlyPaused = false
                         recordEvent(ListeningEventType.RESUMED)
-                    } else if (controller.playbackState != Player.STATE_ENDED) {
-                        recordEvent(ListeningEventType.PAUSED)
                     }
                 }
             }
@@ -134,16 +164,19 @@ class HarmoniaPlayerController(
             override fun onPlaybackStateChanged(state: Int) {
                 updateStateFromController(controller)
                 if (state == Player.STATE_ENDED) {
+                    wasExplicitlyPaused = false
                     checkAndRecordCompletion()
                 }
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                activeTrackStartTime = System.currentTimeMillis()
+                hasRecordedCompletion = false
+                wasExplicitlyPaused = false
+
                 if (mediaItem != null) {
                     val trackId = mediaItem.mediaId
                     val queueIdx = controller.currentMediaItemIndex
-                    activeTrackStartTime = System.currentTimeMillis()
-                    hasRecordedCompletion = false
 
                     scope.launch {
                         val track = trackRepository.getTrackById(trackId)
@@ -169,16 +202,23 @@ class HarmoniaPlayerController(
                     errorMessage = "Playback error [${error.errorCodeName}]: ${error.message}"
                 )
             }
-        })
+        }
+        controller.addListener(listener)
+        activePlayerListener = listener
     }
+
+    internal fun getPlayerListenerForTesting(): Player.Listener? = activePlayerListener
 
     private fun updateStateFromController(controller: Player) {
         val status = when {
+            controller.playerError != null -> PlaybackStatus.ERROR
+            controller.playbackState == Player.STATE_IDLE -> PlaybackStatus.IDLE
+            controller.playbackState == Player.STATE_ENDED -> PlaybackStatus.ENDED
+            !controller.playWhenReady -> PlaybackStatus.PAUSED
+            controller.playbackSuppressionReason != Player.PLAYBACK_SUPPRESSION_REASON_NONE -> PlaybackStatus.SUPPRESSED
             controller.playbackState == Player.STATE_BUFFERING -> PlaybackStatus.BUFFERING
             controller.playbackState == Player.STATE_READY && controller.isPlaying -> PlaybackStatus.PLAYING
-            controller.playbackState == Player.STATE_READY && !controller.isPlaying -> PlaybackStatus.PAUSED
-            controller.playbackState == Player.STATE_ENDED -> PlaybackStatus.ENDED
-            controller.playbackState == Player.STATE_IDLE -> PlaybackStatus.IDLE
+            controller.playbackState == Player.STATE_READY -> PlaybackStatus.READY
             else -> PlaybackStatus.IDLE
         }
 
@@ -187,6 +227,8 @@ class HarmoniaPlayerController(
         _playbackState.value = _playbackState.value.copy(
             isPlaying = controller.isPlaying,
             status = status,
+            playWhenReady = controller.playWhenReady,
+            playbackSuppressionReason = controller.playbackSuppressionReason,
             currentPositionMs = controller.currentPosition.coerceAtLeast(0L),
             durationMs = dur,
             activeQueueIndex = controller.currentMediaItemIndex,
@@ -216,7 +258,12 @@ class HarmoniaPlayerController(
             }
             val savedState = playbackStateRepository.observePlaybackState().firstOrNull()
             if (savedState != null) {
-                _playbackState.value = savedState.copy(isPlaying = false, status = PlaybackStatus.IDLE)
+                _playbackState.value = savedState.copy(
+                    isPlaying = false,
+                    status = PlaybackStatus.IDLE,
+                    playWhenReady = false,
+                    playbackSuppressionReason = 0
+                )
             }
         }
     }
@@ -255,7 +302,7 @@ class HarmoniaPlayerController(
         }
     }
 
-    private fun syncControllerWithQueue(controller: MediaController) {
+    private fun syncControllerWithQueue(controller: Player) {
         val currentItems = _queue.value
         if (currentItems.isNotEmpty() && controller.mediaItemCount == 0) {
             scope.launch {
@@ -291,6 +338,7 @@ class HarmoniaPlayerController(
 
     override fun stop() {
         stopPositionPolling()
+        wasExplicitlyPaused = false
         mediaController?.let { controller ->
             recordEvent(ListeningEventType.STOPPED)
             controller.stop()
@@ -416,7 +464,10 @@ class HarmoniaPlayerController(
 
     fun release() {
         stopPositionPolling()
+        activePlayerListener?.let { mediaController?.removeListener(it) }
+        activePlayerListener = null
         controllerFuture?.let { MediaController.releaseFuture(it) }
+        controllerFuture = null
         mediaController = null
     }
 }

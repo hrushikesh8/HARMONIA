@@ -9,6 +9,7 @@ enum class PlaybackStatus {
     READY,
     PLAYING,
     PAUSED,
+    SUPPRESSED,
     ENDED,
     ERROR
 }
