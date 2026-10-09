@@ -319,12 +319,33 @@ class DefaultMediaReconciliationEngine(
         }
 
         // 5. Checkpoint Handling
+        val previousCheckpoint = database.scanCheckpointDao().getCheckpoint(source.id)
+        val previousGeneration = previousCheckpoint?.lastGeneration ?: 0L
+
         if (failed == 0) {
-            val maxLastMod = candidates.maxOfOrNull { it.lastModifiedEpochSec } ?: System.currentTimeMillis()
+            val newGeneration = when (source) {
+                is StorageSource.MediaStorePrimary,
+                is StorageSource.MediaStoreVolume -> {
+                    val candidateGens = candidates.mapNotNull { it.generation }
+                    if (candidateGens.isNotEmpty()) {
+                        maxOf(previousGeneration, candidateGens.maxOrNull() ?: previousGeneration)
+                    } else {
+                        previousGeneration
+                    }
+                }
+                is StorageSource.SafDocumentTree -> {
+                    // SAF does not possess provider generation counters.
+                    // Scan time is recorded in lastScanTimestamp; lastGeneration remains 0L
+                    // to avoid confusing timestamps with provider generations.
+                    0L
+                }
+                is StorageSource.InternalSyncStorage -> 0L
+            }
+
             val completedCheckpoint = ScanCheckpointEntity(
                 sourceId = source.id,
                 volumeName = source.id,
-                lastGeneration = maxLastMod,
+                lastGeneration = newGeneration,
                 lastScanTimestamp = System.currentTimeMillis(),
                 scannedFileCount = imported + updated + unchanged + moved,
                 status = "COMPLETED"
@@ -338,11 +359,10 @@ class DefaultMediaReconciliationEngine(
             emit(progress)
         } else {
             // Partial scan: do NOT advance lastGeneration beyond failed scan boundary!
-            val previousCheckpoint = database.scanCheckpointDao().getCheckpoint(source.id)
             val partialCheckpoint = ScanCheckpointEntity(
                 sourceId = source.id,
                 volumeName = source.id,
-                lastGeneration = previousCheckpoint?.lastGeneration ?: 0L,
+                lastGeneration = previousGeneration,
                 lastScanTimestamp = System.currentTimeMillis(),
                 scannedFileCount = imported + updated + unchanged + moved,
                 status = "PARTIAL"

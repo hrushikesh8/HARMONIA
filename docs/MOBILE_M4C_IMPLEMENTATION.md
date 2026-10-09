@@ -92,14 +92,14 @@ Android MediaStore / SAF Tree
 ### 5.1 Authoritative Test Summary
 | Test Suite | Total Tests | Passed | Failed | Skipped | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Mobile JVM Unit Tests** | 100 | 100 | 0 | 0 | **PASS** |
-| **Android Connected Tests (API 36)** | 67 | 67 | 0 | 0 | **PASS** |
+| **Mobile JVM Unit Tests** | 101 | 101 | 0 | 0 | **PASS** |
+| **Android Connected Tests (API 36)** | 71 | 71 | 0 | 0 | **PASS** |
 | **Core Regression Suite (Python)** | 173 | 173 | 0 | 0 | **PASS** |
 | **Debug APK Assembly** | 1 | 1 | 0 | 0 | **PASS** |
 
-### 5.2 Mobile JVM Test Breakdown (21 Classes / 100 Tests)
+### 5.2 Mobile JVM Test Breakdown (21 Classes / 101 Tests)
 - `AudioFileFilterTest`: 2 tests
-- `DiscoveredMediaAndIdentityTest`: 7 tests
+- `DiscoveredMediaAndIdentityTest`: 8 tests
 - `ExtractedAudioMetadataTest`: 2 tests
 - `MetadataNormalizerTest`: 8 tests
 - `OfflineListeningEventRepositoryTest`: 2 tests
@@ -120,12 +120,12 @@ Android MediaStore / SAF Tree
 - `LibrarySortingTest`: 8 tests
 - `NavigationDestinationTest`: 2 tests
 
-### 5.3 Android Connected Test Breakdown (10 Classes / 67 Tests on `medium_phone(AVD) - 16`)
+### 5.3 Android Connected Test Breakdown (10 Classes / 71 Tests on `medium_phone(AVD) - 16`)
 - `AndroidAudioMetadataReaderTest`: 7 tests
 - `ArtworkProviderTest`: 4 tests
 - `HarmoniaNavigationAndLibraryUiTest`: 8 tests
 - `M3EndToEndIntegrationTest`: 5 tests
-- `MediaReconciliationEngineTest`: 11 tests
+- `MediaReconciliationEngineTest`: 15 tests
   - `initial_scan_discovers_and_imports_new_tracks_and_local_files`
   - `incremental_scan_recognizes_unchanged_files_and_skips_reprocessing`
   - `scan_with_embedded_artwork_stores_artwork_in_m3_artwork_provider`
@@ -137,6 +137,10 @@ Android MediaStore / SAF Tree
   - `fatal_media_store_query_failure_aborts_without_advancing_checkpoint`
   - `content_hasher_computes_deterministic_sha256_hash`
   - `real_media_store_runtime_discovery_and_reconciliation`
+  - `successful_mediastore_incremental_scan_advances_generation_watermark_using_correct_value`
+  - `later_mediastore_scan_discovers_newly_inserted_item_with_greater_provider_generation`
+  - `partial_scan_does_not_advance_checkpoint_past_unprocessed_candidates`
+  - `saf_checkpoint_handling_does_not_confuse_timestamps_with_mediastore_generations`
 - `NowPlayingAndMiniPlayerUiTest`: 4 tests
 - `PlaylistsFlowUiTest`: 4 tests
 - `RealAndroidPlaybackTest`: 7 tests
@@ -144,15 +148,16 @@ Android MediaStore / SAF Tree
 - `RoomMigrationV2ToV3AndStorageDaoTest`: 5 tests
 
 ### 5.4 Platform Runtime vs Synthetic Classification & Invariants
-1. **Real MediaStore Discovery & Reconciliation:** Authoritatively verified on Android API 36 emulator via `real_media_store_runtime_discovery_and_reconciliation`. Inserts audio to Android MediaStore, discovers it via `MediaStoreScanner`, resolves `content://` URI, hashes bitstream, extracts M4-B metadata, and reconciles into Room.
-2. **SAF DocumentTree Traversal:** Structurally verified via native `DocumentsContract` implementation; covered by unit/synthetic tests (`SafTreeScanner`). Establishing real user-granted SAF document trees on the emulator requires interactive system picker UI, which cannot be invoked headlessly in CI without UI interaction.
+1. **Real MediaStore Discovery & Reconciliation:** Authoritatively verified on Android API 36 emulator via `real_media_store_runtime_discovery_and_reconciliation`. Inserts audio to Android MediaStore, discovers it via `MediaStoreScanner`, resolves `content://` URI, hashes bitstream, extracts M4-B metadata, reconciles into Room, and verifies generation watermark advancement.
+2. **SAF DocumentTree Traversal:** Structurally verified via native `DocumentsContract` implementation; covered by unit/synthetic tests (`SafTreeScanner`, `saf_checkpoint_handling_does_not_confuse_timestamps_with_mediastore_generations`). Establishing real user-granted SAF document trees on the emulator requires interactive system picker UI, which cannot be invoked headlessly in CI without UI interaction.
 3. **Genuine Move / Rename Reconciliation:** Authoritatively verified via `moved_or_renamed_file_reconciles_by_content_hash_without_creating_duplicate_track` using a genuine filesystem move (`renameTo`). The old path ceases to exist (`exists() == false`), the reconciliation engine checks prior locator accessibility, updates the existing `LocalFileEntity` in-place (same `id`, new `fileUri`, updated `verifiedAt`), and preserves the single logical `TrackEntity` without creating duplicates.
 4. **Legitimate Duplicate File Protection:** Authoritatively verified via `duplicate_byte_identical_files_at_distinct_locations_preserve_both_physical_instances`. When two distinct physical locations contain byte-identical audio files and both exist simultaneously, the engine does NOT conflate or overwrite them; it maintains 1 logical `TrackEntity` representing the musical work and 2 distinct physical `LocalFileEntity` rows with unique IDs and paths.
-5. **Checkpoint Safety Across Failure Modes:**
-   - **Corrupt / Inaccessible File:** Verified via `corrupt_or_unreadable_file_is_isolated_and_scan_continues`. Emits `ScanProgressStatus.PARTIAL`, sets checkpoint status to `PARTIAL`, and retains previous `lastGeneration` without advancing.
-   - **Permission Denial:** Verified via `permission_denied_aborts_without_modifying_library_or_checkpoint`. Emits `ScanProgressStatus.PERMISSION_REQUIRED` without advancing or touching checkpoints.
-   - **Fatal Query Failure:** Verified via `fatal_media_store_query_failure_aborts_without_advancing_checkpoint`. Scanner exception emits `ScanProgressStatus.FAILED` without creating or advancing checkpoints.
-   - **Complete Successful Scan:** Verified via `initial_scan_discovers_and_imports_new_tracks_and_local_files`. Advances `lastGeneration` and records `COMPLETED` checkpoint.
+5. **Checkpoint Semantics & Safety Invariants:**
+   - **Provider Generation vs Freshness Timestamps:** MediaStore incremental query relies on provider monotonic `GENERATION_MODIFIED` on API 30+ (`DATE_MODIFIED` on API < 30). `DiscoveredMedia` holds `generation: Long?` distinctly from `lastModifiedEpochSec: Long`.
+   - **SAF Checkpoint Separation:** SAF document trees do not possess provider generation counters. SAF checkpoints record scan wall-clock time in `lastScanTimestamp` and set `lastGeneration = 0L`, completely preventing cross-provider contamination or timestamp confusion.
+   - **Partial Scan Non-Advancement:** When `failed > 0` (e.g. unreadable candidates), `lastGeneration` retains `previousCheckpoint.lastGeneration`, preventing watermarks from advancing past unindexed candidates.
+   - **Fatal Query Non-Advancement:** Exceptions during scan queries abort without mutating or recording checkpoints.
+   - **Complete Successful Scan:** Advances `lastGeneration` to the maximum candidate generation (`maxOf(previousGen, candidateGens.max())`) and marks status `COMPLETED`.
 
 ---
 

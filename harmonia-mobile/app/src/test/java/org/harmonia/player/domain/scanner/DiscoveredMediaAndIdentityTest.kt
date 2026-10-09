@@ -171,4 +171,20 @@ class DiscoveredMediaAndIdentityTest {
         assertEquals(42, checkpoint.scannedFileCount)
         assertEquals(ScanStatus.COMPLETED, checkpoint.status)
     }
+
+    @Test
+    fun discovered_media_distinctly_separates_last_modified_freshness_from_provider_generation() {
+        val candidate = DiscoveredMedia(
+            sourceIdentity = SourceIdentity.mediaStorePrimary("track.mp3"),
+            runtimeLocator = "content://media/external/audio/media/1",
+            displayName = "track.mp3",
+            sizeBytes = 1024L,
+            lastModifiedEpochSec = 1728432000L,
+            sourceType = SourceType.MEDIA_STORE_PRIMARY,
+            generation = 42L
+        )
+
+        assertEquals(1728432000L, candidate.lastModifiedEpochSec)
+        assertEquals(42L, candidate.generation)
+    }
 }

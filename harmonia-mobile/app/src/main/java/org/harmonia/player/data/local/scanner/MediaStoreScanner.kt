@@ -65,6 +65,9 @@ class MediaStoreScanner(
                 val relPathCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     cursor.getColumnIndex(MediaStore.Audio.Media.RELATIVE_PATH)
                 } else -1
+                val genCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    cursor.getColumnIndex(MediaStore.Audio.Media.GENERATION_MODIFIED)
+                } else -1
 
                 while (cursor.moveToNext()) {
                     val id = if (idCol >= 0) cursor.getLong(idCol) else continue
@@ -73,6 +76,13 @@ class MediaStoreScanner(
                     val sizeBytes = if (sizeCol >= 0) cursor.getLong(sizeCol) else 0L
                     val dateModified = if (dateModCol >= 0) cursor.getLong(dateModCol) else 0L
                     val relativePath = if (relPathCol >= 0) cursor.getString(relPathCol) else null
+                    val generation = if (genCol >= 0 && !cursor.isNull(genCol)) {
+                        cursor.getLong(genCol)
+                    } else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+                        dateModified
+                    } else {
+                        null
+                    }
 
                     // Filter to supported audio types
                     if (!AudioFileFilter.isSupportedAudio(displayName, mimeType)) {
@@ -108,7 +118,8 @@ class MediaStoreScanner(
                             sizeBytes = sizeBytes,
                             lastModifiedEpochSec = dateModified,
                             sourceType = sourceType,
-                            isAccessible = true
+                            isAccessible = true,
+                            generation = generation
                         )
                     )
                 }

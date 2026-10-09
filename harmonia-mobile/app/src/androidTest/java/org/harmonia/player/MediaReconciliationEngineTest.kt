@@ -113,7 +113,8 @@ class MediaReconciliationEngineTest {
                 mimeType = "audio/mpeg",
                 sizeBytes = mp3File.length(),
                 lastModifiedEpochSec = mp3File.lastModified() / 1000L,
-                sourceType = SourceType.MEDIA_STORE_PRIMARY
+                sourceType = SourceType.MEDIA_STORE_PRIMARY,
+                generation = 10L
             ),
             DiscoveredMedia(
                 sourceIdentity = SourceIdentity.mediaStorePrimary("test_track.flac"),
@@ -123,7 +124,8 @@ class MediaReconciliationEngineTest {
                 mimeType = "audio/flac",
                 sizeBytes = flacFile.length(),
                 lastModifiedEpochSec = flacFile.lastModified() / 1000L,
-                sourceType = SourceType.MEDIA_STORE_PRIMARY
+                sourceType = SourceType.MEDIA_STORE_PRIMARY,
+                generation = 20L
             )
         )
 
@@ -169,6 +171,7 @@ class MediaReconciliationEngineTest {
         assertNotNull(checkpoint)
         assertEquals("COMPLETED", checkpoint?.status)
         assertEquals(2, checkpoint?.scannedFileCount)
+        assertEquals(20L, checkpoint?.lastGeneration)
     }
 
     @Test
@@ -528,6 +531,28 @@ class MediaReconciliationEngineTest {
     fun fatal_media_store_query_failure_aborts_without_advancing_checkpoint() = runBlocking {
         val permissionChecker = TestMockPermissionChecker(StoragePermissionState.GRANTED)
         val source = StorageSource.MediaStorePrimary()
+        database.storageSourceDao().upsertSource(
+            org.harmonia.player.data.local.entity.StorageSourceEntity(
+                id = source.id,
+                type = "MEDIA_STORE_PRIMARY",
+                uri = "content://media/external/audio/media",
+                displayName = source.displayName,
+                isRemovable = false,
+                isEnabled = true
+            )
+        )
+
+        // Seed prior checkpoint at generation 80L
+        database.scanCheckpointDao().upsertCheckpoint(
+            org.harmonia.player.data.local.entity.ScanCheckpointEntity(
+                sourceId = source.id,
+                volumeName = source.id,
+                lastGeneration = 80L,
+                lastScanTimestamp = 1600000000000L,
+                scannedFileCount = 3,
+                status = "COMPLETED"
+            )
+        )
 
         val failingScanner = object : MediaSourceScanner {
             override val supportedSourceType: SourceType = SourceType.MEDIA_STORE_PRIMARY
@@ -551,7 +576,287 @@ class MediaReconciliationEngineTest {
         assertEquals(ScanProgressStatus.FAILED, result.status)
         assertEquals("Fatal MediaStore SQLite query failure", result.errorMessage)
         assertEquals(0, database.trackDao().getTrackCount())
-        assertNull(database.scanCheckpointDao().getCheckpoint(source.id))
+
+        // Previous checkpoint remains completely unchanged!
+        val checkpoint = database.scanCheckpointDao().getCheckpoint(source.id)
+        assertNotNull(checkpoint)
+        assertEquals(80L, checkpoint?.lastGeneration)
+        assertEquals("COMPLETED", checkpoint?.status)
+    }
+
+    @Test
+    fun successful_mediastore_incremental_scan_advances_generation_watermark_using_correct_value() = runBlocking {
+        val file = File(testMediaDir, "test_track.mp3")
+        val candidate = DiscoveredMedia(
+            sourceIdentity = SourceIdentity.mediaStorePrimary("test_track.mp3"),
+            runtimeLocator = file.absolutePath,
+            discoveryLocator = "301",
+            displayName = "test_track.mp3",
+            mimeType = "audio/mpeg",
+            sizeBytes = file.length(),
+            lastModifiedEpochSec = file.lastModified() / 1000L,
+            sourceType = SourceType.MEDIA_STORE_PRIMARY,
+            generation = 150L
+        )
+
+        val permissionChecker = TestMockPermissionChecker(StoragePermissionState.GRANTED)
+        val source = StorageSource.MediaStorePrimary()
+        database.storageSourceDao().upsertSource(
+            org.harmonia.player.data.local.entity.StorageSourceEntity(
+                id = source.id,
+                type = "MEDIA_STORE_PRIMARY",
+                uri = "content://media/external/audio/media",
+                displayName = source.displayName,
+                isRemovable = false,
+                isEnabled = true
+            )
+        )
+
+        val engine = DefaultMediaReconciliationEngine(
+            context = context,
+            database = database,
+            metadataReader = metadataReader,
+            permissionChecker = permissionChecker,
+            mediaStoreScanner = TestMockScanner { listOf(candidate) },
+            safTreeScanner = SafTreeScanner(context, permissionChecker)
+        )
+
+        val events = engine.scanSource(source, ScanMode.FULL_RECONCILIATION).toList()
+        assertEquals(ScanProgressStatus.COMPLETED, events.last().status)
+
+        val checkpoint = database.scanCheckpointDao().getCheckpoint(source.id)
+        assertNotNull(checkpoint)
+        assertEquals("COMPLETED", checkpoint?.status)
+        assertEquals(150L, checkpoint?.lastGeneration)
+    }
+
+    @Test
+    fun later_mediastore_scan_discovers_newly_inserted_item_with_greater_provider_generation() = runBlocking {
+        val file1 = File(testMediaDir, "test_track.mp3")
+        val file2 = File(testMediaDir, "test_track.flac")
+
+        val candidate1 = DiscoveredMedia(
+            sourceIdentity = SourceIdentity.mediaStorePrimary("test_track.mp3"),
+            runtimeLocator = file1.absolutePath,
+            discoveryLocator = "301",
+            displayName = "test_track.mp3",
+            mimeType = "audio/mpeg",
+            sizeBytes = file1.length(),
+            lastModifiedEpochSec = file1.lastModified() / 1000L,
+            sourceType = SourceType.MEDIA_STORE_PRIMARY,
+            generation = 150L
+        )
+
+        val candidate2 = DiscoveredMedia(
+            sourceIdentity = SourceIdentity.mediaStorePrimary("test_track.flac"),
+            runtimeLocator = file2.absolutePath,
+            discoveryLocator = "302",
+            displayName = "test_track.flac",
+            mimeType = "audio/flac",
+            sizeBytes = file2.length(),
+            lastModifiedEpochSec = file2.lastModified() / 1000L,
+            sourceType = SourceType.MEDIA_STORE_PRIMARY,
+            generation = 175L
+        )
+
+        val permissionChecker = TestMockPermissionChecker(StoragePermissionState.GRANTED)
+        val source = StorageSource.MediaStorePrimary()
+        database.storageSourceDao().upsertSource(
+            org.harmonia.player.data.local.entity.StorageSourceEntity(
+                id = source.id,
+                type = "MEDIA_STORE_PRIMARY",
+                uri = "content://media/external/audio/media",
+                displayName = source.displayName,
+                isRemovable = false,
+                isEnabled = true
+            )
+        )
+
+        // Seed initial checkpoint at generation 150L
+        database.scanCheckpointDao().upsertCheckpoint(
+            org.harmonia.player.data.local.entity.ScanCheckpointEntity(
+                sourceId = source.id,
+                volumeName = source.id,
+                lastGeneration = 150L,
+                lastScanTimestamp = System.currentTimeMillis() - 10000L,
+                scannedFileCount = 1,
+                status = "COMPLETED"
+            )
+        )
+
+        var requestedGeneration = -1L
+        val mockScanner = object : MediaSourceScanner {
+            override val supportedSourceType: SourceType = SourceType.MEDIA_STORE_PRIMARY
+            override suspend fun discoverMedia(source: StorageSource, mode: ScanMode, lastGeneration: Long): List<DiscoveredMedia> {
+                requestedGeneration = lastGeneration
+                // Only return items with generation > lastGeneration
+                return listOf(candidate1, candidate2).filter { (it.generation ?: 0L) > lastGeneration }
+            }
+        }
+
+        val engine = DefaultMediaReconciliationEngine(
+            context = context,
+            database = database,
+            metadataReader = metadataReader,
+            permissionChecker = permissionChecker,
+            mediaStoreScanner = mockScanner,
+            safTreeScanner = SafTreeScanner(context, permissionChecker)
+        )
+
+        val events = engine.scanSource(source, ScanMode.INCREMENTAL).toList()
+        val result = events.last()
+
+        assertEquals(ScanProgressStatus.COMPLETED, result.status)
+        assertEquals(150L, requestedGeneration)
+        assertEquals(1, result.discoveredCount)
+        assertEquals(1, result.importedCount)
+
+        val updatedCheckpoint = database.scanCheckpointDao().getCheckpoint(source.id)
+        assertNotNull(updatedCheckpoint)
+        assertEquals("COMPLETED", updatedCheckpoint?.status)
+        assertEquals(175L, updatedCheckpoint?.lastGeneration)
+    }
+
+    @Test
+    fun partial_scan_does_not_advance_checkpoint_past_unprocessed_candidates() = runBlocking {
+        val validFile = File(testMediaDir, "test_track.flac")
+        val corruptFile = File(testMediaDir, "corrupt.mp3")
+
+        val validCandidate = DiscoveredMedia(
+            sourceIdentity = SourceIdentity.mediaStorePrimary("test_track.flac"),
+            runtimeLocator = validFile.absolutePath,
+            discoveryLocator = "302",
+            displayName = "test_track.flac",
+            mimeType = "audio/flac",
+            sizeBytes = validFile.length(),
+            lastModifiedEpochSec = validFile.lastModified() / 1000L,
+            sourceType = SourceType.MEDIA_STORE_PRIMARY,
+            generation = 200L
+        )
+
+        val corruptCandidate = DiscoveredMedia(
+            sourceIdentity = SourceIdentity.mediaStorePrimary("corrupt.mp3"),
+            runtimeLocator = corruptFile.absolutePath,
+            discoveryLocator = "303",
+            displayName = "corrupt.mp3",
+            mimeType = "audio/mpeg",
+            sizeBytes = corruptFile.length(),
+            lastModifiedEpochSec = corruptFile.lastModified() / 1000L,
+            sourceType = SourceType.MEDIA_STORE_PRIMARY,
+            isAccessible = false,
+            generation = 250L
+        )
+
+        val permissionChecker = TestMockPermissionChecker(StoragePermissionState.GRANTED)
+        val source = StorageSource.MediaStorePrimary()
+        database.storageSourceDao().upsertSource(
+            org.harmonia.player.data.local.entity.StorageSourceEntity(
+                id = source.id,
+                type = "MEDIA_STORE_PRIMARY",
+                uri = "content://media/external/audio/media",
+                displayName = source.displayName,
+                isRemovable = false,
+                isEnabled = true
+            )
+        )
+
+        // Seed initial checkpoint at generation 100L
+        database.scanCheckpointDao().upsertCheckpoint(
+            org.harmonia.player.data.local.entity.ScanCheckpointEntity(
+                sourceId = source.id,
+                volumeName = source.id,
+                lastGeneration = 100L,
+                lastScanTimestamp = System.currentTimeMillis() - 5000L,
+                scannedFileCount = 5,
+                status = "COMPLETED"
+            )
+        )
+
+        val engine = DefaultMediaReconciliationEngine(
+            context = context,
+            database = database,
+            metadataReader = metadataReader,
+            permissionChecker = permissionChecker,
+            mediaStoreScanner = TestMockScanner { listOf(validCandidate, corruptCandidate) },
+            safTreeScanner = SafTreeScanner(context, permissionChecker)
+        )
+
+        val events = engine.scanSource(source, ScanMode.INCREMENTAL).toList()
+        val result = events.last()
+
+        assertEquals(ScanProgressStatus.PARTIAL, result.status)
+        assertEquals(1, result.failedCount)
+
+        val checkpoint = database.scanCheckpointDao().getCheckpoint(source.id)
+        assertNotNull(checkpoint)
+        assertEquals("PARTIAL", checkpoint?.status)
+        // Must NOT advance past unprocessed candidates!
+        assertEquals(100L, checkpoint?.lastGeneration)
+    }
+
+    @Test
+    fun saf_checkpoint_handling_does_not_confuse_timestamps_with_mediastore_generations() = runBlocking {
+        val file = File(testMediaDir, "test_track.mp3")
+        val safCandidate = DiscoveredMedia(
+            sourceIdentity = SourceIdentity.safDocument(
+                treeUri = "content://com.android.externalstorage.documents/tree/primary%3AMusic",
+                documentId = "primary:Music/test_track.mp3"
+            ),
+            runtimeLocator = file.absolutePath,
+            discoveryLocator = "primary:Music/test_track.mp3",
+            displayName = "test_track.mp3",
+            mimeType = "audio/mpeg",
+            sizeBytes = file.length(),
+            lastModifiedEpochSec = 1728432000L,
+            sourceType = SourceType.SAF_DOCUMENT_TREE,
+            generation = null
+        )
+
+        val permissionChecker = TestMockPermissionChecker(StoragePermissionState.GRANTED)
+        val source = StorageSource.SafDocumentTree(
+            id = "saf_tree_1",
+            treeUri = "content://com.android.externalstorage.documents/tree/primary%3AMusic",
+            displayName = "Music Folder"
+        )
+        database.storageSourceDao().upsertSource(
+            org.harmonia.player.data.local.entity.StorageSourceEntity(
+                id = source.id,
+                type = "SAF_DOCUMENT_TREE",
+                uri = source.treeUri,
+                displayName = source.displayName,
+                isRemovable = false,
+                isEnabled = true
+            )
+        )
+
+        val safMockScanner = object : MediaSourceScanner {
+            override val supportedSourceType: SourceType = SourceType.SAF_DOCUMENT_TREE
+            override suspend fun discoverMedia(source: StorageSource, mode: ScanMode, lastGeneration: Long): List<DiscoveredMedia> {
+                return listOf(safCandidate)
+            }
+        }
+
+        val engine = DefaultMediaReconciliationEngine(
+            context = context,
+            database = database,
+            metadataReader = metadataReader,
+            permissionChecker = permissionChecker,
+            mediaStoreScanner = TestMockScanner { emptyList() },
+            safTreeScanner = safMockScanner
+        )
+
+        val events = engine.scanSource(source, ScanMode.FULL_RECONCILIATION).toList()
+        val result = events.last()
+
+        assertEquals(ScanProgressStatus.COMPLETED, result.status)
+        assertEquals(1, result.importedCount)
+
+        val checkpoint = database.scanCheckpointDao().getCheckpoint(source.id)
+        assertNotNull(checkpoint)
+        assertEquals("COMPLETED", checkpoint?.status)
+        // SAF checkpoint must NOT substitute timestamps into lastGeneration!
+        assertEquals(0L, checkpoint?.lastGeneration)
+        assertTrue((checkpoint?.lastScanTimestamp ?: 0L) > 0L)
     }
 
     @Test
@@ -705,6 +1010,14 @@ class MediaReconciliationEngineTest {
                 val localFile = database.localFileDao().getLocalFileByUri(matchingCandidate.runtimeLocator)
                 assertNotNull(localFile)
                 assertEquals("AVAILABLE", localFile?.availabilityStatus)
+
+                val checkpoint = database.scanCheckpointDao().getCheckpoint(source.id)
+                assertNotNull(checkpoint)
+                assertEquals("COMPLETED", checkpoint?.status)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                    assertNotNull(matchingCandidate.generation)
+                    assertTrue((checkpoint?.lastGeneration ?: 0L) >= (matchingCandidate.generation ?: 0L))
+                }
             } finally {
                 try {
                     context.contentResolver.delete(insertedUri, null, null)
