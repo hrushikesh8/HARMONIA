@@ -45,4 +45,16 @@ interface LocalFileDao {
 
     @Query("SELECT COUNT(*) FROM mobile_local_files WHERE availability_status = 'AVAILABLE'")
     suspend fun getAvailableFileCount(): Int
+
+    @Query("SELECT * FROM mobile_local_files WHERE source_id = :sourceId")
+    suspend fun getLocalFilesBySourceId(sourceId: String): List<LocalFileEntity>
+
+    @Query("SELECT * FROM mobile_local_files WHERE source_id = :sourceId")
+    fun observeLocalFilesForSource(sourceId: String): Flow<List<LocalFileEntity>>
+
+    @Query("SELECT * FROM mobile_local_files WHERE source_id IS NULL")
+    suspend fun getLocalFilesWithUnresolvedSource(): List<LocalFileEntity>
+
+    @Query("UPDATE mobile_local_files SET source_id = :sourceId WHERE id = :id")
+    suspend fun updateSourceId(id: String, sourceId: String)
 }

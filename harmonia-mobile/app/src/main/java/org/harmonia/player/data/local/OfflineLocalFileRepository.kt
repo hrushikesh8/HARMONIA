@@ -33,6 +33,7 @@ class OfflineLocalFileRepository(
         val entity = LocalFileEntity(
             id = localFile.id,
             trackId = localFile.trackId,
+            sourceId = localFile.sourceId,
             storageType = localFile.storageType.name,
             fileUri = localFile.fileUri,
             fileSize = localFile.fileSize,
@@ -63,6 +64,7 @@ class OfflineLocalFileRepository(
         return LocalFile(
             id = id,
             trackId = trackId,
+            sourceId = sourceId,
             storageType = try {
                 StorageType.valueOf(storageType)
             } catch (e: Exception) {

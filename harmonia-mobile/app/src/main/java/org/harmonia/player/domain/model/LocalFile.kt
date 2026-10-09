@@ -18,6 +18,7 @@ enum class StorageType {
 data class LocalFile(
     val id: String,
     val trackId: String,
+    val sourceId: String? = null,
     val storageType: StorageType,
     val fileUri: String,
     val fileSize: Long,

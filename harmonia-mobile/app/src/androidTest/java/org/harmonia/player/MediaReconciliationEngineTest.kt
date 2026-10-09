@@ -1025,4 +1025,247 @@ class MediaReconciliationEngineTest {
             }
         }
     }
+
+    @Test
+    fun new_imports_receive_explicit_and_durable_source_association() = runBlocking {
+        val file = File(testMediaDir, "test_track.mp3")
+        val candidate = DiscoveredMedia(
+            sourceIdentity = SourceIdentity.mediaStorePrimary("test_track.mp3"),
+            runtimeLocator = file.absolutePath,
+            discoveryLocator = "401",
+            displayName = "test_track.mp3",
+            mimeType = "audio/mpeg",
+            sizeBytes = file.length(),
+            lastModifiedEpochSec = file.lastModified() / 1000L,
+            sourceType = SourceType.MEDIA_STORE_PRIMARY
+        )
+
+        val permissionChecker = TestMockPermissionChecker(StoragePermissionState.GRANTED)
+        val source = StorageSource.MediaStorePrimary()
+        database.storageSourceDao().upsertSource(
+            org.harmonia.player.data.local.entity.StorageSourceEntity(
+                id = source.id,
+                type = "MEDIA_STORE_PRIMARY",
+                uri = "content://media/external/audio/media",
+                displayName = source.displayName,
+                isRemovable = false,
+                isEnabled = true
+            )
+        )
+
+        val engine = DefaultMediaReconciliationEngine(
+            context = context,
+            database = database,
+            metadataReader = metadataReader,
+            permissionChecker = permissionChecker,
+            mediaStoreScanner = TestMockScanner { listOf(candidate) },
+            safTreeScanner = SafTreeScanner(context, permissionChecker)
+        )
+
+        val events = engine.scanSource(source, ScanMode.FULL_RECONCILIATION).toList()
+        assertEquals(ScanProgressStatus.COMPLETED, events.last().status)
+
+        val localFile = database.localFileDao().getLocalFileByUri(file.absolutePath)
+        assertNotNull(localFile)
+        assertEquals(source.id, localFile?.sourceId)
+
+        val sourceFiles = database.localFileDao().getLocalFilesBySourceId(source.id)
+        assertEquals(1, sourceFiles.size)
+        assertEquals(localFile?.id, sourceFiles.first().id)
+    }
+
+    @Test
+    fun incomplete_discovery_does_not_mark_absent_candidates_missing() = runBlocking {
+        val file = File(testMediaDir, "test_track.mp3")
+        val candidate = DiscoveredMedia(
+            sourceIdentity = SourceIdentity.mediaStorePrimary("test_track.mp3"),
+            runtimeLocator = file.absolutePath,
+            discoveryLocator = "401",
+            displayName = "test_track.mp3",
+            mimeType = "audio/mpeg",
+            sizeBytes = file.length(),
+            lastModifiedEpochSec = file.lastModified() / 1000L,
+            sourceType = SourceType.MEDIA_STORE_PRIMARY
+        )
+
+        val permissionChecker = TestMockPermissionChecker(StoragePermissionState.GRANTED)
+        val source = StorageSource.MediaStorePrimary()
+        database.storageSourceDao().upsertSource(
+            org.harmonia.player.data.local.entity.StorageSourceEntity(
+                id = source.id,
+                type = "MEDIA_STORE_PRIMARY",
+                uri = "content://media/external/audio/media",
+                displayName = source.displayName,
+                isRemovable = false,
+                isEnabled = true
+            )
+        )
+
+        // Seed an existing local file belonging to this source
+        val existingFileId = "existing-file-1"
+        val now = System.currentTimeMillis()
+        database.trackDao().upsertTrack(
+            org.harmonia.player.data.local.entity.TrackEntity(
+                id = "track-1",
+                title = "Existing Track",
+                durationSec = 180.0,
+                createdAt = now,
+                updatedAt = now
+            )
+        )
+        database.localFileDao().upsertLocalFile(
+            org.harmonia.player.data.local.entity.LocalFileEntity(
+                id = existingFileId,
+                trackId = "track-1",
+                sourceId = source.id,
+                storageType = "EXTERNAL_SD",
+                fileUri = "file:///non/existent/old_track.mp3",
+                fileSize = 1000L,
+                fileHash = "hash123",
+                format = "mp3",
+                availabilityStatus = "AVAILABLE",
+                addedAt = now
+            )
+        )
+
+        // Candidate discovery includes a corrupted/unreadable item so failedCount > 0
+        val corruptCandidate = DiscoveredMedia(
+            sourceIdentity = SourceIdentity.mediaStorePrimary("corrupt.mp3"),
+            runtimeLocator = "/corrupt/path.mp3",
+            discoveryLocator = "402",
+            displayName = "corrupt.mp3",
+            mimeType = "audio/mpeg",
+            sizeBytes = 500L,
+            lastModifiedEpochSec = 1000L,
+            sourceType = SourceType.MEDIA_STORE_PRIMARY,
+            isAccessible = false
+        )
+
+        val engine = DefaultMediaReconciliationEngine(
+            context = context,
+            database = database,
+            metadataReader = metadataReader,
+            permissionChecker = permissionChecker,
+            mediaStoreScanner = TestMockScanner { listOf(candidate, corruptCandidate) },
+            safTreeScanner = SafTreeScanner(context, permissionChecker)
+        )
+
+        val events = engine.scanSource(source, ScanMode.FULL_RECONCILIATION).toList()
+        val finalResult = events.last()
+        assertEquals(ScanProgressStatus.PARTIAL, finalResult.status)
+        assertTrue(finalResult.failedCount > 0)
+
+        // Incomplete discovery must NEVER mark absent candidates missing!
+        val preservedFile = database.localFileDao().getLocalFileById(existingFileId)
+        assertNotNull(preservedFile)
+        assertEquals("AVAILABLE", preservedFile?.availabilityStatus)
+    }
+
+    @Test
+    fun complete_scan_marks_absent_candidates_missing_only_for_the_scanned_source() = runBlocking {
+        val permissionChecker = TestMockPermissionChecker(StoragePermissionState.GRANTED)
+        val sourceA = StorageSource.MediaStorePrimary()
+        val sourceB = StorageSource.SafDocumentTree(
+            id = "saf_tree_b",
+            treeUri = "content://com.android.externalstorage.documents/tree/SDCARD%3AMusic",
+            displayName = "SDCARD/Music"
+        )
+
+        database.storageSourceDao().upsertSource(
+            org.harmonia.player.data.local.entity.StorageSourceEntity(
+                id = sourceA.id,
+                type = "MEDIA_STORE_PRIMARY",
+                uri = "content://media/external/audio/media",
+                displayName = sourceA.displayName,
+                isRemovable = false,
+                isEnabled = true
+            )
+        )
+        database.storageSourceDao().upsertSource(
+            org.harmonia.player.data.local.entity.StorageSourceEntity(
+                id = sourceB.id,
+                type = "SAF_DOCUMENT_TREE",
+                uri = sourceB.treeUri,
+                displayName = sourceB.displayName,
+                isRemovable = true,
+                isEnabled = true
+            )
+        )
+
+        val now = System.currentTimeMillis()
+        // Insert tracks and files for sourceA and sourceB
+        database.trackDao().upsertTrack(
+            org.harmonia.player.data.local.entity.TrackEntity(
+                id = "track-a",
+                title = "Track A",
+                durationSec = 120.0,
+                createdAt = now,
+                updatedAt = now
+            )
+        )
+        database.trackDao().upsertTrack(
+            org.harmonia.player.data.local.entity.TrackEntity(
+                id = "track-b",
+                title = "Track B",
+                durationSec = 120.0,
+                createdAt = now,
+                updatedAt = now
+            )
+        )
+
+        database.localFileDao().upsertLocalFile(
+            org.harmonia.player.data.local.entity.LocalFileEntity(
+                id = "file-a",
+                trackId = "track-a",
+                sourceId = sourceA.id,
+                storageType = "INTERNAL_SYNC",
+                fileUri = "content://media/external/audio/media/1001",
+                fileSize = 2000L,
+                fileHash = "hash-a",
+                format = "mp3",
+                availabilityStatus = "AVAILABLE",
+                addedAt = now
+            )
+        )
+        database.localFileDao().upsertLocalFile(
+            org.harmonia.player.data.local.entity.LocalFileEntity(
+                id = "file-b",
+                trackId = "track-b",
+                sourceId = sourceB.id,
+                storageType = "SAF_IMPORTED",
+                fileUri = "content://com.android.externalstorage.documents/tree/SDCARD%3AMusic/document/file-b",
+                fileSize = 2000L,
+                fileHash = "hash-b",
+                format = "mp3",
+                availabilityStatus = "AVAILABLE",
+                addedAt = now
+            )
+        )
+
+        // Run full scan on sourceA with empty candidates (complete scan, failed == 0)
+        val engine = DefaultMediaReconciliationEngine(
+            context = context,
+            database = database,
+            metadataReader = metadataReader,
+            permissionChecker = permissionChecker,
+            mediaStoreScanner = TestMockScanner { emptyList() },
+            safTreeScanner = SafTreeScanner(context, permissionChecker)
+        )
+
+        val events = engine.scanSource(sourceA, ScanMode.FULL_RECONCILIATION).toList()
+        val result = events.last()
+        assertEquals(ScanProgressStatus.COMPLETED, result.status)
+        assertEquals(0, result.failedCount)
+
+        // file-a (belonging to sourceA) is confirmed absent and marked MISSING
+        val fileA = database.localFileDao().getLocalFileById("file-a")
+        assertNotNull(fileA)
+        assertEquals("MISSING", fileA?.availabilityStatus)
+
+        // file-b (belonging to sourceB) MUST REMAIN AVAILABLE!
+        val fileB = database.localFileDao().getLocalFileById("file-b")
+        assertNotNull(fileB)
+        assertEquals("AVAILABLE", fileB?.availabilityStatus)
+    }
 }
+

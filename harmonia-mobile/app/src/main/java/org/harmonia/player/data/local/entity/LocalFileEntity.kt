@@ -18,7 +18,8 @@ import androidx.room.PrimaryKey
     ],
     indices = [
         Index(value = ["track_id"]),
-        Index(value = ["file_uri"], unique = true)
+        Index(value = ["file_uri"], unique = true),
+        Index(value = ["source_id"])
     ]
 )
 data class LocalFileEntity(
@@ -28,6 +29,9 @@ data class LocalFileEntity(
 
     @ColumnInfo(name = "track_id")
     val trackId: String,
+
+    @ColumnInfo(name = "source_id")
+    val sourceId: String? = null,
 
     @ColumnInfo(name = "storage_type")
     val storageType: String, // 'INTERNAL_SYNC', 'SAF_IMPORTED', 'EXTERNAL_SD'

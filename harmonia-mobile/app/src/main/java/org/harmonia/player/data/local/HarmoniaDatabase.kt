@@ -32,6 +32,7 @@ import org.harmonia.player.data.local.entity.TrackEntity
  * Configured with SQLite WAL (Write-Ahead Logging) mode per ADR-021.
  * Schema v2 introduced local playlist management (`mobile_playlists`, `mobile_playlist_items`).
  * Schema v3 introduces storage sources and scan checkpoints (`mobile_storage_sources`, `mobile_scan_checkpoints`).
+ * Schema v4 introduces explicit source association for local files (`source_id` on `mobile_local_files`).
  */
 @Database(
     entities = [
@@ -47,7 +48,7 @@ import org.harmonia.player.data.local.entity.TrackEntity
         StorageSourceEntity::class,
         ScanCheckpointEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class HarmoniaDatabase : RoomDatabase() {
@@ -132,6 +133,13 @@ abstract class HarmoniaDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4: Migration = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `mobile_local_files` ADD COLUMN `source_id` TEXT")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_mobile_local_files_source_id` ON `mobile_local_files` (`source_id`)")
+            }
+        }
+
         @Volatile
         private var INSTANCE: HarmoniaDatabase? = null
 
@@ -148,7 +156,7 @@ abstract class HarmoniaDatabase : RoomDatabase() {
                 DATABASE_NAME
             )
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .fallbackToDestructiveMigration(false)
                 .build()
         }

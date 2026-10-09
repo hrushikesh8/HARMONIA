@@ -109,11 +109,13 @@ class DefaultMediaReconciliationEngine(
                     if (isFresh) {
                         // UNCHANGED: Skip bitstream I/O
                         unchanged++
-                        if (existingFile.availabilityStatus != "AVAILABLE") {
-                            database.localFileDao().updateAvailabilityStatus(
-                                id = existingFile.id,
-                                status = "AVAILABLE",
-                                verifiedAt = System.currentTimeMillis()
+                        if (existingFile.sourceId == null || existingFile.availabilityStatus != "AVAILABLE") {
+                            database.localFileDao().upsertLocalFile(
+                                existingFile.copy(
+                                    sourceId = source.id,
+                                    availabilityStatus = "AVAILABLE",
+                                    verifiedAt = System.currentTimeMillis()
+                                )
                             )
                         }
                     } else {
@@ -124,6 +126,7 @@ class DefaultMediaReconciliationEngine(
 
                         database.localFileDao().upsertLocalFile(
                             existingFile.copy(
+                                sourceId = source.id,
                                 fileSize = candidate.sizeBytes,
                                 fileHash = newHash,
                                 bitrate = metadata.bitrateKbps,
@@ -161,6 +164,7 @@ class DefaultMediaReconciliationEngine(
                             // MOVED / RELOCATED: Previous location no longer exists, update URI on existing physical LocalFile
                             database.localFileDao().upsertLocalFile(
                                 existingByHash.copy(
+                                    sourceId = source.id,
                                     fileUri = candidate.runtimeLocator,
                                     storageType = candidate.sourceType.name,
                                     availabilityStatus = "AVAILABLE",
@@ -175,6 +179,7 @@ class DefaultMediaReconciliationEngine(
                             val duplicateLocalFile = LocalFileEntity(
                                 id = UUID.randomUUID().toString(),
                                 trackId = existingByHash.trackId,
+                                sourceId = source.id,
                                 storageType = candidate.sourceType.name,
                                 fileUri = candidate.runtimeLocator,
                                 fileSize = candidate.sizeBytes,
@@ -261,6 +266,7 @@ class DefaultMediaReconciliationEngine(
                         val localFile = LocalFileEntity(
                             id = UUID.randomUUID().toString(),
                             trackId = trackId,
+                            sourceId = source.id,
                             storageType = candidate.sourceType.name,
                             fileUri = candidate.runtimeLocator,
                             fileSize = candidate.sizeBytes,
@@ -297,15 +303,10 @@ class DefaultMediaReconciliationEngine(
         }
 
         // 4. Missing Files Handling in Full Reconciliation
+        // Invariant: Only mark missing if discovery was 100% complete (failed == 0) and strictly for this source.id
         var unavailable = 0
-        if (mode == ScanMode.FULL_RECONCILIATION) {
-            val storageTypeName = when (source) {
-                is StorageSource.SafDocumentTree -> org.harmonia.player.domain.model.storage.SourceType.SAF_DOCUMENT_TREE.name
-                is StorageSource.MediaStoreVolume -> org.harmonia.player.domain.model.storage.SourceType.MEDIA_STORE_VOLUME.name
-                is StorageSource.InternalSyncStorage -> org.harmonia.player.domain.model.storage.SourceType.INTERNAL_SYNC.name
-                is StorageSource.MediaStorePrimary -> org.harmonia.player.domain.model.storage.SourceType.MEDIA_STORE_PRIMARY.name
-            }
-            val sourceFiles = database.localFileDao().getLocalFilesByStorageType(storageTypeName)
+        if (mode == ScanMode.FULL_RECONCILIATION && failed == 0) {
+            val sourceFiles = database.localFileDao().getLocalFilesBySourceId(source.id)
             for (file in sourceFiles) {
                 if (file.fileUri !in activeUris && file.availabilityStatus == "AVAILABLE") {
                     database.localFileDao().updateAvailabilityStatus(

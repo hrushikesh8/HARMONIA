@@ -60,6 +60,9 @@ object ServiceLocator {
     private var mediaReconciliationEngineInstance: org.harmonia.player.domain.scanner.MediaReconciliationEngine? = null
 
     @Volatile
+    private var storageVolumeLifecycleCoordinatorInstance: org.harmonia.player.domain.model.storage.lifecycle.StorageVolumeLifecycleCoordinator? = null
+
+    @Volatile
     private var playbackPortInstance: PlaybackPort? = null
 
     fun initialize(context: Context) {
@@ -85,6 +88,16 @@ object ServiceLocator {
                 permissionChecker = permChecker,
                 mediaStoreScanner = msScanner,
                 safTreeScanner = safScanner
+            )
+        }
+        if (storageVolumeLifecycleCoordinatorInstance == null) {
+            val db = database ?: HarmoniaDatabase.getInstance(context)
+            val reconEngine = mediaReconciliationEngineInstance ?: error("MediaReconciliationEngine missing")
+            val platformBridge = org.harmonia.player.data.local.storage.lifecycle.AndroidStoragePlatformBridge(context.applicationContext)
+            storageVolumeLifecycleCoordinatorInstance = org.harmonia.player.data.local.storage.lifecycle.DefaultStorageVolumeLifecycleCoordinator(
+                storageSourceDao = db.storageSourceDao(),
+                reconciliationEngine = reconEngine,
+                platformBridge = platformBridge
             )
         }
     }
@@ -220,6 +233,14 @@ object ServiceLocator {
         mediaReconciliationEngineInstance = engine
     }
 
+    fun getStorageVolumeLifecycleCoordinator(): org.harmonia.player.domain.model.storage.lifecycle.StorageVolumeLifecycleCoordinator {
+        return storageVolumeLifecycleCoordinatorInstance ?: error("StorageVolumeLifecycleCoordinator has not been initialized in ServiceLocator!")
+    }
+
+    fun setStorageVolumeLifecycleCoordinatorForTesting(coordinator: org.harmonia.player.domain.model.storage.lifecycle.StorageVolumeLifecycleCoordinator) {
+        storageVolumeLifecycleCoordinatorInstance = coordinator
+    }
+
     fun getPlaybackPort(): PlaybackPort {
         return playbackPortInstance ?: error("PlaybackPort has not been registered in ServiceLocator!")
     }
@@ -244,6 +265,7 @@ object ServiceLocator {
         storagePermissionCheckerInstance = null
         audioMetadataReaderInstance = null
         mediaReconciliationEngineInstance = null
+        storageVolumeLifecycleCoordinatorInstance = null
         playbackPortInstance = null
     }
 }
