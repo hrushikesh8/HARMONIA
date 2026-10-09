@@ -112,7 +112,7 @@ class DefaultMediaReconciliationEngine(
                         if (existingFile.sourceId == null || existingFile.availabilityStatus != "AVAILABLE") {
                             database.localFileDao().upsertLocalFile(
                                 existingFile.copy(
-                                    sourceId = source.id,
+                                    sourceId = existingFile.sourceId ?: source.id,
                                     availabilityStatus = "AVAILABLE",
                                     verifiedAt = System.currentTimeMillis()
                                 )
@@ -126,7 +126,7 @@ class DefaultMediaReconciliationEngine(
 
                         database.localFileDao().upsertLocalFile(
                             existingFile.copy(
-                                sourceId = source.id,
+                                sourceId = existingFile.sourceId ?: source.id,
                                 fileSize = candidate.sizeBytes,
                                 fileHash = newHash,
                                 bitrate = metadata.bitrateKbps,
@@ -156,15 +156,21 @@ class DefaultMediaReconciliationEngine(
                     val existingByHash = contentHash?.let { database.localFileDao().getLocalFileByHash(it) }
 
                     if (existingByHash != null) {
-                        // Check if the previous location still exists
+                        // Check if the previous location still exists within the SAME source.
+                        // Invariant: Content hash alone must NEVER establish physical source ownership!
+                        // A file move is ONLY inferred if the previous location explicitly belonged to this same source.
+                        // If existingByHash is from a different source OR is an unresolved legacy record (sourceId == null),
+                        // it MUST NOT be modified or hijacked as a "move". It must be treated as a distinct physical instance
+                        // sharing logical Track identity.
+                        val isSameSource = existingByHash.sourceId != null && existingByHash.sourceId == source.id
                         val oldLocationInCandidates = candidates.any { it.runtimeLocator == existingByHash.fileUri }
                         val oldLocationExists = oldLocationInCandidates || isLocatorAccessible(context, existingByHash.fileUri)
 
-                        if (!oldLocationExists) {
-                            // MOVED / RELOCATED: Previous location no longer exists, update URI on existing physical LocalFile
+                        if (isSameSource && !oldLocationExists) {
+                            // MOVED / RELOCATED: Previous location no longer exists within the SAME source.
+                            // Update URI on existing physical LocalFile.
                             database.localFileDao().upsertLocalFile(
                                 existingByHash.copy(
-                                    sourceId = source.id,
                                     fileUri = candidate.runtimeLocator,
                                     storageType = candidate.sourceType.name,
                                     availabilityStatus = "AVAILABLE",
@@ -173,9 +179,10 @@ class DefaultMediaReconciliationEngine(
                             )
                             moved++
                         } else {
-                            // DUPLICATE CONTENT: Both physical locations exist simultaneously.
+                            // DISTINCT PHYSICAL INSTANCE (Duplicate, different source, or unresolved legacy):
                             // Link to same logical Track (preserving single musical work identity),
-                            // but record distinct physical LocalFile for this separate location!
+                            // but record distinct physical LocalFile for this separate location/source.
+                            // The existingByHash (including any unresolved legacy row) is preserved completely untouched!
                             val duplicateLocalFile = LocalFileEntity(
                                 id = UUID.randomUUID().toString(),
                                 trackId = existingByHash.trackId,
@@ -183,7 +190,7 @@ class DefaultMediaReconciliationEngine(
                                 storageType = candidate.sourceType.name,
                                 fileUri = candidate.runtimeLocator,
                                 fileSize = candidate.sizeBytes,
-                                fileHash = contentHash ?: existingByHash.fileHash,
+                                fileHash = contentHash,
                                 format = AudioFileFilter.extractFormat(candidate.displayName, candidate.mimeType),
                                 bitrate = existingByHash.bitrate,
                                 sampleRate = existingByHash.sampleRate,

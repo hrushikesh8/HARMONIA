@@ -10,6 +10,9 @@ class HarmoniaApp : Application() {
         super.onCreate()
         ServiceLocator.initialize(this)
 
+        // Start storage volume lifecycle monitoring and sync source availability
+        ServiceLocator.getStorageVolumeLifecycleCoordinator().startMonitoring()
+
         // Initialize authoritative native Media3 playback controller
         val playerController = HarmoniaPlayerController(
             context = this,

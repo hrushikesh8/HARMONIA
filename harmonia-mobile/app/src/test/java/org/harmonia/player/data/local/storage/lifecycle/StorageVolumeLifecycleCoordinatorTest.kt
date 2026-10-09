@@ -56,9 +56,14 @@ class StorageVolumeLifecycleCoordinatorTest {
     private val fakePlatformBridge = object : StoragePlatformBridge {
         val mountedVolumes = mutableSetOf("1234")
         val grantedTrees = mutableSetOf("content://com.android.externalstorage.documents/tree/primary%3AMusic")
+        var registeredListener: VolumeEventListener? = null
         override fun isPlatformVolumeMounted(volumeUuid: String) = mountedVolumes.contains(volumeUuid)
         override fun isSafPermissionGranted(treeUri: String) = grantedTrees.contains(treeUri)
         override suspend fun checkVolumeReadiness(source: StorageSourceEntity) = true
+        override fun registerVolumeEventListener(listener: VolumeEventListener): AutoCloseable {
+            registeredListener = listener
+            return AutoCloseable { registeredListener = null }
+        }
     }
 
     private lateinit var coordinator: DefaultStorageVolumeLifecycleCoordinator
@@ -196,5 +201,24 @@ class StorageVolumeLifecycleCoordinatorTest {
         assertTrue(states.containsKey("saf_tree_music"))
         assertTrue(states["mediastore_vol_1234"]?.isMounted == true)
         assertTrue(states["saf_tree_music"]?.hasPermission == true)
+    }
+
+    @Test
+    fun start_monitoring_registers_platform_listener_and_revalidates_sources() = testScope.runTest {
+        coordinator.startMonitoring()
+        advanceUntilIdle()
+
+        org.junit.Assert.assertNotNull(fakePlatformBridge.registeredListener)
+        val states = coordinator.runtimeStates.value
+        assertEquals(2, states.size)
+        assertTrue(states["mediastore_vol_1234"]?.isAvailable == true)
+
+        // Trigger hardware unmount through the registered platform listener
+        fakePlatformBridge.registeredListener?.onVolumeUnmounted("1234")
+        advanceUntilIdle()
+        assertFalse(coordinator.runtimeStates.value["mediastore_vol_1234"]?.isAvailable == true)
+
+        coordinator.stopMonitoring()
+        org.junit.Assert.assertNull(fakePlatformBridge.registeredListener)
     }
 }

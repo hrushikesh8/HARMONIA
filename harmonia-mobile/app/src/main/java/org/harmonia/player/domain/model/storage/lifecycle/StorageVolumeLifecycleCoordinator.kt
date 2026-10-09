@@ -23,4 +23,8 @@ interface StorageVolumeLifecycleCoordinator {
     suspend fun revalidateAllSources(): Map<String, SourceRuntimeState>
 
     suspend fun revalidateSource(source: StorageSource): SourceRuntimeState
+
+    fun startMonitoring()
+
+    fun stopMonitoring()
 }

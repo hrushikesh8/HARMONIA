@@ -38,6 +38,29 @@ class DefaultStorageVolumeLifecycleCoordinator(
     private val _runtimeStates = MutableStateFlow<Map<String, SourceRuntimeState>>(emptyMap())
     override val runtimeStates: StateFlow<Map<String, SourceRuntimeState>> = _runtimeStates.asStateFlow()
 
+    private var platformSubscription: AutoCloseable? = null
+
+    override fun startMonitoring() {
+        if (platformSubscription != null) return
+        platformSubscription = platformBridge.registerVolumeEventListener(object : VolumeEventListener {
+            override fun onVolumeMounted(volumeId: String) {
+                this@DefaultStorageVolumeLifecycleCoordinator.onVolumeMounted(volumeId)
+            }
+
+            override fun onVolumeUnmounted(volumeId: String) {
+                this@DefaultStorageVolumeLifecycleCoordinator.onVolumeUnmounted(volumeId)
+            }
+        })
+        scope.launch {
+            revalidateAllSources()
+        }
+    }
+
+    override fun stopMonitoring() {
+        platformSubscription?.close()
+        platformSubscription = null
+    }
+
     override fun isSourceAvailable(sourceId: String): Boolean {
         return _runtimeStates.value[sourceId]?.isAvailable ?: true
     }
@@ -190,14 +213,15 @@ class DefaultStorageVolumeLifecycleCoordinator(
     }
 
     private fun matchesVolume(source: StorageSourceEntity, volumeId: String): Boolean {
-        if (source.id == volumeId) return true
+        val cleanVolumeId = volumeId.trim().lowercase()
+        if (source.id.lowercase() == cleanVolumeId || source.id.lowercase() == "mediastore_vol_$cleanVolumeId") return true
         if (source.type == "MEDIA_STORE_VOLUME") {
             val parts = source.uri.split(":", limit = 2)
-            val volumeName = parts.getOrNull(0) ?: ""
-            val volumeUuid = parts.getOrNull(1) ?: ""
-            return volumeId.equals(volumeName, ignoreCase = true) ||
-                   volumeId.equals(volumeUuid, ignoreCase = true) ||
-                   volumeId.contains(volumeUuid, ignoreCase = true)
+            val volumeName = parts.getOrNull(0)?.trim()?.lowercase() ?: ""
+            val volumeUuid = parts.getOrNull(1)?.trim()?.lowercase() ?: ""
+            return cleanVolumeId == volumeName ||
+                   cleanVolumeId == volumeUuid ||
+                   source.id.lowercase().contains(cleanVolumeId)
         }
         return false
     }

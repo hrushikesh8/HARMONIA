@@ -1267,5 +1267,175 @@ class MediaReconciliationEngineTest {
         assertNotNull(fileB)
         assertEquals("AVAILABLE", fileB?.availabilityStatus)
     }
+
+    @Test
+    fun identical_content_hash_on_different_source_does_not_mutate_legacy_unresolved_row() = runBlocking {
+        val file = File(testMediaDir, "test_track.mp3")
+        val fileHash = org.harmonia.player.data.local.scanner.ContentHasher.computeFileHash(context, file.absolutePath)
+        assertNotNull(fileHash)
+
+        // Pre-insert an unresolved legacy row with identical content hash at an inaccessible/different path
+        val now = System.currentTimeMillis()
+        database.trackDao().upsertTrack(
+            org.harmonia.player.data.local.entity.TrackEntity(
+                id = "track-legacy",
+                title = "Legacy Song",
+                durationSec = 180.0,
+                createdAt = now,
+                updatedAt = now
+            )
+        )
+        database.localFileDao().upsertLocalFile(
+            org.harmonia.player.data.local.entity.LocalFileEntity(
+                id = "legacy-file-1",
+                trackId = "track-legacy",
+                sourceId = null, // explicitly unresolved
+                storageType = "SAF_IMPORTED",
+                fileUri = "content://legacy.storage.provider/doc/missing_sdcard.mp3",
+                fileSize = file.length(),
+                fileHash = fileHash!!,
+                format = "mp3",
+                availabilityStatus = "AVAILABLE",
+                addedAt = now
+            )
+        )
+
+        // Candidate on a new source (e.g. MediaStorePrimary) with identical audio bytes
+        val candidate = DiscoveredMedia(
+            sourceIdentity = SourceIdentity.mediaStorePrimary("test_track.mp3"),
+            runtimeLocator = file.absolutePath,
+            discoveryLocator = "501",
+            displayName = "test_track.mp3",
+            mimeType = "audio/mpeg",
+            sizeBytes = file.length(),
+            lastModifiedEpochSec = file.lastModified() / 1000L,
+            sourceType = SourceType.MEDIA_STORE_PRIMARY
+        )
+
+        val permissionChecker = TestMockPermissionChecker(StoragePermissionState.GRANTED)
+        val source = StorageSource.MediaStorePrimary()
+        database.storageSourceDao().upsertSource(
+            org.harmonia.player.data.local.entity.StorageSourceEntity(
+                id = source.id,
+                type = "MEDIA_STORE_PRIMARY",
+                uri = "content://media/external/audio/media",
+                displayName = source.displayName,
+                isRemovable = false,
+                isEnabled = true
+            )
+        )
+
+        val engine = DefaultMediaReconciliationEngine(
+            context = context,
+            database = database,
+            metadataReader = metadataReader,
+            permissionChecker = permissionChecker,
+            mediaStoreScanner = TestMockScanner { listOf(candidate) },
+            safTreeScanner = SafTreeScanner(context, permissionChecker)
+        )
+
+        val events = engine.scanSource(source, ScanMode.FULL_RECONCILIATION).toList()
+        assertEquals(ScanProgressStatus.COMPLETED, events.last().status)
+
+        // 1. Invariant: Legacy unresolved row is NOT hijacked, mutated, or assigned source.id!
+        val legacyRow = database.localFileDao().getLocalFileById("legacy-file-1")
+        assertNotNull(legacyRow)
+        assertNull("Legacy row source_id must remain null when matching by hash across sources", legacyRow?.sourceId)
+        assertEquals("content://legacy.storage.provider/doc/missing_sdcard.mp3", legacyRow?.fileUri)
+
+        // 2. Invariant: Newly discovered candidate receives its own physical LocalFileEntity
+        val newLocalFile = database.localFileDao().getLocalFileByUri(file.absolutePath)
+        assertNotNull(newLocalFile)
+        assertEquals(source.id, newLocalFile?.sourceId)
+        assertTrue(newLocalFile?.id != "legacy-file-1")
+
+        // 3. Invariant: Both physical LocalFiles share the logical Track without duplicating the Track
+        assertEquals(1, database.trackDao().getTrackCount())
+        assertEquals(legacyRow?.trackId, newLocalFile?.trackId)
+        assertEquals(2, database.localFileDao().getAllLocalFiles().size)
+    }
+
+    @Test
+    fun identical_content_hash_on_different_source_does_not_hijack_existing_source_association() = runBlocking {
+        val file = File(testMediaDir, "test_track.mp3")
+        val fileHash = org.harmonia.player.data.local.scanner.ContentHasher.computeFileHash(context, file.absolutePath)
+        assertNotNull(fileHash)
+
+        val now = System.currentTimeMillis()
+        database.trackDao().upsertTrack(
+            org.harmonia.player.data.local.entity.TrackEntity(
+                id = "track-shared",
+                title = "Shared Song",
+                durationSec = 180.0,
+                createdAt = now,
+                updatedAt = now
+            )
+        )
+        // File exists on sourceA
+        database.localFileDao().upsertLocalFile(
+            org.harmonia.player.data.local.entity.LocalFileEntity(
+                id = "file-source-a",
+                trackId = "track-shared",
+                sourceId = "source_internal",
+                storageType = "INTERNAL_SYNC",
+                fileUri = "file:///internal/sync/song.mp3",
+                fileSize = file.length(),
+                fileHash = fileHash!!,
+                format = "mp3",
+                availabilityStatus = "AVAILABLE",
+                addedAt = now
+            )
+        )
+
+        // Candidate discovered on sourceB (MediaStorePrimary)
+        val candidate = DiscoveredMedia(
+            sourceIdentity = SourceIdentity.mediaStorePrimary("test_track.mp3"),
+            runtimeLocator = file.absolutePath,
+            discoveryLocator = "502",
+            displayName = "test_track.mp3",
+            mimeType = "audio/mpeg",
+            sizeBytes = file.length(),
+            lastModifiedEpochSec = file.lastModified() / 1000L,
+            sourceType = SourceType.MEDIA_STORE_PRIMARY
+        )
+
+        val permissionChecker = TestMockPermissionChecker(StoragePermissionState.GRANTED)
+        val sourceB = StorageSource.MediaStorePrimary()
+        database.storageSourceDao().upsertSource(
+            org.harmonia.player.data.local.entity.StorageSourceEntity(
+                id = sourceB.id,
+                type = "MEDIA_STORE_PRIMARY",
+                uri = "content://media/external/audio/media",
+                displayName = sourceB.displayName,
+                isRemovable = false,
+                isEnabled = true
+            )
+        )
+
+        val engine = DefaultMediaReconciliationEngine(
+            context = context,
+            database = database,
+            metadataReader = metadataReader,
+            permissionChecker = permissionChecker,
+            mediaStoreScanner = TestMockScanner { listOf(candidate) },
+            safTreeScanner = SafTreeScanner(context, permissionChecker)
+        )
+
+        val events = engine.scanSource(sourceB, ScanMode.FULL_RECONCILIATION).toList()
+        assertEquals(ScanProgressStatus.COMPLETED, events.last().status)
+
+        // Invariant: file-source-a retains source_internal and is not mutated
+        val fileA = database.localFileDao().getLocalFileById("file-source-a")
+        assertNotNull(fileA)
+        assertEquals("source_internal", fileA?.sourceId)
+        assertEquals("file:///internal/sync/song.mp3", fileA?.fileUri)
+
+        // Invariant: candidate receives distinct LocalFile on sourceB
+        val fileB = database.localFileDao().getLocalFileByUri(file.absolutePath)
+        assertNotNull(fileB)
+        assertEquals(sourceB.id, fileB?.sourceId)
+        assertEquals(2, database.localFileDao().getAllLocalFiles().size)
+        assertEquals(1, database.trackDao().getTrackCount())
+    }
 }
 
