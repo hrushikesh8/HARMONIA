@@ -14,44 +14,94 @@ sealed interface StorageSource {
      * Primary internal storage discovered via Android MediaStore.
      */
     data class MediaStorePrimary(
-        override val id: String = "mediastore_primary",
+        override val id: String = ID,
         override val displayName: String = "Internal Audio Storage",
         override val isRemovable: Boolean = false,
         override val isAvailable: Boolean = true
-    ) : StorageSource
+    ) : StorageSource {
+        companion object {
+            const val ID = "mediastore_primary"
+        }
+    }
 
     /**
      * Removable external volume (e.g. SD Card, USB OTG) indexed via MediaStore volume UUID.
      */
     data class MediaStoreVolume(
-        override val id: String,
         val volumeName: String,
         val volumeUuid: String,
         override val displayName: String,
+        override val id: String = deriveCanonicalId(volumeUuid),
         override val isRemovable: Boolean = true,
         override val isAvailable: Boolean = true
-    ) : StorageSource
+    ) : StorageSource {
+        companion object {
+            fun normalizeVolumeUuid(volumeUuid: String): String = volumeUuid.trim().lowercase()
+
+            fun deriveCanonicalId(volumeUuid: String): String {
+                val clean = normalizeVolumeUuid(volumeUuid)
+                require(clean.isNotBlank()) { "Volume UUID cannot be blank for removable media store volume" }
+                return "mediastore_vol_$clean"
+            }
+        }
+    }
 
     /**
      * User-selected directory tree picked via Storage Access Framework (SAF ACTION_OPEN_DOCUMENT_TREE).
      */
     data class SafDocumentTree(
-        override val id: String,
         val treeUri: String,
         override val displayName: String,
+        override val id: String = deriveCanonicalId(treeUri),
         val isPersisted: Boolean = true,
         override val isRemovable: Boolean = false,
         override val isAvailable: Boolean = true
-    ) : StorageSource
+    ) : StorageSource {
+        companion object {
+            /**
+             * Normalizes SAF tree URI representation:
+             * - Trims whitespace
+             * - Normalizes URI scheme to lowercase
+             * - Strips trailing slash
+             */
+            fun normalizeTreeUri(treeUri: String): String {
+                val trimmed = treeUri.trim()
+                val schemeSep = trimmed.indexOf("://")
+                val schemeNormalized = if (schemeSep != -1) {
+                    trimmed.substring(0, schemeSep).lowercase() + trimmed.substring(schemeSep)
+                } else {
+                    trimmed
+                }
+                return schemeNormalized.trimEnd('/')
+            }
+
+            /**
+             * Derives deterministic, collision-resistant canonical source ID using SHA-256
+             * over normalized tree URI.
+             */
+            fun deriveCanonicalId(treeUri: String): String {
+                val normalized = normalizeTreeUri(treeUri)
+                require(normalized.isNotBlank()) { "Tree URI cannot be blank" }
+                val digest = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(normalized.toByteArray(Charsets.UTF_8))
+                val hex = digest.joinToString("") { "%02x".format(it) }
+                return "saf_tree_$hex"
+            }
+        }
+    }
 
     /**
      * App-scoped private storage directory reserved for future desktop-to-mobile synchronization.
      */
     data class InternalSyncStorage(
-        override val id: String = "internal_sync_store",
+        override val id: String = ID,
         val rootPath: String,
         override val displayName: String = "Harmonia Synced Storage",
         override val isRemovable: Boolean = false,
         override val isAvailable: Boolean = true
-    ) : StorageSource
+    ) : StorageSource {
+        companion object {
+            const val ID = "internal_sync_store"
+        }
+    }
 }

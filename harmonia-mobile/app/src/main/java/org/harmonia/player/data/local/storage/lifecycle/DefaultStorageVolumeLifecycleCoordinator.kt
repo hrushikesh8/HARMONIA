@@ -129,7 +129,7 @@ class DefaultStorageVolumeLifecycleCoordinator(
     override fun onSafPermissionRevoked(treeUri: String) {
         scope.launch {
             val sources = storageSourceDao.observeAllSources().firstOrNull() ?: emptyList()
-            val matching = sources.filter { it.type == "SAF_DOCUMENT_TREE" && (it.uri == treeUri || it.id == treeUri) }
+            val matching = sources.filter { matchesSafSource(it, treeUri) }
 
             val updated = _runtimeStates.value.toMutableMap()
             for (source in matching) {
@@ -148,7 +148,7 @@ class DefaultStorageVolumeLifecycleCoordinator(
     override fun onSafPermissionGranted(treeUri: String) {
         scope.launch {
             val sources = storageSourceDao.observeAllSources().firstOrNull() ?: emptyList()
-            val matching = sources.filter { it.type == "SAF_DOCUMENT_TREE" && (it.uri == treeUri || it.id == treeUri) }
+            val matching = sources.filter { matchesSafSource(it, treeUri) }
 
             val updated = _runtimeStates.value.toMutableMap()
             for (source in matching) {
@@ -212,17 +212,52 @@ class DefaultStorageVolumeLifecycleCoordinator(
         }
     }
 
-    private fun matchesVolume(source: StorageSourceEntity, volumeId: String): Boolean {
-        val cleanVolumeId = volumeId.trim().lowercase()
-        if (source.id.lowercase() == cleanVolumeId || source.id.lowercase() == "mediastore_vol_$cleanVolumeId") return true
-        if (source.type == "MEDIA_STORE_VOLUME") {
-            val parts = source.uri.split(":", limit = 2)
-            val volumeName = parts.getOrNull(0)?.trim()?.lowercase() ?: ""
-            val volumeUuid = parts.getOrNull(1)?.trim()?.lowercase() ?: ""
-            return cleanVolumeId == volumeName ||
-                   cleanVolumeId == volumeUuid ||
-                   source.id.lowercase().contains(cleanVolumeId)
+    private fun matchesSafSource(source: StorageSourceEntity, treeUri: String): Boolean {
+        if (source.type != "SAF_DOCUMENT_TREE") return false
+        val cleanInput = treeUri.trim()
+        if (cleanInput.isBlank()) return false
+        val normalizedInput = StorageSource.SafDocumentTree.normalizeTreeUri(cleanInput)
+        val normalizedSourceUri = StorageSource.SafDocumentTree.normalizeTreeUri(source.uri)
+        val canonicalId = StorageSource.SafDocumentTree.deriveCanonicalId(cleanInput)
+
+        return source.uri == cleanInput ||
+               normalizedSourceUri == normalizedInput ||
+               source.id == canonicalId ||
+               source.id == cleanInput
+    }
+
+    private fun matchesVolume(source: StorageSourceEntity, eventVolumeId: String): Boolean {
+        val cleanEventId = eventVolumeId.trim()
+        if (cleanEventId.isBlank()) return false
+
+        if (source.type == "MEDIA_STORE_PRIMARY") {
+            val normalized = cleanEventId.lowercase()
+            return normalized == "primary" ||
+                   normalized == StorageSource.MediaStorePrimary.ID ||
+                   normalized == source.id.lowercase()
         }
+
+        if (source.type == "MEDIA_STORE_VOLUME") {
+            // Extract the authoritative volume UUID from source.uri ("volumeName:volumeUuid") or source.id
+            val parts = source.uri.split(":", limit = 2)
+            val sourceUuid = parts.getOrNull(1)?.trim()?.lowercase()
+                ?: if (source.id.startsWith("mediastore_vol_")) source.id.removePrefix("mediastore_vol_").trim().lowercase() else ""
+
+            if (sourceUuid.isBlank()) {
+                // Persisted source is missing authoritative UUID: ambiguous, do not match
+                return false
+            }
+
+            // Normalize event volume ID: could be bare UUID ("1234-5678") or prefixed ("mediastore_vol_1234-5678")
+            val cleanEventUuid = cleanEventId.lowercase().removePrefix("mediastore_vol_")
+            if (cleanEventUuid.isBlank()) {
+                return false
+            }
+
+            // Match strictly on authoritative normalized UUID. NEVER match solely by volumeName!
+            return sourceUuid == cleanEventUuid
+        }
+
         return false
     }
 

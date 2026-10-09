@@ -57,7 +57,7 @@ class StorageVolumeLifecycleCoordinatorTest {
         val mountedVolumes = mutableSetOf("1234")
         val grantedTrees = mutableSetOf("content://com.android.externalstorage.documents/tree/primary%3AMusic")
         var registeredListener: VolumeEventListener? = null
-        override fun isPlatformVolumeMounted(volumeUuid: String) = mountedVolumes.contains(volumeUuid)
+        override fun isPlatformVolumeMounted(volumeUuid: String) = mountedVolumes.any { it.equals(volumeUuid, ignoreCase = true) }
         override fun isSafPermissionGranted(treeUri: String) = grantedTrees.contains(treeUri)
         override suspend fun checkVolumeReadiness(source: StorageSourceEntity) = true
         override fun registerVolumeEventListener(listener: VolumeEventListener): AutoCloseable {
@@ -220,5 +220,117 @@ class StorageVolumeLifecycleCoordinatorTest {
 
         coordinator.stopMonitoring()
         org.junit.Assert.assertNull(fakePlatformBridge.registeredListener)
+    }
+
+    @Test
+    fun saf_canonical_id_derivation_is_deterministic_and_collision_resistant() {
+        val uri1 = "content://com.android.externalstorage.documents/tree/primary%3AMusic"
+        val uri2 = "content://com.android.externalstorage.documents/tree/primary%3AMusic/"
+        val uri3 = "CONTENT://com.android.externalstorage.documents/tree/primary%3AMusic"
+        val distinctUri = "content://com.android.externalstorage.documents/tree/SDCARD%3APodcasts"
+
+        val id1 = StorageSource.SafDocumentTree.deriveCanonicalId(uri1)
+        val id2 = StorageSource.SafDocumentTree.deriveCanonicalId(uri2)
+        val id3 = StorageSource.SafDocumentTree.deriveCanonicalId(uri3)
+        val idDistinct = StorageSource.SafDocumentTree.deriveCanonicalId(distinctUri)
+
+        // Identical and normalized representations produce identical canonical IDs
+        assertEquals(id1, id2)
+        assertEquals(id1, id3)
+        assertTrue(id1.startsWith("saf_tree_"))
+        assertEquals(73, id1.length) // "saf_tree_" (9) + 64 hex chars (SHA-256)
+
+        // Distinct URIs produce distinct canonical IDs
+        assertTrue(id1 != idDistinct)
+    }
+
+    @Test
+    fun removable_volume_matching_does_not_conflate_duplicate_volume_names() = testScope.runTest {
+        // Two separate physical SD cards sharing the exact same user-facing volume name "SDCARD"
+        val sourceA = StorageSourceEntity(
+            id = "mediastore_vol_1111-aaaa",
+            type = "MEDIA_STORE_VOLUME",
+            uri = "SDCARD:1111-AAAA",
+            displayName = "SD Card 1",
+            isRemovable = true,
+            isEnabled = true
+        )
+        val sourceB = StorageSourceEntity(
+            id = "mediastore_vol_2222-bbbb",
+            type = "MEDIA_STORE_VOLUME",
+            uri = "SDCARD:2222-BBBB",
+            displayName = "SD Card 2",
+            isRemovable = true,
+            isEnabled = true
+        )
+        fakeSources.add(sourceA)
+        fakeSources.add(sourceB)
+        fakePlatformBridge.mountedVolumes.add("1111-aaaa")
+        fakePlatformBridge.mountedVolumes.add("2222-bbbb")
+
+        coordinator.revalidateAllSources()
+
+        // Unmount sourceB by its authoritative UUID
+        coordinator.onVolumeUnmounted("2222-BBBB")
+        advanceUntilIdle()
+
+        val states = coordinator.runtimeStates.value
+        // sourceB is unmounted
+        assertFalse(states["mediastore_vol_2222-bbbb"]?.isAvailable == true)
+        // sourceA MUST REMAIN AVAILABLE despite sharing the same volumeName "SDCARD"!
+        assertTrue(states["mediastore_vol_1111-aaaa"]?.isAvailable == true)
+    }
+
+    @Test
+    fun removable_volume_matching_handles_uuid_case_normalization_and_remount() = testScope.runTest {
+        val source = StorageSourceEntity(
+            id = "mediastore_vol_abcd-1234",
+            type = "MEDIA_STORE_VOLUME",
+            uri = "external_sd:ABCD-1234",
+            displayName = "Kingston SD",
+            isRemovable = true,
+            isEnabled = true
+        )
+        fakeSources.add(source)
+        fakePlatformBridge.mountedVolumes.add("abcd-1234")
+
+        coordinator.revalidateAllSources()
+        assertTrue(coordinator.runtimeStates.value["mediastore_vol_abcd-1234"]?.isAvailable == true)
+
+        // Unmount with lowercase UUID
+        coordinator.onVolumeUnmounted("abcd-1234")
+        advanceUntilIdle()
+        assertFalse(coordinator.runtimeStates.value["mediastore_vol_abcd-1234"]?.isAvailable == true)
+
+        // Remount with uppercase UUID
+        coordinator.onVolumeMounted("ABCD-1234")
+        advanceUntilIdle()
+        assertTrue(coordinator.runtimeStates.value["mediastore_vol_abcd-1234"]?.isAvailable == true)
+    }
+
+    @Test
+    fun removable_volume_matching_rejects_missing_or_ambiguous_uuids() = testScope.runTest {
+        val source = StorageSourceEntity(
+            id = "mediastore_vol_5555-6666",
+            type = "MEDIA_STORE_VOLUME",
+            uri = "sdcard:5555-6666",
+            displayName = "SanDisk",
+            isRemovable = true,
+            isEnabled = true
+        )
+        fakeSources.add(source)
+        fakePlatformBridge.mountedVolumes.add("5555-6666")
+
+        coordinator.revalidateAllSources()
+        assertTrue(coordinator.runtimeStates.value["mediastore_vol_5555-6666"]?.isAvailable == true)
+
+        // Ambiguous unmount without UUID (empty string or volume name only)
+        coordinator.onVolumeUnmounted("")
+        coordinator.onVolumeUnmounted("   ")
+        coordinator.onVolumeUnmounted("sdcard")
+        advanceUntilIdle()
+
+        // Source must NOT be touched or affected by ambiguous events
+        assertTrue(coordinator.runtimeStates.value["mediastore_vol_5555-6666"]?.isAvailable == true)
     }
 }
