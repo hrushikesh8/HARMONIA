@@ -236,12 +236,13 @@ class StorageVolumeLifecycleCoordinatorTest {
         val id3 = StorageSource.SafDocumentTree.deriveCanonicalId(uri3)
         val idDistinct = StorageSource.SafDocumentTree.deriveCanonicalId(distinctUri)
 
-        // Identical and normalized representations produce identical canonical IDs
-        assertEquals(id1, id2)
+        // Scheme case normalization produces identical canonical IDs
         assertEquals(id1, id3)
         assertTrue(id1.startsWith("saf_tree_"))
         assertEquals(73, id1.length) // "saf_tree_" (9) + 64 hex chars (SHA-256)
 
+        // Trailing slash differences are preserved so potentially distinct tree locators are NOT conflated
+        assertTrue(id1 != id2)
         // Distinct URIs produce distinct canonical IDs
         assertTrue(id1 != idDistinct)
     }
@@ -408,13 +409,16 @@ class StorageVolumeLifecycleCoordinatorTest {
         // Subtree paths MUST produce distinct canonical IDs
         assertTrue(idExt != idSubfolder)
 
-        // Normalization variants of the same tree MUST produce identical canonical IDs
-        val trailingSlash = "content://com.android.externalstorage.documents/tree/primary%3AMusic/"
+        // Scheme case and whitespace variants produce identical canonical IDs
         val upperScheme = "CONTENT://com.android.externalstorage.documents/tree/primary%3AMusic"
         val whitespace = "  content://com.android.externalstorage.documents/tree/primary%3AMusic  "
 
-        assertEquals(idExt, StorageSource.SafDocumentTree.deriveCanonicalId(trailingSlash))
         assertEquals(idExt, StorageSource.SafDocumentTree.deriveCanonicalId(upperScheme))
         assertEquals(idExt, StorageSource.SafDocumentTree.deriveCanonicalId(whitespace))
+
+        // Trailing slash variants are NOT conflated: they remain distinct locators
+        val trailingSlash = "content://com.android.externalstorage.documents/tree/primary%3AMusic/"
+        val idTrailing = StorageSource.SafDocumentTree.deriveCanonicalId(trailingSlash)
+        assertTrue(idExt != idTrailing)
     }
 }

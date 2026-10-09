@@ -101,19 +101,20 @@ sealed interface StorageSource {
         companion object {
             /**
              * Normalizes SAF tree URI representation:
-             * - Trims whitespace
-             * - Normalizes URI scheme to lowercase
-             * - Strips trailing slash
+             * - Trims leading and trailing whitespace
+             * - Normalizes URI scheme to lowercase (e.g. "content://")
+             *
+             * Note: Trailing slashes are preserved as removing them is not guaranteed
+             * to preserve identity across all document providers.
              */
             fun normalizeTreeUri(treeUri: String): String {
                 val trimmed = treeUri.trim()
                 val schemeSep = trimmed.indexOf("://")
-                val schemeNormalized = if (schemeSep != -1) {
+                return if (schemeSep != -1) {
                     trimmed.substring(0, schemeSep).lowercase() + trimmed.substring(schemeSep)
                 } else {
                     trimmed
                 }
-                return schemeNormalized.trimEnd('/')
             }
 
             /**
