@@ -148,21 +148,48 @@ class DefaultMediaReconciliationEngine(
                         updated++
                     }
                 } else {
-                    // NEW or MOVED: Compute content hash outside transaction
+                    // NEW, MOVED, or DUPLICATE: Compute content hash outside transaction
                     val contentHash = ContentHasher.computeFileHash(context, candidate.runtimeLocator)
                     val existingByHash = contentHash?.let { database.localFileDao().getLocalFileByHash(it) }
 
                     if (existingByHash != null) {
-                        // MOVED / RELOCATED: Same content identity, updated URI
-                        database.localFileDao().upsertLocalFile(
-                            existingByHash.copy(
-                                fileUri = candidate.runtimeLocator,
-                                storageType = candidate.sourceType.name,
-                                availabilityStatus = "AVAILABLE",
-                                verifiedAt = System.currentTimeMillis()
+                        // Check if the previous location still exists
+                        val oldLocationInCandidates = candidates.any { it.runtimeLocator == existingByHash.fileUri }
+                        val oldLocationExists = oldLocationInCandidates || isLocatorAccessible(context, existingByHash.fileUri)
+
+                        if (!oldLocationExists) {
+                            // MOVED / RELOCATED: Previous location no longer exists, update URI on existing physical LocalFile
+                            database.localFileDao().upsertLocalFile(
+                                existingByHash.copy(
+                                    fileUri = candidate.runtimeLocator,
+                                    storageType = candidate.sourceType.name,
+                                    availabilityStatus = "AVAILABLE",
+                                    verifiedAt = System.currentTimeMillis()
+                                )
                             )
-                        )
-                        moved++
+                            moved++
+                        } else {
+                            // DUPLICATE CONTENT: Both physical locations exist simultaneously.
+                            // Link to same logical Track (preserving single musical work identity),
+                            // but record distinct physical LocalFile for this separate location!
+                            val duplicateLocalFile = LocalFileEntity(
+                                id = UUID.randomUUID().toString(),
+                                trackId = existingByHash.trackId,
+                                storageType = candidate.sourceType.name,
+                                fileUri = candidate.runtimeLocator,
+                                fileSize = candidate.sizeBytes,
+                                fileHash = contentHash ?: existingByHash.fileHash,
+                                format = AudioFileFilter.extractFormat(candidate.displayName, candidate.mimeType),
+                                bitrate = existingByHash.bitrate,
+                                sampleRate = existingByHash.sampleRate,
+                                isLossless = existingByHash.isLossless,
+                                availabilityStatus = "AVAILABLE",
+                                verifiedAt = System.currentTimeMillis(),
+                                addedAt = System.currentTimeMillis()
+                            )
+                            database.localFileDao().upsertLocalFile(duplicateLocalFile)
+                            imported++
+                        }
                     } else {
                         // NEW: Extract metadata and create library records
                         val metadata = metadataReader.readMetadata(candidate.runtimeLocator, extractArtwork = true)
@@ -330,4 +357,17 @@ class DefaultMediaReconciliationEngine(
             emit(progress)
         }
     }.flowOn(Dispatchers.IO)
+
+    private fun isLocatorAccessible(context: Context, locator: String): Boolean {
+        return try {
+            if (locator.startsWith("content://")) {
+                val uri = android.net.Uri.parse(locator)
+                context.contentResolver.openFileDescriptor(uri, "r")?.use { true } ?: false
+            } else {
+                java.io.File(locator).exists()
+            }
+        } catch (_: Throwable) {
+            false
+        }
+    }
 }

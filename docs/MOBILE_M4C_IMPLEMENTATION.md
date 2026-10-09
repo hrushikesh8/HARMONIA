@@ -93,7 +93,7 @@ Android MediaStore / SAF Tree
 | Test Suite | Total Tests | Passed | Failed | Skipped | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Mobile JVM Unit Tests** | 100 | 100 | 0 | 0 | **PASS** |
-| **Android Connected Tests (API 36)** | 65 | 65 | 0 | 0 | **PASS** |
+| **Android Connected Tests (API 36)** | 67 | 67 | 0 | 0 | **PASS** |
 | **Core Regression Suite (Python)** | 173 | 173 | 0 | 0 | **PASS** |
 | **Debug APK Assembly** | 1 | 1 | 0 | 0 | **PASS** |
 
@@ -120,19 +120,21 @@ Android MediaStore / SAF Tree
 - `LibrarySortingTest`: 8 tests
 - `NavigationDestinationTest`: 2 tests
 
-### 5.3 Android Connected Test Breakdown (10 Classes / 65 Tests on `medium_phone(AVD) - 16`)
+### 5.3 Android Connected Test Breakdown (10 Classes / 67 Tests on `medium_phone(AVD) - 16`)
 - `AndroidAudioMetadataReaderTest`: 7 tests
 - `ArtworkProviderTest`: 4 tests
 - `HarmoniaNavigationAndLibraryUiTest`: 8 tests
 - `M3EndToEndIntegrationTest`: 5 tests
-- `MediaReconciliationEngineTest`: 9 tests
+- `MediaReconciliationEngineTest`: 11 tests
   - `initial_scan_discovers_and_imports_new_tracks_and_local_files`
   - `incremental_scan_recognizes_unchanged_files_and_skips_reprocessing`
   - `scan_with_embedded_artwork_stores_artwork_in_m3_artwork_provider`
   - `full_reconciliation_marks_missing_file_without_deleting_database_records`
   - `permission_denied_aborts_without_modifying_library_or_checkpoint`
   - `moved_or_renamed_file_reconciles_by_content_hash_without_creating_duplicate_track`
+  - `duplicate_byte_identical_files_at_distinct_locations_preserve_both_physical_instances`
   - `corrupt_or_unreadable_file_is_isolated_and_scan_continues`
+  - `fatal_media_store_query_failure_aborts_without_advancing_checkpoint`
   - `content_hasher_computes_deterministic_sha256_hash`
   - `real_media_store_runtime_discovery_and_reconciliation`
 - `NowPlayingAndMiniPlayerUiTest`: 4 tests
@@ -141,11 +143,16 @@ Android MediaStore / SAF Tree
 - `RoomMigrationAndPlaylistDaoTest`: 12 tests
 - `RoomMigrationV2ToV3AndStorageDaoTest`: 5 tests
 
-### 5.4 Platform Runtime vs Synthetic Classification
+### 5.4 Platform Runtime vs Synthetic Classification & Invariants
 1. **Real MediaStore Discovery & Reconciliation:** Authoritatively verified on Android API 36 emulator via `real_media_store_runtime_discovery_and_reconciliation`. Inserts audio to Android MediaStore, discovers it via `MediaStoreScanner`, resolves `content://` URI, hashes bitstream, extracts M4-B metadata, and reconciles into Room.
 2. **SAF DocumentTree Traversal:** Structurally verified via native `DocumentsContract` implementation; covered by unit/synthetic tests (`SafTreeScanner`). Establishing real user-granted SAF document trees on the emulator requires interactive system picker UI, which cannot be invoked headlessly in CI without UI interaction.
-3. **Moved / Renamed Content Identity:** Verified via `moved_or_renamed_file_reconciles_by_content_hash_without_creating_duplicate_track`. Proves that when content hash is identical across different file paths, Room updates the existing `LocalFileEntity` and preserves the original `TrackEntity` without creating duplicates.
-4. **Checkpoint Failure Safety:** Verified via `corrupt_or_unreadable_file_is_isolated_and_scan_continues`. Proves that upon encountering an inaccessible/corrupt file, the scan isolates the error, imports valid candidates, emits `ScanProgressStatus.PARTIAL`, and retains the previous checkpoint `lastGeneration` without advancing beyond the failed scan boundary.
+3. **Genuine Move / Rename Reconciliation:** Authoritatively verified via `moved_or_renamed_file_reconciles_by_content_hash_without_creating_duplicate_track` using a genuine filesystem move (`renameTo`). The old path ceases to exist (`exists() == false`), the reconciliation engine checks prior locator accessibility, updates the existing `LocalFileEntity` in-place (same `id`, new `fileUri`, updated `verifiedAt`), and preserves the single logical `TrackEntity` without creating duplicates.
+4. **Legitimate Duplicate File Protection:** Authoritatively verified via `duplicate_byte_identical_files_at_distinct_locations_preserve_both_physical_instances`. When two distinct physical locations contain byte-identical audio files and both exist simultaneously, the engine does NOT conflate or overwrite them; it maintains 1 logical `TrackEntity` representing the musical work and 2 distinct physical `LocalFileEntity` rows with unique IDs and paths.
+5. **Checkpoint Safety Across Failure Modes:**
+   - **Corrupt / Inaccessible File:** Verified via `corrupt_or_unreadable_file_is_isolated_and_scan_continues`. Emits `ScanProgressStatus.PARTIAL`, sets checkpoint status to `PARTIAL`, and retains previous `lastGeneration` without advancing.
+   - **Permission Denial:** Verified via `permission_denied_aborts_without_modifying_library_or_checkpoint`. Emits `ScanProgressStatus.PERMISSION_REQUIRED` without advancing or touching checkpoints.
+   - **Fatal Query Failure:** Verified via `fatal_media_store_query_failure_aborts_without_advancing_checkpoint`. Scanner exception emits `ScanProgressStatus.FAILED` without creating or advancing checkpoints.
+   - **Complete Successful Scan:** Verified via `initial_scan_discovers_and_imports_new_tracks_and_local_files`. Advances `lastGeneration` and records `COMPLETED` checkpoint.
 
 ---
 

@@ -24,7 +24,9 @@ import org.harmonia.player.domain.model.storage.permission.StoragePermissionStat
 import org.harmonia.player.domain.scanner.MediaSourceScanner
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -350,15 +352,16 @@ class MediaReconciliationEngineTest {
 
     @Test
     fun moved_or_renamed_file_reconciles_by_content_hash_without_creating_duplicate_track() = runBlocking {
-        val originalFile = File(testMediaDir, "test_track.mp3")
-        val movedFile = File(testMediaDir, "renamed_song.mp3")
-        originalFile.copyTo(movedFile, overwrite = true)
+        val originalFile = File(testMediaDir, "moving_origin.mp3")
+        File(testMediaDir, "test_track.mp3").copyTo(originalFile, overwrite = true)
+        val renamedDestination = File(testMediaDir, "moved_dest.mp3")
+        if (renamedDestination.exists()) renamedDestination.delete()
 
         val initialCandidate = DiscoveredMedia(
-            sourceIdentity = SourceIdentity.mediaStorePrimary("test_track.mp3"),
+            sourceIdentity = SourceIdentity.mediaStorePrimary("moving_origin.mp3"),
             runtimeLocator = originalFile.absolutePath,
             discoveryLocator = "101",
-            displayName = "test_track.mp3",
+            displayName = "moving_origin.mp3",
             mimeType = "audio/mpeg",
             sizeBytes = originalFile.length(),
             lastModifiedEpochSec = originalFile.lastModified() / 1000L,
@@ -393,15 +396,26 @@ class MediaReconciliationEngineTest {
         assertEquals(1, initialEvents.last().importedCount)
         assertEquals(1, database.trackDao().getTrackCount())
 
-        // 2. File was moved/renamed: same content hash, new path
+        val initialLocalFile = database.localFileDao().getLocalFileByUri(originalFile.absolutePath)
+        assertNotNull(initialLocalFile)
+        val initialTrackId = initialLocalFile!!.trackId
+        val initialFileId = initialLocalFile.id
+        val initialHash = initialLocalFile.fileHash
+
+        // 2. Perform a REAL filesystem move: renameTo moves the file and removes the old location
+        assertTrue(originalFile.renameTo(renamedDestination))
+        assertFalse(originalFile.exists())
+        assertTrue(renamedDestination.exists())
+
+        // 3. Rescan with moved candidate
         val movedCandidate = DiscoveredMedia(
-            sourceIdentity = SourceIdentity.mediaStorePrimary("renamed_song.mp3"),
-            runtimeLocator = movedFile.absolutePath,
+            sourceIdentity = SourceIdentity.mediaStorePrimary("moved_dest.mp3"),
+            runtimeLocator = renamedDestination.absolutePath,
             discoveryLocator = "102",
-            displayName = "renamed_song.mp3",
+            displayName = "moved_dest.mp3",
             mimeType = "audio/mpeg",
-            sizeBytes = movedFile.length(),
-            lastModifiedEpochSec = movedFile.lastModified() / 1000L,
+            sizeBytes = renamedDestination.length(),
+            lastModifiedEpochSec = renamedDestination.lastModified() / 1000L,
             sourceType = SourceType.MEDIA_STORE_PRIMARY
         )
 
@@ -412,12 +426,132 @@ class MediaReconciliationEngineTest {
         assertEquals(ScanProgressStatus.COMPLETED, secondResult.status)
         assertEquals(0, secondResult.importedCount)
         assertEquals(1, secondResult.movedCount)
-        // No duplicate track created!
+
+        // Verify: Same Track, no duplicate Track
         assertEquals(1, database.trackDao().getTrackCount())
 
-        val reconciledFile = database.localFileDao().getLocalFileByUri(movedFile.absolutePath)
+        // Verify: Same physical LocalFile reconciled in-place, no duplicate LocalFile
+        assertEquals(1, database.localFileDao().getAllLocalFiles().size)
+        val reconciledFile = database.localFileDao().getLocalFileByUri(renamedDestination.absolutePath)
         assertNotNull(reconciledFile)
+        assertEquals(initialFileId, reconciledFile?.id)
+        assertEquals(initialTrackId, reconciledFile?.trackId)
+        assertEquals(initialHash, reconciledFile?.fileHash)
         assertEquals("AVAILABLE", reconciledFile?.availabilityStatus)
+
+        // Verify: Old URI is no longer considered the active location
+        assertNull(database.localFileDao().getLocalFileByUri(originalFile.absolutePath))
+    }
+
+    @Test
+    fun duplicate_byte_identical_files_at_distinct_locations_preserve_both_physical_instances() = runBlocking {
+        val fileA = File(testMediaDir, "dup_a.mp3")
+        val fileB = File(testMediaDir, "dup_b.mp3")
+        File(testMediaDir, "test_track.mp3").copyTo(fileA, overwrite = true)
+        File(testMediaDir, "test_track.mp3").copyTo(fileB, overwrite = true)
+
+        assertTrue(fileA.exists())
+        assertTrue(fileB.exists())
+
+        val candidateA = DiscoveredMedia(
+            sourceIdentity = SourceIdentity.mediaStorePrimary("dup_a.mp3"),
+            runtimeLocator = fileA.absolutePath,
+            discoveryLocator = "201",
+            displayName = "dup_a.mp3",
+            mimeType = "audio/mpeg",
+            sizeBytes = fileA.length(),
+            lastModifiedEpochSec = fileA.lastModified() / 1000L,
+            sourceType = SourceType.MEDIA_STORE_PRIMARY
+        )
+        val candidateB = DiscoveredMedia(
+            sourceIdentity = SourceIdentity.mediaStorePrimary("dup_b.mp3"),
+            runtimeLocator = fileB.absolutePath,
+            discoveryLocator = "202",
+            displayName = "dup_b.mp3",
+            mimeType = "audio/mpeg",
+            sizeBytes = fileB.length(),
+            lastModifiedEpochSec = fileB.lastModified() / 1000L,
+            sourceType = SourceType.MEDIA_STORE_PRIMARY
+        )
+
+        val permissionChecker = TestMockPermissionChecker(StoragePermissionState.GRANTED)
+        val source = StorageSource.MediaStorePrimary()
+        database.storageSourceDao().upsertSource(
+            org.harmonia.player.data.local.entity.StorageSourceEntity(
+                id = source.id,
+                type = "MEDIA_STORE_PRIMARY",
+                uri = "content://media/external/audio/media",
+                displayName = source.displayName,
+                isRemovable = false,
+                isEnabled = true
+            )
+        )
+
+        val engine = DefaultMediaReconciliationEngine(
+            context = context,
+            database = database,
+            metadataReader = metadataReader,
+            permissionChecker = permissionChecker,
+            mediaStoreScanner = TestMockScanner { listOf(candidateA, candidateB) },
+            safTreeScanner = SafTreeScanner(context, permissionChecker)
+        )
+
+        val events = engine.scanSource(source, ScanMode.FULL_RECONCILIATION).toList()
+        val result = events.last()
+
+        assertEquals(ScanProgressStatus.COMPLETED, result.status)
+        assertEquals(2, result.discoveredCount)
+        assertEquals(2, result.importedCount)
+        assertEquals(0, result.movedCount)
+
+        // Logical Track: Exactly 1 Track represents the musical work (no duplicate track!)
+        assertEquals(1, database.trackDao().getTrackCount())
+
+        // Physical LocalFiles: BOTH instances are preserved (2 physical rows)
+        val allLocalFiles = database.localFileDao().getAllLocalFiles()
+        assertEquals(2, allLocalFiles.size)
+
+        val localFileA = database.localFileDao().getLocalFileByUri(fileA.absolutePath)
+        val localFileB = database.localFileDao().getLocalFileByUri(fileB.absolutePath)
+        assertNotNull(localFileA)
+        assertNotNull(localFileB)
+
+        // Distinct physical file IDs, but same logical track and identical content hash
+        assertTrue(localFileA!!.id != localFileB!!.id)
+        assertEquals(localFileA.trackId, localFileB.trackId)
+        assertEquals(localFileA.fileHash, localFileB.fileHash)
+        assertEquals("AVAILABLE", localFileA.availabilityStatus)
+        assertEquals("AVAILABLE", localFileB.availabilityStatus)
+    }
+
+    @Test
+    fun fatal_media_store_query_failure_aborts_without_advancing_checkpoint() = runBlocking {
+        val permissionChecker = TestMockPermissionChecker(StoragePermissionState.GRANTED)
+        val source = StorageSource.MediaStorePrimary()
+
+        val failingScanner = object : MediaSourceScanner {
+            override val supportedSourceType: SourceType = SourceType.MEDIA_STORE_PRIMARY
+            override suspend fun discoverMedia(source: StorageSource, mode: ScanMode, lastGeneration: Long): List<DiscoveredMedia> {
+                throw RuntimeException("Fatal MediaStore SQLite query failure")
+            }
+        }
+
+        val engine = DefaultMediaReconciliationEngine(
+            context = context,
+            database = database,
+            metadataReader = metadataReader,
+            permissionChecker = permissionChecker,
+            mediaStoreScanner = failingScanner,
+            safTreeScanner = SafTreeScanner(context, permissionChecker)
+        )
+
+        val events = engine.scanSource(source, ScanMode.FULL_RECONCILIATION).toList()
+        val result = events.last()
+
+        assertEquals(ScanProgressStatus.FAILED, result.status)
+        assertEquals("Fatal MediaStore SQLite query failure", result.errorMessage)
+        assertEquals(0, database.trackDao().getTrackCount())
+        assertNull(database.scanCheckpointDao().getCheckpoint(source.id))
     }
 
     @Test
