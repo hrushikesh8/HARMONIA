@@ -238,19 +238,16 @@ class DefaultStorageVolumeLifecycleCoordinator(
         }
 
         if (source.type == "MEDIA_STORE_VOLUME") {
-            // Extract the authoritative volume UUID from source.uri ("volumeName:volumeUuid") or source.id
-            val parts = source.uri.split(":", limit = 2)
-            val sourceUuid = parts.getOrNull(1)?.trim()?.lowercase()
-                ?: if (source.id.startsWith("mediastore_vol_")) source.id.removePrefix("mediastore_vol_").trim().lowercase() else ""
-
-            if (sourceUuid.isBlank()) {
+            val sourceUuid = StorageSource.MediaStoreVolume.extractVolumeUuid(source.uri, source.id)
+            if (sourceUuid == null) {
                 // Persisted source is missing authoritative UUID: ambiguous, do not match
                 return false
             }
 
-            // Normalize event volume ID: could be bare UUID ("1234-5678") or prefixed ("mediastore_vol_1234-5678")
-            val cleanEventUuid = cleanEventId.lowercase().removePrefix("mediastore_vol_")
-            if (cleanEventUuid.isBlank()) {
+            val cleanEventUuid = StorageSource.MediaStoreVolume.extractVolumeUuid(cleanEventId, cleanEventId)
+                ?: cleanEventId.lowercase().removePrefix("mediastore_vol_").takeIf { StorageSource.MediaStoreVolume.isValidVolumeUuid(it) }
+
+            if (cleanEventUuid == null) {
                 return false
             }
 
@@ -270,13 +267,16 @@ class DefaultStorageVolumeLifecycleCoordinator(
                 isAvailable = isEnabled
             )
             "MEDIA_STORE_VOLUME" -> {
-                val parts = uri.split(":", limit = 2)
-                val volumeName = parts.getOrNull(0) ?: id
-                val volumeUuid = parts.getOrNull(1) ?: id
+                val extractedUuid = StorageSource.MediaStoreVolume.extractVolumeUuid(uri, id) ?: id
+                val volumeName = if (uri.contains(":") && !uri.startsWith("content:", ignoreCase = true) && !uri.startsWith("file:", ignoreCase = true)) {
+                    uri.substringBefore(":").trim().ifBlank { displayName }
+                } else {
+                    displayName.ifBlank { extractedUuid }
+                }
                 StorageSource.MediaStoreVolume(
                     id = id,
                     volumeName = volumeName,
-                    volumeUuid = volumeUuid,
+                    volumeUuid = extractedUuid,
                     displayName = displayName,
                     isRemovable = isRemovable,
                     isAvailable = isEnabled

@@ -14,6 +14,7 @@ import org.harmonia.player.domain.model.storage.StorageSource
 import org.harmonia.player.domain.scanner.MediaReconciliationEngine
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -31,6 +32,7 @@ class StorageVolumeLifecycleCoordinatorTest {
         override fun observeAllSources() = flowOf(fakeSources.toList())
         override fun observeEnabledSources() = flowOf(fakeSources.filter { it.isEnabled })
         override suspend fun getSourceById(id: String) = fakeSources.find { it.id == id }
+        override suspend fun getAllSources() = fakeSources.toList()
         override suspend fun upsertSource(source: StorageSourceEntity) {
             fakeSources.removeAll { it.id == source.id }
             fakeSources.add(source)
@@ -332,5 +334,87 @@ class StorageVolumeLifecycleCoordinatorTest {
 
         // Source must NOT be touched or affected by ambiguous events
         assertTrue(coordinator.runtimeStates.value["mediastore_vol_5555-6666"]?.isAvailable == true)
+    }
+
+    @Test
+    fun removable_volume_exact_production_persistence_format_matching() = testScope.runTest {
+        // Exact format produced by OfflineStorageSourceRepository.toEntity(): "$volumeName:$volumeUuid"
+        val domainVolume = StorageSource.MediaStoreVolume(
+            volumeName = "disk_ext",
+            volumeUuid = "9ABC-DEF0",
+            displayName = "External Drive"
+        )
+        val entity = StorageSourceEntity(
+            id = domainVolume.id,
+            type = "MEDIA_STORE_VOLUME",
+            uri = "${domainVolume.volumeName}:${domainVolume.volumeUuid}",
+            displayName = domainVolume.displayName,
+            isRemovable = domainVolume.isRemovable,
+            isEnabled = domainVolume.isAvailable
+        )
+        fakeSources.add(entity)
+        fakePlatformBridge.mountedVolumes.add("9abc-def0")
+
+        coordinator.revalidateAllSources()
+        assertTrue(coordinator.runtimeStates.value[domainVolume.id]?.isAvailable == true)
+
+        // Unmount by volume UUID (lowercase)
+        coordinator.onVolumeUnmounted("9abc-def0")
+        advanceUntilIdle()
+        assertFalse(coordinator.runtimeStates.value[domainVolume.id]?.isAvailable == true)
+
+        // Remount by canonical ID ("mediastore_vol_9abc-def0")
+        coordinator.onVolumeMounted("mediastore_vol_9abc-def0")
+        advanceUntilIdle()
+        assertTrue(coordinator.runtimeStates.value[domainVolume.id]?.isAvailable == true)
+    }
+
+    @Test
+    fun removable_volume_content_uri_or_missing_uuid_fails_safely_without_matching() = testScope.runTest {
+        val malformedSource = StorageSourceEntity(
+            id = "custom_removable_source",
+            type = "MEDIA_STORE_VOLUME",
+            uri = "content://media/external/audio/media", // Not a "volumeName:volumeUuid" pair
+            displayName = "Ambiguous Source",
+            isRemovable = true,
+            isEnabled = true
+        )
+        fakeSources.add(malformedSource)
+
+        coordinator.revalidateAllSources()
+
+        // Unmount event with an arbitrary UUID must NEVER match or touch the ambiguous source
+        coordinator.onVolumeUnmounted("1234-5678")
+        advanceUntilIdle()
+        assertNotNull(coordinator.runtimeStates.value["custom_removable_source"])
+    }
+
+    @Test
+    fun saf_uri_canonicalization_preserves_distinct_authorities_and_subtrees() {
+        val externalStorage = "content://com.android.externalstorage.documents/tree/primary%3AMusic"
+        val downloadsProvider = "content://com.android.providers.downloads.documents/tree/downloads"
+        val googleDrive = "content://com.google.android.apps.docs.storage/tree/primary%3AMusic"
+        val subfolder = "content://com.android.externalstorage.documents/tree/primary%3AMusic%2FRock"
+
+        val idExt = StorageSource.SafDocumentTree.deriveCanonicalId(externalStorage)
+        val idDownloads = StorageSource.SafDocumentTree.deriveCanonicalId(downloadsProvider)
+        val idDrive = StorageSource.SafDocumentTree.deriveCanonicalId(googleDrive)
+        val idSubfolder = StorageSource.SafDocumentTree.deriveCanonicalId(subfolder)
+
+        // Distinct authorities MUST produce distinct canonical IDs
+        assertTrue(idExt != idDownloads)
+        assertTrue(idExt != idDrive)
+
+        // Subtree paths MUST produce distinct canonical IDs
+        assertTrue(idExt != idSubfolder)
+
+        // Normalization variants of the same tree MUST produce identical canonical IDs
+        val trailingSlash = "content://com.android.externalstorage.documents/tree/primary%3AMusic/"
+        val upperScheme = "CONTENT://com.android.externalstorage.documents/tree/primary%3AMusic"
+        val whitespace = "  content://com.android.externalstorage.documents/tree/primary%3AMusic  "
+
+        assertEquals(idExt, StorageSource.SafDocumentTree.deriveCanonicalId(trailingSlash))
+        assertEquals(idExt, StorageSource.SafDocumentTree.deriveCanonicalId(upperScheme))
+        assertEquals(idExt, StorageSource.SafDocumentTree.deriveCanonicalId(whitespace))
     }
 }

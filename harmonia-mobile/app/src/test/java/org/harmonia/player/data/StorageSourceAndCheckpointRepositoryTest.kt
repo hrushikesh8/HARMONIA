@@ -26,6 +26,7 @@ class StorageSourceAndCheckpointRepositoryTest {
         override fun observeAllSources() = flowOf(sources.values.toList())
         override fun observeEnabledSources() = flowOf(sources.values.filter { it.isEnabled })
         override suspend fun getSourceById(id: String) = sources[id]
+        override suspend fun getAllSources() = sources.values.toList()
         override suspend fun upsertSource(source: StorageSourceEntity) { sources[source.id] = source }
         override suspend fun upsertSources(sources: List<StorageSourceEntity>) { sources.forEach { this.sources[it.id] = it } }
         override suspend fun updateSource(source: StorageSourceEntity) { sources[source.id] = source }
@@ -95,5 +96,75 @@ class StorageSourceAndCheckpointRepositoryTest {
 
         repo.resetCheckpoint("src-1")
         assertNull(repo.getCheckpoint("src-1"))
+    }
+
+    @Test
+    fun `re-registering legacy SAF source reuses existing ID and prevents duplicate rows`() = runBlocking {
+        val dao = FakeStorageSourceDao()
+        val repo = OfflineStorageSourceRepository(dao)
+
+        val legacyUri = "content://com.android.externalstorage.documents/tree/primary%3AMusic"
+        val legacyId = "saf_tree_${legacyUri.hashCode()}"
+        val legacyEntity = StorageSourceEntity(
+            id = legacyId,
+            type = "SAF_DOCUMENT_TREE",
+            uri = legacyUri,
+            displayName = "Music Folder",
+            isRemovable = false,
+            isEnabled = true,
+            lastScannedAt = 123456L
+        )
+        dao.upsertSource(legacyEntity)
+
+        // User reopens/re-registers the tree, producing a new domain object with canonical SHA-256 ID
+        val newRegistration = StorageSource.SafDocumentTree(
+            treeUri = legacyUri,
+            displayName = "Renamed Music Folder"
+        )
+        assertTrue(newRegistration.id != legacyId)
+        assertTrue(newRegistration.id.startsWith("saf_tree_"))
+
+        // Save re-registration
+        repo.saveSource(newRegistration)
+
+        // Must retain EXACTLY one source row in database
+        val allSources = dao.getAllSources()
+        assertEquals(1, allSources.size)
+
+        // The persisted source must retain the existing legacy ID
+        val persisted = allSources.first()
+        assertEquals(legacyId, persisted.id)
+        assertEquals("Renamed Music Folder", persisted.displayName)
+        assertEquals(123456L, persisted.lastScannedAt)
+
+        // Lookup via existing legacy ID retrieves it
+        val byLegacy = repo.getSourceById(legacyId)
+        assertNotNull(byLegacy)
+        assertEquals(legacyId, byLegacy?.id)
+
+        // Lookup via canonical SHA-256 ID alias also retrieves the same existing source
+        val byCanonical = repo.getSourceById(newRegistration.id)
+        assertNotNull(byCanonical)
+        assertEquals(legacyId, byCanonical?.id)
+    }
+
+    @Test
+    fun `distinct SAF trees are not conflated or merged`() = runBlocking {
+        val dao = FakeStorageSourceDao()
+        val repo = OfflineStorageSourceRepository(dao)
+
+        val uri1 = "content://com.android.externalstorage.documents/tree/primary%3AMusic"
+        val uri2 = "content://com.android.externalstorage.documents/tree/primary%3APodcasts"
+
+        val tree1 = StorageSource.SafDocumentTree(treeUri = uri1, displayName = "Music")
+        val tree2 = StorageSource.SafDocumentTree(treeUri = uri2, displayName = "Podcasts")
+
+        repo.saveSource(tree1)
+        repo.saveSource(tree2)
+
+        val allSources = dao.getAllSources()
+        assertEquals(2, allSources.size)
+        assertTrue(allSources.any { it.id == tree1.id })
+        assertTrue(allSources.any { it.id == tree2.id })
     }
 }

@@ -38,6 +38,47 @@ sealed interface StorageSource {
         companion object {
             fun normalizeVolumeUuid(volumeUuid: String): String = volumeUuid.trim().lowercase()
 
+            fun isValidVolumeUuid(uuid: String): Boolean {
+                val clean = uuid.trim()
+                if (clean.isBlank()) return false
+                if (clean.contains("/") || clean.contains("\\") || clean.contains("?") || clean.contains("&") || clean.contains(":")) {
+                    return false
+                }
+                return clean.length in 2..64 && clean.all { it.isLetterOrDigit() || it == '-' || it == '_' }
+            }
+
+            fun extractVolumeUuid(uri: String, id: String): String? {
+                val rawUri = uri.trim()
+                val cleanUri = if (rawUri.startsWith("mediastore_vol_", ignoreCase = true)) {
+                    rawUri.substring("mediastore_vol_".length).trim()
+                } else {
+                    rawUri
+                }
+
+                if (cleanUri.isNotBlank() && !cleanUri.startsWith("content:", ignoreCase = true) && !cleanUri.startsWith("file:", ignoreCase = true)) {
+                    if (cleanUri.contains(":")) {
+                        val candidate = cleanUri.substringAfter(":").trim()
+                        if (isValidVolumeUuid(candidate)) {
+                            return normalizeVolumeUuid(candidate)
+                        }
+                    } else if (isValidVolumeUuid(cleanUri)) {
+                        return normalizeVolumeUuid(cleanUri)
+                    }
+                }
+
+                val trimmedId = id.trim()
+                if (trimmedId.startsWith("mediastore_vol_", ignoreCase = true)) {
+                    val candidate = trimmedId.substring("mediastore_vol_".length).trim()
+                    if (isValidVolumeUuid(candidate)) {
+                        return normalizeVolumeUuid(candidate)
+                    }
+                } else if (isValidVolumeUuid(trimmedId)) {
+                    return normalizeVolumeUuid(trimmedId)
+                }
+
+                return null
+            }
+
             fun deriveCanonicalId(volumeUuid: String): String {
                 val clean = normalizeVolumeUuid(volumeUuid)
                 require(clean.isNotBlank()) { "Volume UUID cannot be blank for removable media store volume" }

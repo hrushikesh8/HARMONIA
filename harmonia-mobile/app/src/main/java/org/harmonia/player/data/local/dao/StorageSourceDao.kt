@@ -20,6 +20,9 @@ interface StorageSourceDao {
     @Query("SELECT * FROM mobile_storage_sources WHERE id = :id")
     suspend fun getSourceById(id: String): StorageSourceEntity?
 
+    @Query("SELECT * FROM mobile_storage_sources ORDER BY display_name ASC")
+    suspend fun getAllSources(): List<StorageSourceEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertSource(source: StorageSourceEntity)
 

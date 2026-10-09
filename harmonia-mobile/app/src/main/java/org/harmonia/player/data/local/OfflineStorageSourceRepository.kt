@@ -27,11 +27,75 @@ class OfflineStorageSourceRepository(
     }
 
     override suspend fun getSourceById(id: String): StorageSource? {
-        return storageSourceDao.getSourceById(id)?.toDomain()
+        val direct = storageSourceDao.getSourceById(id)
+        if (direct != null) return direct.toDomain()
+
+        // Fallback: resolve canonical or legacy aliases across existing sources
+        val all = storageSourceDao.getAllSources()
+        val matched = all.firstOrNull { entity ->
+            when (entity.type) {
+                "SAF_DOCUMENT_TREE" -> {
+                    entity.id == id ||
+                    entity.uri == id ||
+                    StorageSource.SafDocumentTree.deriveCanonicalId(entity.uri) == id ||
+                    StorageSource.SafDocumentTree.normalizeTreeUri(entity.uri) == StorageSource.SafDocumentTree.normalizeTreeUri(id)
+                }
+                "MEDIA_STORE_VOLUME" -> {
+                    val uuid = StorageSource.MediaStoreVolume.extractVolumeUuid(entity.uri, entity.id)
+                    uuid != null && (
+                        entity.id == id ||
+                        StorageSource.MediaStoreVolume.deriveCanonicalId(uuid) == id ||
+                        uuid == id.lowercase().removePrefix("mediastore_vol_")
+                    )
+                }
+                else -> entity.id == id
+            }
+        }
+        return matched?.toDomain()
     }
 
     override suspend fun saveSource(source: StorageSource) {
-        storageSourceDao.upsertSource(source.toEntity())
+        val allSources = storageSourceDao.getAllSources()
+        val existingMatch = when (source) {
+            is StorageSource.SafDocumentTree -> {
+                val normalizedTarget = StorageSource.SafDocumentTree.normalizeTreeUri(source.treeUri)
+                val canonicalTargetId = StorageSource.SafDocumentTree.deriveCanonicalId(source.treeUri)
+                allSources.firstOrNull { entity ->
+                    entity.type == "SAF_DOCUMENT_TREE" && (
+                        entity.id == source.id ||
+                        entity.id == canonicalTargetId ||
+                        entity.uri == source.treeUri ||
+                        StorageSource.SafDocumentTree.normalizeTreeUri(entity.uri) == normalizedTarget
+                    )
+                }
+            }
+            is StorageSource.MediaStoreVolume -> {
+                val targetUuid = StorageSource.MediaStoreVolume.normalizeVolumeUuid(source.volumeUuid)
+                allSources.firstOrNull { entity ->
+                    if (entity.type != "MEDIA_STORE_VOLUME") return@firstOrNull false
+                    val entityUuid = StorageSource.MediaStoreVolume.extractVolumeUuid(entity.uri, entity.id)
+                    entityUuid != null && entityUuid == targetUuid
+                }
+            }
+            is StorageSource.MediaStorePrimary -> {
+                allSources.firstOrNull { it.type == "MEDIA_STORE_PRIMARY" || it.id == source.id }
+            }
+            is StorageSource.InternalSyncStorage -> {
+                allSources.firstOrNull { it.type == "INTERNAL_SYNC" || it.id == source.id }
+            }
+        }
+
+        if (existingMatch != null) {
+            // Reuse existing source: retain its existing ID, preventing duplicate rows
+            // and preserving all LocalFile foreign-key associations
+            val entityToSave = source.toEntity().copy(
+                id = existingMatch.id,
+                lastScannedAt = existingMatch.lastScannedAt
+            )
+            storageSourceDao.upsertSource(entityToSave)
+        } else {
+            storageSourceDao.upsertSource(source.toEntity())
+        }
     }
 
     override suspend fun setSourceEnabled(id: String, isEnabled: Boolean) {
@@ -51,13 +115,16 @@ class OfflineStorageSourceRepository(
                 isAvailable = isEnabled
             )
             "MEDIA_STORE_VOLUME" -> {
-                val parts = uri.split(":", limit = 2)
-                val volumeName = parts.getOrNull(0) ?: id
-                val volumeUuid = parts.getOrNull(1) ?: id
+                val extractedUuid = StorageSource.MediaStoreVolume.extractVolumeUuid(uri, id) ?: id
+                val volumeName = if (uri.contains(":") && !uri.startsWith("content:", ignoreCase = true) && !uri.startsWith("file:", ignoreCase = true)) {
+                    uri.substringBefore(":").trim().ifBlank { displayName }
+                } else {
+                    displayName.ifBlank { extractedUuid }
+                }
                 StorageSource.MediaStoreVolume(
                     id = id,
                     volumeName = volumeName,
-                    volumeUuid = volumeUuid,
+                    volumeUuid = extractedUuid,
                     displayName = displayName,
                     isRemovable = isRemovable,
                     isAvailable = isEnabled
