@@ -22,6 +22,16 @@ import org.harmonia.player.domain.model.LocalFileAvailability
 import org.harmonia.player.domain.model.Track
 import org.harmonia.player.presentation.MainAppContainer
 import org.harmonia.player.presentation.playback.PlaybackViewModel
+import org.harmonia.player.core.di.ServiceLocator
+import org.harmonia.player.data.local.permission.AndroidStoragePermissionChecker
+import org.harmonia.player.domain.model.scanner.ScanMode
+import org.harmonia.player.domain.model.scanner.ScanProgress
+import org.harmonia.player.domain.model.scanner.ScanProgressStatus
+import org.harmonia.player.domain.model.storage.StorageSource
+import org.harmonia.player.domain.model.storage.permission.StoragePermissionChecker
+import org.harmonia.player.domain.model.storage.permission.StoragePermissionState
+import org.harmonia.player.domain.scanner.MediaReconciliationEngine
+import kotlinx.coroutines.flow.flow
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -42,6 +52,21 @@ class M3EndToEndIntegrationTest {
     private lateinit var testPort: TestPort
     private lateinit var testTrackRepo: TestTrackRepo
     private lateinit var playbackViewModel: PlaybackViewModel
+    private lateinit var fakePermChecker: FakePermissionChecker
+    private lateinit var fakeReconciliationEngine: FakeReconciliationEngine
+
+    private class FakePermissionChecker(
+        var state: StoragePermissionState = StoragePermissionState.GRANTED
+    ) : StoragePermissionChecker {
+        override fun getPermissionState(): StoragePermissionState = state
+        override fun canScanAudioMedia(): Boolean = state == StoragePermissionState.GRANTED
+    }
+
+    private class FakeReconciliationEngine : MediaReconciliationEngine {
+        override fun scanSource(source: StorageSource, mode: ScanMode) = flow {
+            emit(ScanProgress(sourceId = source.id, status = ScanProgressStatus.COMPLETED))
+        }
+    }
 
     private val track1 = Track(
         id = "e2e-track-1",
@@ -78,6 +103,12 @@ class M3EndToEndIntegrationTest {
         db.playlistDao().deleteAllPlaylists()
         db.playbackStateDao().clearQueue()
 
+        ServiceLocator.initialize(context)
+        fakePermChecker = FakePermissionChecker(StoragePermissionState.GRANTED)
+        ServiceLocator.setStoragePermissionCheckerForTesting(fakePermChecker)
+        fakeReconciliationEngine = FakeReconciliationEngine()
+        ServiceLocator.setMediaReconciliationEngineForTesting(fakeReconciliationEngine)
+
         testPort = TestPort()
         testTrackRepo = TestTrackRepo()
         testTrackRepo.tracks[track1.id] = track1
@@ -91,10 +122,15 @@ class M3EndToEndIntegrationTest {
         db.trackDao().deleteAllTracks()
         db.playlistDao().deleteAllPlaylists()
         db.playbackStateDao().clearQueue()
+        ServiceLocator.setStoragePermissionCheckerForTesting(
+            AndroidStoragePermissionChecker(context)
+        )
     }
 
     @Test
     fun flowA_fresh_install_empty_library_usable_without_crash() {
+        fakePermChecker.state = StoragePermissionState.GRANTED
+
         composeTestRule.setContent {
             HarmoniaTheme {
                 MainAppContainer(playbackViewModel = playbackViewModel)
@@ -108,13 +144,16 @@ class M3EndToEndIntegrationTest {
         composeTestRule.onNodeWithText("HARMONIA").assertIsDisplayed()
         composeTestRule.onAllNodesWithText("Welcome to Harmonia").onFirst().assertIsDisplayed()
 
-        // 2. Switch to Library tab
+        // 2. Switch to Library tab -> displays empty library state
         composeTestRule.onAllNodesWithText("Library").onFirst().performClick()
         composeTestRule.waitUntil(5000) {
             composeTestRule.onAllNodesWithText("LIBRARY").fetchSemanticsNodes().isNotEmpty()
         }
         composeTestRule.onNodeWithText("LIBRARY").assertIsDisplayed()
-        composeTestRule.onAllNodesWithText("No tracks found in library", substring = true).onFirst().assertIsDisplayed()
+        composeTestRule.waitUntil(5000) {
+            composeTestRule.onAllNodesWithText("No audio files found").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithText("No audio files found").assertIsDisplayed()
 
         // 3. Switch to Search tab
         composeTestRule.onAllNodesWithText("Search").onFirst().performClick()
@@ -125,6 +164,52 @@ class M3EndToEndIntegrationTest {
         composeTestRule.onAllNodesWithText("Type to search local catalog", substring = true).onFirst().assertIsDisplayed()
 
         // 4. Switch to Playlists tab
+        composeTestRule.onAllNodesWithText("Playlists").onFirst().performClick()
+        composeTestRule.waitUntil(5000) {
+            composeTestRule.onAllNodesWithText("PLAYLISTS").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithText("PLAYLISTS").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("No Playlists Yet", substring = true).onFirst().assertIsDisplayed()
+    }
+
+    @Test
+    fun flowA_fresh_install_without_permission_shows_onboarding_without_crash() {
+        fakePermChecker.state = StoragePermissionState.DENIED
+
+        composeTestRule.setContent {
+            HarmoniaTheme {
+                MainAppContainer(playbackViewModel = playbackViewModel)
+            }
+        }
+
+        // 1. Home destination renders empty state cleanly
+        composeTestRule.waitUntil(5000) {
+            composeTestRule.onAllNodesWithText("HARMONIA").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithText("HARMONIA").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Welcome to Harmonia").onFirst().assertIsDisplayed()
+
+        // 2. Switch to Library tab -> displays permission onboarding
+        composeTestRule.onAllNodesWithText("Library").onFirst().performClick()
+        composeTestRule.waitUntil(5000) {
+            composeTestRule.onAllNodesWithText("LIBRARY").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithText("LIBRARY").assertIsDisplayed()
+        composeTestRule.waitUntil(5000) {
+            composeTestRule.onAllNodesWithText("Audio Permission Required").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithText("Audio Permission Required").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Grant audio permission").assertIsDisplayed()
+
+        // 3. Switch to Search tab -> unaffected by storage permission
+        composeTestRule.onAllNodesWithText("Search").onFirst().performClick()
+        composeTestRule.waitUntil(5000) {
+            composeTestRule.onAllNodesWithText("SEARCH").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithText("SEARCH").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Type to search local catalog", substring = true).onFirst().assertIsDisplayed()
+
+        // 4. Switch to Playlists tab -> unaffected by storage permission
         composeTestRule.onAllNodesWithText("Playlists").onFirst().performClick()
         composeTestRule.waitUntil(5000) {
             composeTestRule.onAllNodesWithText("PLAYLISTS").fetchSemanticsNodes().isNotEmpty()

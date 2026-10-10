@@ -141,6 +141,20 @@ class HarmoniaNavigationAndLibraryUiTest {
 
     @Test
     fun library_screen_renders_tabs_and_sorting_dialog() {
+        runBlocking {
+            val context = ApplicationProvider.getApplicationContext<Context>()
+            val db = HarmoniaDatabase.getInstance(context)
+            db.trackDao().upsertTrack(
+                TrackEntity(
+                    id = "lib-trk-1",
+                    title = "Library Test Track",
+                    durationSec = 180.0,
+                    createdAt = 1000L,
+                    updatedAt = 1000L
+                )
+            )
+        }
+
         composeTestRule.setContent {
             HarmoniaTheme {
                 LibraryScreen()
@@ -152,7 +166,10 @@ class HarmoniaNavigationAndLibraryUiTest {
         }
 
         // Verify tabs
-        composeTestRule.onNodeWithText("Tracks (0)").assertIsDisplayed()
+        composeTestRule.waitUntil(5000) {
+            composeTestRule.onAllNodesWithText("Tracks (1)").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onNodeWithText("Tracks (1)").assertIsDisplayed()
         composeTestRule.onNodeWithText("Albums (0)").assertIsDisplayed()
         composeTestRule.onNodeWithText("Artists (0)").assertIsDisplayed()
 

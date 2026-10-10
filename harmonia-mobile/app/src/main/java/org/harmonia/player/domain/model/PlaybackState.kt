@@ -28,4 +28,8 @@ data class PlaybackState(
     val volumeScalar: Float = 1.0f,
     val errorMessage: String? = null,
     val updatedAt: Long = System.currentTimeMillis()
-)
+) {
+    companion object {
+        const val STORAGE_DISCONNECTED_MESSAGE = "Storage volume disconnected"
+    }
+}

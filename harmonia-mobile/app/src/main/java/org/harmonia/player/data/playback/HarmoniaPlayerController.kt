@@ -78,7 +78,7 @@ class HarmoniaPlayerController(
     private var storageObservationJob: Job? = null
 
     companion object {
-        const val STORAGE_DISCONNECTED_MESSAGE = "Storage volume disconnected"
+        const val STORAGE_DISCONNECTED_MESSAGE = PlaybackState.STORAGE_DISCONNECTED_MESSAGE
     }
 
     private fun startPositionPolling(controller: Player) {

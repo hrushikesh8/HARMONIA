@@ -37,6 +37,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -170,6 +172,52 @@ fun NowPlayingSheet(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+
+                // Storage Disconnection / Playback Error Banner
+                if (playbackState.errorMessage != null) {
+                    val errorMsg = playbackState.errorMessage
+                    val isStorageDisconnected = errorMsg == PlaybackState.STORAGE_DISCONNECTED_MESSAGE
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(StudioSlate)
+                            .semantics {
+                                contentDescription = if (isStorageDisconnected) {
+                                    PlaybackState.STORAGE_DISCONNECTED_MESSAGE
+                                } else {
+                                    errorMsg
+                                }
+                            }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = HarmoniaIcons.Settings,
+                            contentDescription = null,
+                            tint = AcousticTeal,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (isStorageDisconnected) "Storage Disconnected" else "Playback Error",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = PureSignalWhite
+                            )
+                            Text(
+                                text = if (isStorageDisconnected) {
+                                    "The storage volume for this track is unavailable. Reconnect storage to resume playback."
+                                } else {
+                                    errorMsg
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MutedSlate
+                            )
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(20.dp))
 

@@ -38,6 +38,7 @@ data class TrackWithDetails(
             LocalFile(
                 id = it.id,
                 trackId = it.trackId,
+                sourceId = it.sourceId,
                 storageType = try {
                     StorageType.valueOf(it.storageType)
                 } catch (e: Exception) {
@@ -63,6 +64,7 @@ data class TrackWithDetails(
             primaryLocalFile.availabilityStatus == "AVAILABLE" -> LocalFileAvailability.AVAILABLE_VERIFIED
             primaryLocalFile.availabilityStatus == "MISSING" -> LocalFileAvailability.MISSING
             primaryLocalFile.availabilityStatus == "CORRUPT" -> LocalFileAvailability.CORRUPT
+            primaryLocalFile.availabilityStatus == "STORAGE_UNMOUNTED" -> LocalFileAvailability.UNAVAILABLE
             else -> LocalFileAvailability.UNVERIFIED
         }
 

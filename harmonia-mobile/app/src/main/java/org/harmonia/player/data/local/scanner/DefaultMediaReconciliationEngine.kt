@@ -21,7 +21,10 @@ import org.harmonia.player.domain.model.storage.permission.StoragePermissionChec
 import org.harmonia.player.domain.model.storage.permission.StoragePermissionState
 import org.harmonia.player.domain.scanner.MediaReconciliationEngine
 import org.harmonia.player.domain.scanner.MediaSourceScanner
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Concrete implementation of MediaReconciliationEngine for Harmonia Mobile.
@@ -42,8 +45,11 @@ class DefaultMediaReconciliationEngine(
     private val metadataReader: AudioMetadataReader,
     private val permissionChecker: StoragePermissionChecker,
     private val mediaStoreScanner: MediaSourceScanner,
-    private val safTreeScanner: MediaSourceScanner
+    private val safTreeScanner: MediaSourceScanner,
+    private val scanCoordinator: org.harmonia.player.domain.scanner.SourceScanCoordinator = org.harmonia.player.domain.scanner.SourceScanCoordinator()
 ) : MediaReconciliationEngine {
+
+    fun getCoordinator(): org.harmonia.player.domain.scanner.SourceScanCoordinator = scanCoordinator
 
     override fun scanSource(
         source: StorageSource,
@@ -59,8 +65,9 @@ class DefaultMediaReconciliationEngine(
             return@flow
         }
 
-        // 2. Discovery Phase
-        emit(progress.copy(status = ScanProgressStatus.DISCOVERING))
+        scanCoordinator.withSourceLock(source.id) {
+            // 2. Discovery Phase
+            emit(progress.copy(status = ScanProgressStatus.DISCOVERING))
 
         val checkpoint = database.scanCheckpointDao().getCheckpoint(source.id)
         val lastGen = if (mode == ScanMode.INCREMENTAL) checkpoint?.lastGeneration ?: 0L else 0L
@@ -74,7 +81,7 @@ class DefaultMediaReconciliationEngine(
             scanner.discoverMedia(source, mode, lastGen)
         } catch (t: Throwable) {
             emit(progress.copy(status = ScanProgressStatus.FAILED, errorMessage = t.message))
-            return@flow
+            return@withSourceLock
         }
 
         progress = progress.copy(
@@ -384,7 +391,8 @@ class DefaultMediaReconciliationEngine(
             )
             emit(progress)
         }
-    }.flowOn(Dispatchers.IO)
+    }
+}.flowOn(Dispatchers.IO)
 
     private fun isLocatorAccessible(context: Context, locator: String): Boolean {
         return try {

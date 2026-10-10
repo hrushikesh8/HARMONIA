@@ -65,6 +65,9 @@ object ServiceLocator {
     @Volatile
     private var playbackPortInstance: PlaybackPort? = null
 
+    @Volatile
+    private var safPermissionDelegateInstance: org.harmonia.player.domain.model.storage.permission.SafPermissionDelegate? = null
+
     fun initialize(context: Context) {
         if (database == null) {
             database = HarmoniaDatabase.getInstance(context)
@@ -99,6 +102,9 @@ object ServiceLocator {
                 reconciliationEngine = reconEngine,
                 platformBridge = platformBridge
             )
+        }
+        if (safPermissionDelegateInstance == null) {
+            safPermissionDelegateInstance = org.harmonia.player.data.local.permission.AndroidSafPermissionDelegate(context.applicationContext)
         }
     }
 
@@ -249,6 +255,14 @@ object ServiceLocator {
         playbackPortInstance = port
     }
 
+    fun getSafPermissionDelegate(): org.harmonia.player.domain.model.storage.permission.SafPermissionDelegate {
+        return safPermissionDelegateInstance ?: error("SafPermissionDelegate has not been initialized in ServiceLocator!")
+    }
+
+    fun setSafPermissionDelegateForTesting(delegate: org.harmonia.player.domain.model.storage.permission.SafPermissionDelegate) {
+        safPermissionDelegateInstance = delegate
+    }
+
     fun reset() {
         database?.close()
         database = null
@@ -267,5 +281,6 @@ object ServiceLocator {
         mediaReconciliationEngineInstance = null
         storageVolumeLifecycleCoordinatorInstance = null
         playbackPortInstance = null
+        safPermissionDelegateInstance = null
     }
 }
