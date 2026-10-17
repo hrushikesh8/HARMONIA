@@ -51,6 +51,9 @@ object ServiceLocator {
     private var scanCheckpointRepositoryInstance: org.harmonia.player.domain.repository.ScanCheckpointRepository? = null
 
     @Volatile
+    private var personalizationRepositoryInstance: org.harmonia.player.domain.repository.PersonalizationRepository? = null
+
+    @Volatile
     private var storagePermissionCheckerInstance: org.harmonia.player.domain.model.storage.permission.StoragePermissionChecker? = null
 
     @Volatile
@@ -68,8 +71,22 @@ object ServiceLocator {
     @Volatile
     private var safPermissionDelegateInstance: org.harmonia.player.domain.model.storage.permission.SafPermissionDelegate? = null
 
+    @Volatile
+    private var equalizerUserIntentSourceInstance: org.harmonia.player.domain.model.equalizer.EqualizerUserIntentSource? = null
+
+    private val audioEqualizerCoordinatorFlow = kotlinx.coroutines.flow.MutableStateFlow<org.harmonia.player.domain.model.equalizer.AudioEqualizerCoordinator?>(null)
+
     fun initialize(context: Context) {
+        if (equalizerUserIntentSourceInstance == null) {
+            val prefs = context.applicationContext.getSharedPreferences(
+                org.harmonia.player.data.local.preferences.SharedPreferencesEqualizerUserIntentSource.PREFERENCES_NAME,
+                Context.MODE_PRIVATE
+            )
+            equalizerUserIntentSourceInstance = org.harmonia.player.data.local.preferences.SharedPreferencesEqualizerUserIntentSource(prefs)
+        }
+
         if (database == null) {
+
             database = HarmoniaDatabase.getInstance(context)
         }
         if (storagePermissionCheckerInstance == null) {
@@ -123,6 +140,7 @@ object ServiceLocator {
         searchRepositoryInstance = null
         storageSourceRepositoryInstance = null
         scanCheckpointRepositoryInstance = null
+        personalizationRepositoryInstance = null
         playbackPortInstance = null
     }
 
@@ -219,6 +237,23 @@ object ServiceLocator {
         }
     }
 
+    fun getPersonalizationDao(): org.harmonia.player.data.local.dao.PersonalizationDao {
+        return getDatabase().personalizationDao()
+    }
+
+    fun getPersonalizationRepository(): org.harmonia.player.domain.repository.PersonalizationRepository {
+        return personalizationRepositoryInstance ?: synchronized(this) {
+            personalizationRepositoryInstance ?: org.harmonia.player.data.local.OfflinePersonalizationRepository(
+                personalizationDao = getDatabase().personalizationDao(),
+                trackDao = getDatabase().trackDao()
+            ).also { personalizationRepositoryInstance = it }
+        }
+    }
+
+    fun setPersonalizationRepositoryForTesting(repository: org.harmonia.player.domain.repository.PersonalizationRepository?) {
+        personalizationRepositoryInstance = repository
+    }
+
     fun getStoragePermissionChecker(): org.harmonia.player.domain.model.storage.permission.StoragePermissionChecker {
         return storagePermissionCheckerInstance ?: error("StoragePermissionChecker has not been initialized in ServiceLocator!")
     }
@@ -263,6 +298,34 @@ object ServiceLocator {
         safPermissionDelegateInstance = delegate
     }
 
+    fun getEqualizerUserIntentSource(): org.harmonia.player.domain.model.equalizer.EqualizerUserIntentSource {
+        return equalizerUserIntentSourceInstance ?: synchronized(this) {
+            equalizerUserIntentSourceInstance ?: org.harmonia.player.service.equalizer.InMemoryEqualizerUserIntentSource().also {
+                equalizerUserIntentSourceInstance = it
+            }
+        }
+    }
+
+    fun setEqualizerUserIntentSourceForTesting(source: org.harmonia.player.domain.model.equalizer.EqualizerUserIntentSource) {
+        equalizerUserIntentSourceInstance = source
+    }
+
+    fun getAudioEqualizerCoordinator(): org.harmonia.player.domain.model.equalizer.AudioEqualizerCoordinator? {
+        return audioEqualizerCoordinatorFlow.value
+    }
+
+    fun observeAudioEqualizerCoordinator(): kotlinx.coroutines.flow.StateFlow<org.harmonia.player.domain.model.equalizer.AudioEqualizerCoordinator?> {
+        return audioEqualizerCoordinatorFlow
+    }
+
+    fun setAudioEqualizerCoordinator(coordinator: org.harmonia.player.domain.model.equalizer.AudioEqualizerCoordinator?) {
+        audioEqualizerCoordinatorFlow.value = coordinator
+    }
+
+    fun clearAudioEqualizerCoordinator(coordinator: org.harmonia.player.domain.model.equalizer.AudioEqualizerCoordinator): Boolean {
+        return audioEqualizerCoordinatorFlow.compareAndSet(coordinator, null)
+    }
+
     fun reset() {
         database?.close()
         database = null
@@ -276,11 +339,14 @@ object ServiceLocator {
         searchRepositoryInstance = null
         storageSourceRepositoryInstance = null
         scanCheckpointRepositoryInstance = null
+        personalizationRepositoryInstance = null
         storagePermissionCheckerInstance = null
         audioMetadataReaderInstance = null
         mediaReconciliationEngineInstance = null
         storageVolumeLifecycleCoordinatorInstance = null
         playbackPortInstance = null
         safPermissionDelegateInstance = null
+        equalizerUserIntentSourceInstance = null
+        audioEqualizerCoordinatorFlow.value = null
     }
 }

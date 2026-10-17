@@ -24,6 +24,13 @@ interface StorageVolumeLifecycleCoordinator {
 
     suspend fun revalidateSource(source: StorageSource): SourceRuntimeState
 
+    /**
+     * Awaits completion of the initial storage readiness validation.
+     * Returns true if initial validation completed successfully, false if it failed.
+     * Propagates CancellationException if the calling coroutine was cancelled.
+     */
+    suspend fun awaitInitialReadiness(): Boolean
+
     fun startMonitoring()
 
     fun stopMonitoring()

@@ -149,4 +149,17 @@ class OfflinePlaylistRepository(
         }
         playlistDao.replacePlaylistItems(playlistId, updatedEntities)
     }
+
+    override suspend fun getPlaylistsPaged(limit: Int, offset: Int): List<Playlist> {
+        return playlistDao.getPlaylistsWithCountPaged(limit, offset).map {
+            it.playlist.toDomain(trackCount = it.trackCount)
+        }
+    }
+
+    override suspend fun getPlaylistItemsPaged(playlistId: String, limit: Int, offset: Int): List<PlaylistItem> {
+        return playlistDao.getPlaylistItemsPaged(playlistId, limit, offset).map { entity ->
+            val track = trackDao.getTrackById(entity.trackId)?.toDomainTrack()
+            entity.toDomain().copy(track = track)
+        }
+    }
 }

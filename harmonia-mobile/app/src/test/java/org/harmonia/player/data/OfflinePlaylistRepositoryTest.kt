@@ -112,6 +112,22 @@ class FakePlaylistDao : PlaylistDao {
             }
         }
     }
+
+    override suspend fun getPlaylistsWithCountPaged(limit: Int, offset: Int): List<org.harmonia.player.data.local.dao.PlaylistWithCount> {
+        if (offset >= playlists.size) return emptyList()
+        return playlists.subList(offset, (offset + limit).coerceAtMost(playlists.size)).map { entity ->
+            org.harmonia.player.data.local.dao.PlaylistWithCount(
+                playlist = entity,
+                trackCount = items.count { it.playlistId == entity.id }
+            )
+        }
+    }
+
+    override suspend fun getPlaylistItemsPaged(playlistId: String, limit: Int, offset: Int): List<PlaylistItemEntity> {
+        val filtered = items.filter { it.playlistId == playlistId }.sortedBy { it.position }
+        if (offset >= filtered.size) return emptyList()
+        return filtered.subList(offset, (offset + limit).coerceAtMost(filtered.size))
+    }
 }
 
 class OfflinePlaylistRepositoryTest {

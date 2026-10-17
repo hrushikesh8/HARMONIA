@@ -21,4 +21,7 @@ interface PlaylistRepository {
     suspend fun addTracksToPlaylist(playlistId: String, trackIds: List<String>): List<PlaylistItem>
     suspend fun removeTrackFromPlaylist(playlistId: String, trackId: String)
     suspend fun reorderPlaylistItem(playlistId: String, fromPosition: Int, toPosition: Int)
+
+    suspend fun getPlaylistsPaged(limit: Int, offset: Int): List<Playlist> = emptyList()
+    suspend fun getPlaylistItemsPaged(playlistId: String, limit: Int, offset: Int): List<PlaylistItem> = emptyList()
 }

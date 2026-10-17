@@ -180,6 +180,7 @@ private class FakeStorageVolumeLifecycleCoordinator : StorageVolumeLifecycleCoor
             hasPermission = true
         )
     }
+    override suspend fun awaitInitialReadiness(): Boolean = true
     override fun startMonitoring() {}
     override fun stopMonitoring() {}
 }

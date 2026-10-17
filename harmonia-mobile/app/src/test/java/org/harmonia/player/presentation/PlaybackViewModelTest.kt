@@ -125,6 +125,36 @@ class FakePlaybackPort : PlaybackPort {
     override fun setVolume(volume: Float) {
         lastVolume = volume
     }
+
+    val _sleepTimerState = MutableStateFlow(org.harmonia.player.domain.model.audio.SleepTimerState())
+    override val sleepTimerState = _sleepTimerState
+
+    var startSleepTimerDurationCalled: Long? = null
+    var startSleepTimerEndOfTrackCalled: Boolean = false
+    var cancelSleepTimerCalled: Boolean = false
+
+    override fun startSleepTimer(durationMs: Long) {
+        startSleepTimerDurationCalled = durationMs
+        _sleepTimerState.value = org.harmonia.player.domain.model.audio.SleepTimerState(
+            isActive = true,
+            remainingDurationMs = durationMs,
+            targetDurationMs = durationMs,
+            mode = org.harmonia.player.domain.model.audio.SleepTimerMode.DURATION
+        )
+    }
+
+    override fun startSleepTimerEndOfTrack() {
+        startSleepTimerEndOfTrackCalled = true
+        _sleepTimerState.value = org.harmonia.player.domain.model.audio.SleepTimerState(
+            isActive = true,
+            mode = org.harmonia.player.domain.model.audio.SleepTimerMode.END_OF_TRACK
+        )
+    }
+
+    override fun cancelSleepTimer() {
+        cancelSleepTimerCalled = true
+        _sleepTimerState.value = org.harmonia.player.domain.model.audio.SleepTimerState(isActive = false)
+    }
 }
 
 class FakeTrackRepository : TrackRepository {
@@ -312,5 +342,32 @@ class PlaybackViewModelTest {
         assertEquals("Playback decoder initialization failed", state.playbackState.errorMessage)
         assertFalse(state.playbackState.isPlaying)
         assertNull(state.currentTrack)
+    }
+
+    @Test
+    fun `sleep timer presets and cancellation delegate to playback port and update ui state`() = runTest(testDispatcher) {
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect() }
+
+        assertFalse(viewModel.uiState.value.sleepTimerState.isActive)
+
+        // Set preset 30 minutes
+        viewModel.startSleepTimer(org.harmonia.player.domain.model.audio.SleepTimerPreset.MINUTES_30)
+        advanceUntilIdle()
+        assertEquals(30 * 60 * 1000L, fakePlaybackPort.startSleepTimerDurationCalled)
+        assertTrue(viewModel.uiState.value.sleepTimerState.isActive)
+        assertEquals(30 * 60 * 1000L, viewModel.uiState.value.sleepTimerState.remainingDurationMs)
+
+        // Set End of Track
+        viewModel.startSleepTimer(org.harmonia.player.domain.model.audio.SleepTimerPreset.END_OF_TRACK)
+        advanceUntilIdle()
+        assertTrue(fakePlaybackPort.startSleepTimerEndOfTrackCalled)
+        assertTrue(viewModel.uiState.value.sleepTimerState.isActive)
+        assertEquals(org.harmonia.player.domain.model.audio.SleepTimerMode.END_OF_TRACK, viewModel.uiState.value.sleepTimerState.mode)
+
+        // Cancel
+        viewModel.cancelSleepTimer()
+        advanceUntilIdle()
+        assertTrue(fakePlaybackPort.cancelSleepTimerCalled)
+        assertFalse(viewModel.uiState.value.sleepTimerState.isActive)
     }
 }

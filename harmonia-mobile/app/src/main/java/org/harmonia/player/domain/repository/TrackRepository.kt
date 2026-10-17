@@ -36,4 +36,29 @@ interface TrackRepository {
      * Deletes a track by ID.
      */
     suspend fun deleteTrack(id: String)
+
+    /**
+     * Retrieves a paginated slice of tracks sorted deterministically by title, id.
+     */
+    suspend fun getTracksPaged(limit: Int, offset: Int): List<Track> = emptyList()
+
+    /**
+     * Retrieves tracks for an album paginated and sorted by disc, track number, title, id.
+     */
+    suspend fun getTracksByAlbumPaged(albumId: String, limit: Int, offset: Int): List<Track> = emptyList()
+
+    /**
+     * Retrieves all tracks for an album sorted deterministically for container playback.
+     */
+    suspend fun getTracksByAlbum(albumId: String): List<Track> = emptyList()
+
+    /**
+     * Retrieves tracks for an artist paginated and sorted by album, disc, track number, title, id.
+     */
+    suspend fun getTracksByArtistPaged(artistId: String, limit: Int, offset: Int): List<Track> = emptyList()
+
+    /**
+     * Retrieves all tracks for an artist sorted deterministically for container playback.
+     */
+    suspend fun getTracksByArtist(artistId: String): List<Track> = emptyList()
 }

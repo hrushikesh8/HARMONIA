@@ -9,6 +9,7 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -28,6 +29,9 @@ import org.harmonia.player.domain.model.PlaybackStatus
 import org.harmonia.player.domain.model.QueueItem
 import org.harmonia.player.domain.model.RepeatMode
 import org.harmonia.player.domain.model.Track
+import org.harmonia.player.domain.model.audio.MonotonicClock
+import org.harmonia.player.domain.model.audio.SleepTimerMode
+import org.harmonia.player.domain.model.audio.SleepTimerState
 import org.harmonia.player.domain.model.storage.lifecycle.SourceRuntimeState
 import org.harmonia.player.domain.model.storage.lifecycle.StorageVolumeLifecycleCoordinator
 import org.harmonia.player.domain.playback.PlaybackPort
@@ -51,7 +55,9 @@ class HarmoniaPlayerController(
     private val storageVolumeLifecycleCoordinator: StorageVolumeLifecycleCoordinator? = null,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob()),
     private val playerOverride: Player? = null,
-    private val enablePositionPolling: Boolean = true
+    private val enablePositionPolling: Boolean = true,
+    private val monotonicClock: MonotonicClock = MonotonicClock.DEFAULT,
+    private val timerDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) : PlaybackPort {
 
     private val _playbackState = MutableStateFlow(PlaybackState())
@@ -59,6 +65,12 @@ class HarmoniaPlayerController(
 
     private val _queue = MutableStateFlow<List<QueueItem>>(emptyList())
     override val queue: StateFlow<List<QueueItem>> = _queue.asStateFlow()
+
+    private val _sleepTimerState = MutableStateFlow(SleepTimerState())
+    override val sleepTimerState: StateFlow<SleepTimerState> = _sleepTimerState.asStateFlow()
+
+    private var sleepTimerJob: Job? = null
+    private var baselineVolume: Float = 1.0f
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var mediaController: Player? = null
@@ -79,6 +91,15 @@ class HarmoniaPlayerController(
 
     companion object {
         const val STORAGE_DISCONNECTED_MESSAGE = PlaybackState.STORAGE_DISCONNECTED_MESSAGE
+        const val TRACK_PREFIX = "track:"
+
+        fun extractDatabaseTrackId(mediaId: String): String {
+            return if (mediaId.startsWith(TRACK_PREFIX)) {
+                mediaId.removePrefix(TRACK_PREFIX)
+            } else {
+                mediaId
+            }
+        }
     }
 
     private fun startPositionPolling(controller: Player) {
@@ -145,6 +166,7 @@ class HarmoniaPlayerController(
     }
 
     private fun handleStorageDisconnection() {
+        cancelSleepTimer()
         val alreadyDisconnected = _playbackState.value.errorMessage == STORAGE_DISCONNECTED_MESSAGE
         val isPaused = mediaController?.playWhenReady == false
 
@@ -200,6 +222,9 @@ class HarmoniaPlayerController(
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 updateStateFromController(controller)
                 if (!playWhenReady) {
+                    if (_sleepTimerState.value.isActive) {
+                        restoreVolumeToBaseline()
+                    }
                     if (reason != Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM &&
                         controller.playbackState != Player.STATE_ENDED &&
                         _playbackState.value.currentTrackId != null
@@ -218,6 +243,12 @@ class HarmoniaPlayerController(
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 updateStateFromController(controller)
+                if (isPlaying && _sleepTimerState.value.isActive) {
+                    val fadeRatio = calculateCurrentFadeRatio()
+                    val attenuated = baselineVolume * fadeRatio
+                    mediaController?.volume = attenuated
+                    _playbackState.value = _playbackState.value.copy(volumeScalar = attenuated)
+                }
                 val currentTrackId = _playbackState.value.currentTrackId
                 if (currentTrackId != null && isPlaying) {
                     if (wasExplicitlyPaused) {
@@ -232,6 +263,9 @@ class HarmoniaPlayerController(
                 if (state == Player.STATE_ENDED) {
                     wasExplicitlyPaused = false
                     checkAndRecordCompletion()
+                    if (_sleepTimerState.value.isActive && _sleepTimerState.value.mode == SleepTimerMode.END_OF_TRACK) {
+                        completeSleepTimer()
+                    }
                 }
             }
 
@@ -240,25 +274,43 @@ class HarmoniaPlayerController(
                 hasRecordedCompletion = false
                 wasExplicitlyPaused = false
 
+                if (_sleepTimerState.value.isActive && _sleepTimerState.value.mode == SleepTimerMode.END_OF_TRACK) {
+                    if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT) {
+                        completeSleepTimer()
+                    } else {
+                        // User manually skipped/seeked to another track: re-bind to the new track and restore baseline volume
+                        restoreVolumeToBaseline()
+                    }
+                }
+
                 if (mediaItem != null) {
-                    val trackId = mediaItem.mediaId
+                    val rawTrackId = extractDatabaseTrackId(mediaItem.mediaId)
                     val queueIdx = controller.currentMediaItemIndex
 
                     scope.launch {
-                        val track = trackRepository.getTrackById(trackId)
-                        val localFiles = localFileRepository.observeLocalFilesForTrack(trackId).firstOrNull() ?: emptyList()
+                        val track = trackRepository.getTrackById(rawTrackId)
+                        val localFiles = localFileRepository.observeLocalFilesForTrack(rawTrackId).firstOrNull() ?: emptyList()
                         val localFile = localFiles.firstOrNull() ?: track?.localFile
                         activeTrackDurationSec = track?.durationSec ?: 0.0
 
                         val resolvedSourceId = localFile?.sourceId ?: localFile?.let { localFileRepository.getLocalFileById(it.id)?.sourceId }
                         currentSourceId = resolvedSourceId
 
+                        val newDurMs = (activeTrackDurationSec * 1000).toLong()
                         _playbackState.value = _playbackState.value.copy(
-                            currentTrackId = trackId,
+                            currentTrackId = rawTrackId,
                             currentLocalFileId = localFile?.id,
                             activeQueueIndex = queueIdx,
-                            durationMs = (activeTrackDurationSec * 1000).toLong()
+                            durationMs = newDurMs
                         )
+
+                        if (_sleepTimerState.value.isActive && _sleepTimerState.value.mode == SleepTimerMode.END_OF_TRACK) {
+                            _sleepTimerState.value = _sleepTimerState.value.copy(
+                                remainingDurationMs = newDurMs,
+                                targetDurationMs = newDurMs
+                            )
+                        }
+
                         recordEvent(ListeningEventType.STARTED)
                         persistCurrentState()
 
@@ -270,6 +322,7 @@ class HarmoniaPlayerController(
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                cancelSleepTimer()
                 val isFileNotFound = error.errorCode == PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND
                 val activeSource = currentSourceId
                 val isSourceConfirmedUnavailable = activeSource != null && storageVolumeLifecycleCoordinator?.isSourceAvailable(activeSource) == false
@@ -562,12 +615,195 @@ class HarmoniaPlayerController(
 
     override fun setVolume(volume: Float) {
         val clamped = volume.coerceIn(0.0f, 1.0f)
-        mediaController?.volume = clamped
-        _playbackState.value = _playbackState.value.copy(volumeScalar = clamped)
-        persistCurrentState()
+        baselineVolume = clamped
+        if (!_sleepTimerState.value.isActive) {
+            mediaController?.volume = clamped
+            _playbackState.value = _playbackState.value.copy(volumeScalar = clamped)
+            persistCurrentState()
+        } else {
+            _sleepTimerState.value = _sleepTimerState.value.copy(baselineVolume = clamped)
+            val fadeRatio = calculateCurrentFadeRatio()
+            val attenuated = clamped * fadeRatio
+            mediaController?.volume = attenuated
+            _playbackState.value = _playbackState.value.copy(volumeScalar = attenuated)
+            persistCurrentState()
+        }
+    }
+
+    override fun startSleepTimer(durationMs: Long) {
+        if (durationMs <= 0L) {
+            cancelSleepTimer()
+            return
+        }
+        sleepTimerJob?.cancel()
+        restoreVolumeToBaseline()
+        baselineVolume = mediaController?.volume ?: _playbackState.value.volumeScalar
+
+        _sleepTimerState.value = SleepTimerState(
+            isActive = true,
+            remainingDurationMs = durationMs,
+            targetDurationMs = durationMs,
+            mode = SleepTimerMode.DURATION,
+            baselineVolume = baselineVolume
+        )
+
+        sleepTimerJob = scope.launch(timerDispatcher) {
+            var remainingMs = durationMs
+            var lastTickMs = monotonicClock.elapsedRealtimeMs()
+            val fadeWindowMs = minOf(30_000L, durationMs)
+
+            while (isActive && remainingMs > 0L) {
+                delay(250L)
+                val currentMs = monotonicClock.elapsedRealtimeMs()
+                val elapsed = (currentMs - lastTickMs).coerceAtLeast(0L)
+                lastTickMs = currentMs
+
+                if (_playbackState.value.isPlaying) {
+                    remainingMs = (remainingMs - elapsed).coerceAtLeast(0L)
+                    _sleepTimerState.value = _sleepTimerState.value.copy(remainingDurationMs = remainingMs)
+
+                    if (fadeWindowMs > 0L && remainingMs <= fadeWindowMs) {
+                        val ratio = (remainingMs.toFloat() / fadeWindowMs.toFloat()).coerceIn(0.0f, 1.0f)
+                        val attenuated = baselineVolume * ratio
+                        mediaController?.volume = attenuated
+                        _playbackState.value = _playbackState.value.copy(volumeScalar = attenuated)
+                    } else {
+                        if (mediaController?.volume != baselineVolume) {
+                            mediaController?.volume = baselineVolume
+                            _playbackState.value = _playbackState.value.copy(volumeScalar = baselineVolume)
+                        }
+                    }
+                } else {
+                    // Suspended while paused: restore baseline volume during pause
+                    if (mediaController?.volume != baselineVolume) {
+                        mediaController?.volume = baselineVolume
+                        _playbackState.value = _playbackState.value.copy(volumeScalar = baselineVolume)
+                    }
+                }
+            }
+
+            if (isActive && remainingMs <= 0L) {
+                completeSleepTimer()
+            }
+        }
+    }
+
+    override fun startSleepTimerEndOfTrack() {
+        sleepTimerJob?.cancel()
+        restoreVolumeToBaseline()
+        baselineVolume = mediaController?.volume ?: _playbackState.value.volumeScalar
+
+        val dur = mediaController?.duration?.takeIf { it > 0 } ?: _playbackState.value.durationMs
+        val pos = mediaController?.currentPosition?.coerceAtLeast(0L) ?: _playbackState.value.currentPositionMs
+        val remainingMs = (dur - pos).coerceAtLeast(0L)
+
+        _sleepTimerState.value = SleepTimerState(
+            isActive = true,
+            remainingDurationMs = remainingMs,
+            targetDurationMs = dur,
+            mode = SleepTimerMode.END_OF_TRACK,
+            baselineVolume = baselineVolume
+        )
+
+        sleepTimerJob = scope.launch(timerDispatcher) {
+            while (isActive) {
+                delay(250L)
+                if (_playbackState.value.isPlaying) {
+                    val currentDur = mediaController?.duration?.takeIf { it > 0 } ?: _playbackState.value.durationMs
+                    val currentPos = mediaController?.currentPosition?.coerceAtLeast(0L) ?: _playbackState.value.currentPositionMs
+                    val rem = (currentDur - currentPos).coerceAtLeast(0L)
+                    _sleepTimerState.value = _sleepTimerState.value.copy(
+                        remainingDurationMs = rem,
+                        targetDurationMs = currentDur
+                    )
+
+                    val fadeWindowMs = if (currentDur in 1..29_999L) minOf(10_000L, currentDur) else 30_000L
+                    if (fadeWindowMs > 0L && rem <= fadeWindowMs && currentDur > 0) {
+                        val ratio = (rem.toFloat() / fadeWindowMs.toFloat()).coerceIn(0.0f, 1.0f)
+                        val attenuated = baselineVolume * ratio
+                        mediaController?.volume = attenuated
+                        _playbackState.value = _playbackState.value.copy(volumeScalar = attenuated)
+                    } else {
+                        if (mediaController?.volume != baselineVolume) {
+                            mediaController?.volume = baselineVolume
+                            _playbackState.value = _playbackState.value.copy(volumeScalar = baselineVolume)
+                        }
+                    }
+
+                    if (currentDur > 0 && currentPos >= currentDur - 50L) {
+                        completeSleepTimer()
+                        break
+                    }
+                } else {
+                    // Suspended while paused: restore baseline volume
+                    if (mediaController?.volume != baselineVolume) {
+                        mediaController?.volume = baselineVolume
+                        _playbackState.value = _playbackState.value.copy(volumeScalar = baselineVolume)
+                    }
+                }
+            }
+        }
+    }
+
+    override fun cancelSleepTimer() {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        restoreVolumeToBaseline()
+        _sleepTimerState.value = SleepTimerState(
+            isActive = false,
+            remainingDurationMs = 0L,
+            targetDurationMs = 0L,
+            mode = SleepTimerMode.DURATION,
+            baselineVolume = baselineVolume
+        )
+    }
+
+    private fun completeSleepTimer() {
+        if (!_sleepTimerState.value.isActive) return
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        mediaController?.pause()
+        wasExplicitlyPaused = true
+        restoreVolumeToBaseline()
+        _sleepTimerState.value = SleepTimerState(
+            isActive = false,
+            remainingDurationMs = 0L,
+            targetDurationMs = 0L,
+            mode = _sleepTimerState.value.mode,
+            baselineVolume = baselineVolume
+        )
+    }
+
+    private fun restoreVolumeToBaseline() {
+        mediaController?.volume = baselineVolume
+        _playbackState.value = _playbackState.value.copy(volumeScalar = baselineVolume)
+    }
+
+    private fun calculateCurrentFadeRatio(): Float {
+        if (!_sleepTimerState.value.isActive || !_playbackState.value.isPlaying) return 1.0f
+        return when (_sleepTimerState.value.mode) {
+            SleepTimerMode.DURATION -> {
+                val targetDur = _sleepTimerState.value.targetDurationMs
+                val rem = _sleepTimerState.value.remainingDurationMs
+                val fadeWindowMs = minOf(30_000L, targetDur)
+                if (fadeWindowMs > 0L && rem <= fadeWindowMs) {
+                    (rem.toFloat() / fadeWindowMs.toFloat()).coerceIn(0.0f, 1.0f)
+                } else 1.0f
+            }
+            SleepTimerMode.END_OF_TRACK -> {
+                val dur = mediaController?.duration?.takeIf { it > 0 } ?: _playbackState.value.durationMs
+                val pos = mediaController?.currentPosition?.coerceAtLeast(0L) ?: _playbackState.value.currentPositionMs
+                val rem = (dur - pos).coerceAtLeast(0L)
+                val fadeWindowMs = if (dur in 1..29_999L) minOf(10_000L, dur) else 30_000L
+                if (fadeWindowMs > 0L && rem <= fadeWindowMs && dur > 0) {
+                    (rem.toFloat() / fadeWindowMs.toFloat()).coerceIn(0.0f, 1.0f)
+                } else 1.0f
+            }
+        }
     }
 
     fun release() {
+        cancelSleepTimer()
         stopPositionPolling()
         storageObservationJob?.cancel()
         storageObservationJob = null

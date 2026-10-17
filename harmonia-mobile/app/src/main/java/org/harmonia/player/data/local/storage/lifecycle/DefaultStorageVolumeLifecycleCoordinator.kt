@@ -1,7 +1,10 @@
 package org.harmonia.player.data.local.storage.lifecycle
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,31 +41,77 @@ class DefaultStorageVolumeLifecycleCoordinator(
     private val _runtimeStates = MutableStateFlow<Map<String, SourceRuntimeState>>(emptyMap())
     override val runtimeStates: StateFlow<Map<String, SourceRuntimeState>> = _runtimeStates.asStateFlow()
 
+    private val lock = Any()
     private var platformSubscription: AutoCloseable? = null
+    private val initialReadinessDeferred = CompletableDeferred<Boolean>()
+    private var initialRevalidationJob: Job? = null
 
     override fun startMonitoring() {
-        if (platformSubscription != null) return
-        platformSubscription = platformBridge.registerVolumeEventListener(object : VolumeEventListener {
-            override fun onVolumeMounted(volumeId: String) {
-                this@DefaultStorageVolumeLifecycleCoordinator.onVolumeMounted(volumeId)
-            }
+        synchronized(lock) {
+            if (platformSubscription != null) return
+            platformSubscription = platformBridge.registerVolumeEventListener(object : VolumeEventListener {
+                override fun onVolumeMounted(volumeId: String) {
+                    this@DefaultStorageVolumeLifecycleCoordinator.onVolumeMounted(volumeId)
+                }
 
-            override fun onVolumeUnmounted(volumeId: String) {
-                this@DefaultStorageVolumeLifecycleCoordinator.onVolumeUnmounted(volumeId)
+                override fun onVolumeUnmounted(volumeId: String) {
+                    this@DefaultStorageVolumeLifecycleCoordinator.onVolumeUnmounted(volumeId)
+                }
+            })
+            if (initialRevalidationJob == null) {
+                triggerInitialRevalidationLocked()
+            } else {
+                // Restarting after stopMonitoring(): refresh storage state to reflect transitions while stopped
+                scope.launch {
+                    try {
+                        revalidateAllSources()
+                    } catch (e: Exception) {
+                        // Keep fail-closed runtime state
+                    }
+                }
             }
-        })
-        scope.launch {
-            revalidateAllSources()
+        }
+    }
+
+    private fun triggerInitialRevalidationLocked() {
+        if (initialRevalidationJob == null) {
+            initialRevalidationJob = scope.launch {
+                try {
+                    revalidateAllSources()
+                    initialReadinessDeferred.complete(true)
+                } catch (ce: CancellationException) {
+                    initialReadinessDeferred.complete(false)
+                    throw ce
+                } catch (e: Exception) {
+                    initialReadinessDeferred.complete(false)
+                }
+            }
+        }
+    }
+
+    override suspend fun awaitInitialReadiness(): Boolean {
+        synchronized(lock) {
+            if (!initialReadinessDeferred.isCompleted && platformSubscription == null) {
+                startMonitoring()
+            }
+        }
+        return try {
+            initialReadinessDeferred.await()
+        } catch (ce: CancellationException) {
+            throw ce
         }
     }
 
     override fun stopMonitoring() {
-        platformSubscription?.close()
-        platformSubscription = null
+        synchronized(lock) {
+            platformSubscription?.close()
+            platformSubscription = null
+        }
     }
 
     override fun isSourceAvailable(sourceId: String): Boolean {
-        return _runtimeStates.value[sourceId]?.isAvailable ?: true
+        val state = _runtimeStates.value[sourceId] ?: return false
+        return state.isAvailable && state.isMounted && state.hasPermission
     }
 
     override fun onVolumeUnmounted(volumeId: String) {

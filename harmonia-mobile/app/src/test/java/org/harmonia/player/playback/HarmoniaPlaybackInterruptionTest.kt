@@ -947,6 +947,7 @@ class FakeStorageVolumeLifecycleCoordinator(
     override suspend fun revalidateAllSources(): Map<String, SourceRuntimeState> = statesFlow.value
     override suspend fun revalidateSource(source: StorageSource): SourceRuntimeState =
         statesFlow.value[source.id] ?: SourceRuntimeState(source.id, true, true, true)
+    override suspend fun awaitInitialReadiness(): Boolean = true
     override fun startMonitoring() {}
     override fun stopMonitoring() {}
 }

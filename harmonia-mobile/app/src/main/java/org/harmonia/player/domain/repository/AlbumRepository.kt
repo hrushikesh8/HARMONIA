@@ -11,4 +11,5 @@ interface AlbumRepository {
     suspend fun getAlbumById(id: String): Album?
     fun observeAlbumsByArtist(artistId: String): Flow<List<Album>>
     suspend fun upsertAlbums(albums: List<Album>)
+    suspend fun getAlbumsPaged(limit: Int, offset: Int): List<Album> = emptyList()
 }

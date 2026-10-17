@@ -90,4 +90,23 @@ class OfflineAlbumRepository(
         }
         albumDao.upsertAlbums(entities)
     }
+
+    override suspend fun getAlbumsPaged(limit: Int, offset: Int): List<Album> {
+        return albumDao.getAlbumsPaged(limit, offset).map { entity ->
+            val artist = entity.artistId?.let { artistDao.getArtistById(it) }
+            Album(
+                id = entity.id,
+                title = entity.title,
+                artistId = entity.artistId,
+                artistName = artist?.name,
+                year = entity.year,
+                totalTracks = entity.totalTracks,
+                totalDiscs = entity.totalDiscs,
+                mbid = entity.mbid,
+                artworkHash = entity.artworkHash,
+                createdAt = entity.createdAt,
+                updatedAt = entity.updatedAt
+            )
+        }
+    }
 }

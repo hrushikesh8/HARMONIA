@@ -10,6 +10,7 @@ import org.harmonia.player.data.local.dao.AlbumDao
 import org.harmonia.player.data.local.dao.ArtistDao
 import org.harmonia.player.data.local.dao.ListeningEventDao
 import org.harmonia.player.data.local.dao.LocalFileDao
+import org.harmonia.player.data.local.dao.PersonalizationDao
 import org.harmonia.player.data.local.dao.PlaybackStateDao
 import org.harmonia.player.data.local.dao.PlaylistDao
 import org.harmonia.player.data.local.dao.ScanCheckpointDao
@@ -17,12 +18,14 @@ import org.harmonia.player.data.local.dao.StorageSourceDao
 import org.harmonia.player.data.local.dao.TrackDao
 import org.harmonia.player.data.local.entity.AlbumEntity
 import org.harmonia.player.data.local.entity.ArtistEntity
+import org.harmonia.player.data.local.entity.FavoriteEntity
 import org.harmonia.player.data.local.entity.ListeningEventEntity
 import org.harmonia.player.data.local.entity.LocalFileEntity
 import org.harmonia.player.data.local.entity.PlaybackStateEntity
 import org.harmonia.player.data.local.entity.PlaylistEntity
 import org.harmonia.player.data.local.entity.PlaylistItemEntity
 import org.harmonia.player.data.local.entity.QueueItemEntity
+import org.harmonia.player.data.local.entity.RatingEntity
 import org.harmonia.player.data.local.entity.ScanCheckpointEntity
 import org.harmonia.player.data.local.entity.StorageSourceEntity
 import org.harmonia.player.data.local.entity.TrackEntity
@@ -33,6 +36,7 @@ import org.harmonia.player.data.local.entity.TrackEntity
  * Schema v2 introduced local playlist management (`mobile_playlists`, `mobile_playlist_items`).
  * Schema v3 introduces storage sources and scan checkpoints (`mobile_storage_sources`, `mobile_scan_checkpoints`).
  * Schema v4 introduces explicit source association for local files (`source_id` on `mobile_local_files`).
+ * Schema v5 introduces dedicated personal annotations (`mobile_favorites`, `mobile_ratings`).
  */
 @Database(
     entities = [
@@ -46,10 +50,12 @@ import org.harmonia.player.data.local.entity.TrackEntity
         PlaylistEntity::class,
         PlaylistItemEntity::class,
         StorageSourceEntity::class,
-        ScanCheckpointEntity::class
+        ScanCheckpointEntity::class,
+        FavoriteEntity::class,
+        RatingEntity::class
     ],
-    version = 4,
-    exportSchema = false
+    version = 5,
+    exportSchema = true
 )
 abstract class HarmoniaDatabase : RoomDatabase() {
 
@@ -62,6 +68,7 @@ abstract class HarmoniaDatabase : RoomDatabase() {
     abstract fun playlistDao(): PlaylistDao
     abstract fun storageSourceDao(): StorageSourceDao
     abstract fun scanCheckpointDao(): ScanCheckpointDao
+    abstract fun personalizationDao(): PersonalizationDao
 
     companion object {
         const val DATABASE_NAME = "harmonia_library.db"
@@ -140,6 +147,34 @@ abstract class HarmoniaDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_4_5: Migration = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `mobile_favorites` (
+                        `track_id` TEXT NOT NULL,
+                        `client_updated_at` INTEGER NOT NULL,
+                        PRIMARY KEY(`track_id`),
+                        FOREIGN KEY(`track_id`) REFERENCES `mobile_tracks`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                """.trimIndent())
+
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `mobile_ratings` (
+                        `track_id` TEXT NOT NULL,
+                        `rating` INTEGER NOT NULL CHECK (`rating` >= 1 AND `rating` <= 5),
+                        `client_updated_at` INTEGER NOT NULL,
+                        PRIMARY KEY(`track_id`),
+                        FOREIGN KEY(`track_id`) REFERENCES `mobile_tracks`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                """.trimIndent())
+
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_mobile_favorites_track_id` ON `mobile_favorites` (`track_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_mobile_favorites_client_updated_at` ON `mobile_favorites` (`client_updated_at`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_mobile_ratings_track_id` ON `mobile_ratings` (`track_id`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_mobile_ratings_rating_client_updated_at` ON `mobile_ratings` (`rating`, `client_updated_at`)")
+            }
+        }
+
         @Volatile
         private var INSTANCE: HarmoniaDatabase? = null
 
@@ -156,7 +191,7 @@ abstract class HarmoniaDatabase : RoomDatabase() {
                 DATABASE_NAME
             )
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .fallbackToDestructiveMigration(false)
                 .build()
         }

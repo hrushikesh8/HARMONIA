@@ -84,4 +84,24 @@ interface PlaybackPort {
      * Sets playback volume scalar (0.0 to 1.0).
      */
     fun setVolume(volume: Float)
+
+    /**
+     * Observable stream of the authoritative sleep timer state.
+     */
+    val sleepTimerState: StateFlow<org.harmonia.player.domain.model.audio.SleepTimerState>
+
+    /**
+     * Starts or replaces the active sleep timer with a duration countdown in milliseconds.
+     */
+    fun startSleepTimer(durationMs: Long)
+
+    /**
+     * Starts or replaces the active sleep timer to trigger upon completion of the currently playing track.
+     */
+    fun startSleepTimerEndOfTrack()
+
+    /**
+     * Cancels the active sleep timer and immediately restores playback volume to the baseline.
+     */
+    fun cancelSleepTimer()
 }

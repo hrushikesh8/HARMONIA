@@ -5,11 +5,13 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.harmonia.player.core.di.ServiceLocator
@@ -22,7 +24,32 @@ import org.harmonia.player.domain.model.storage.permission.SafPermissionDelegate
 import org.harmonia.player.domain.model.storage.permission.StoragePermissionChecker
 import org.harmonia.player.domain.repository.StorageSourceRepository
 import org.harmonia.player.domain.repository.TrackRepository
+import org.harmonia.player.domain.model.equalizer.AudioEqualizerCoordinator
+import org.harmonia.player.domain.model.equalizer.EqualizerBand
+import org.harmonia.player.domain.model.equalizer.EqualizerFailureReason
+import org.harmonia.player.domain.model.equalizer.EqualizerPreset
+import org.harmonia.player.domain.model.equalizer.EqualizerState
+import org.harmonia.player.domain.model.equalizer.EqualizerUserIntentSource
 import org.harmonia.player.domain.scanner.MediaReconciliationEngine
+
+enum class EqualizerUiStatus {
+    UNSUPPORTED,
+    UNAVAILABLE_NO_SESSION,
+    CONTROL_LOST,
+    DISABLED,
+    ENABLED
+}
+
+data class EqualizerUiState(
+    val isUserEnabled: Boolean = false,
+    val status: EqualizerUiStatus = EqualizerUiStatus.UNAVAILABLE_NO_SESSION,
+    val statusMessage: String = "No active playback session",
+    val bandLevelRange: IntRange = -1500..1500,
+    val bands: List<EqualizerBand> = emptyList(),
+    val presets: List<EqualizerPreset> = emptyList(),
+    val currentPresetIndex: Short = -1,
+    val isInteractive: Boolean = false
+)
 
 data class StorageSourceItemUiState(
     val id: String,
@@ -44,7 +71,8 @@ data class SettingsUiState(
     val storageSources: List<StorageSourceItemUiState> = emptyList(),
     val isScanning: Boolean = false,
     val scanStatusMessage: String? = null,
-    val scanErrorMessage: String? = null
+    val scanErrorMessage: String? = null,
+    val equalizer: EqualizerUiState = EqualizerUiState()
 )
 
 private data class CatalogStats(
@@ -61,6 +89,8 @@ class SettingsViewModel(
     private val mediaReconciliationEngine: MediaReconciliationEngine? = null,
     private val storagePermissionChecker: StoragePermissionChecker? = null,
     private val safPermissionDelegate: SafPermissionDelegate? = null,
+    private val equalizerUserIntentSource: EqualizerUserIntentSource? = null,
+    private val audioEqualizerCoordinator: AudioEqualizerCoordinator? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
@@ -75,6 +105,86 @@ class SettingsViewModel(
 
     private val safDelegate: SafPermissionDelegate?
         get() = safPermissionDelegate ?: runCatching { ServiceLocator.getSafPermissionDelegate() }.getOrNull()
+
+    private val intentSource: EqualizerUserIntentSource
+        get() = equalizerUserIntentSource ?: ServiceLocator.getEqualizerUserIntentSource()
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private val equalizerCoordinatorFlow: StateFlow<AudioEqualizerCoordinator?> =
+        if (audioEqualizerCoordinator != null) {
+            MutableStateFlow(audioEqualizerCoordinator)
+        } else {
+            ServiceLocator.observeAudioEqualizerCoordinator()
+        }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private val equalizerStateFlow: Flow<EqualizerState> =
+        equalizerCoordinatorFlow.flatMapLatest { coordinatorInstance: AudioEqualizerCoordinator? ->
+            coordinatorInstance?.state ?: MutableStateFlow(EqualizerState.NoSession())
+        }
+
+    private val equalizerUiStateFlow: Flow<EqualizerUiState> = combine(
+        intentSource.observeEqualizerEnabled(),
+        equalizerStateFlow
+    ) { isUserEnabled, eqState ->
+        when (eqState) {
+            is EqualizerState.NoSession -> {
+                val failure = eqState.failureReason
+                val (status, msg) = when (failure) {
+                    is EqualizerFailureReason.UnsupportedHardwareOrRoute ->
+                        EqualizerUiStatus.UNSUPPORTED to (failure.message ?: "Equalizer unsupported on this device or route")
+                    is EqualizerFailureReason.InvalidSessionOrArgument ->
+                        EqualizerUiStatus.UNSUPPORTED to (failure.message ?: "Invalid audio session")
+                    is EqualizerFailureReason.NativeIllegalState ->
+                        EqualizerUiStatus.UNSUPPORTED to (failure.message ?: "Equalizer native state error")
+                    is EqualizerFailureReason.UnexpectedNativeError ->
+                        EqualizerUiStatus.UNSUPPORTED to (failure.message ?: "Unexpected equalizer error")
+                    null ->
+                        EqualizerUiStatus.UNAVAILABLE_NO_SESSION to "No active playback session"
+                }
+                EqualizerUiState(
+                    isUserEnabled = isUserEnabled,
+                    status = status,
+                    statusMessage = msg,
+                    isInteractive = false
+                )
+            }
+            is EqualizerState.ControlLost -> {
+                EqualizerUiState(
+                    isUserEnabled = isUserEnabled,
+                    status = EqualizerUiStatus.CONTROL_LOST,
+                    statusMessage = "Audio effect control temporarily lost to another application",
+                    bandLevelRange = eqState.bandLevelRange,
+                    bands = eqState.bands,
+                    presets = eqState.presets,
+                    isInteractive = false
+                )
+            }
+            is EqualizerState.AvailableDisabled -> {
+                EqualizerUiState(
+                    isUserEnabled = isUserEnabled,
+                    status = EqualizerUiStatus.DISABLED,
+                    statusMessage = "Disabled",
+                    bandLevelRange = eqState.bandLevelRange,
+                    bands = eqState.bands,
+                    presets = eqState.presets,
+                    isInteractive = false
+                )
+            }
+            is EqualizerState.EnabledWithControl -> {
+                EqualizerUiState(
+                    isUserEnabled = isUserEnabled,
+                    status = EqualizerUiStatus.ENABLED,
+                    statusMessage = "Active",
+                    bandLevelRange = eqState.bandLevelRange,
+                    bands = eqState.bands,
+                    presets = eqState.presets,
+                    currentPresetIndex = eqState.currentPresetIndex,
+                    isInteractive = true
+                )
+            }
+        }
+    }
 
     private val _isScanning = MutableStateFlow(false)
     private val _scanStatusMessage = MutableStateFlow<String?>(null)
@@ -114,8 +224,9 @@ class SettingsViewModel(
         catalogStatsFlow,
         storageSourceRepository.observeAllSources(),
         runtimeStatesFlow,
-        scanStateFlow
-    ) { catalogStats, sources, runtimeStates, (isScanning, statusMsg, errorMsg) ->
+        scanStateFlow,
+        equalizerUiStateFlow
+    ) { catalogStats, sources, runtimeStates, (isScanning, statusMsg, errorMsg), eqUiState ->
         val sourceItems = sources.map { source ->
             val runtime = runtimeStates[source.id]
             val trackCount = catalogStats.trackCountsBySourceId[source.id] ?: 0
@@ -168,13 +279,54 @@ class SettingsViewModel(
             storageSources = sourceItems,
             isScanning = isScanning,
             scanStatusMessage = statusMsg,
-            scanErrorMessage = errorMsg
+            scanErrorMessage = errorMsg,
+            equalizer = eqUiState
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = SettingsUiState()
+        initialValue = SettingsUiState(
+            equalizer = EqualizerUiState(
+                isUserEnabled = intentSource.isEqualizerEnabled()
+            )
+        )
     )
+
+    fun setEqualizerEnabled(enabled: Boolean) {
+        intentSource.setEqualizerEnabled(enabled)
+        viewModelScope.launch {
+            equalizerCoordinatorFlow.value?.setEnabled(enabled)
+        }
+    }
+
+    fun setEqualizerBandLevel(band: Short, levelMb: Short) {
+        val currentEq = uiState.value.equalizer
+        if (currentEq.bands.isNotEmpty() && currentEq.bands.none { it.index == band }) {
+            return
+        }
+        val clampedLevel = if (currentEq.bands.isNotEmpty()) {
+            levelMb.coerceIn(
+                currentEq.bandLevelRange.first.toShort(),
+                currentEq.bandLevelRange.last.toShort()
+            )
+        } else {
+            levelMb
+        }
+        viewModelScope.launch {
+            equalizerCoordinatorFlow.value?.setBandLevel(band, clampedLevel)
+        }
+    }
+
+    fun useEqualizerPreset(presetIndex: Short) {
+        val currentEq = uiState.value.equalizer
+        if (currentEq.presets.isNotEmpty() && currentEq.presets.none { it.index == presetIndex }) {
+            return
+        }
+        viewModelScope.launch {
+            equalizerCoordinatorFlow.value?.usePreset(presetIndex)
+        }
+    }
+
 
     fun toggleSource(sourceId: String, isEnabled: Boolean) {
         viewModelScope.launch(ioDispatcher) {

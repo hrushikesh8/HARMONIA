@@ -34,6 +34,10 @@ class FakeSearchAlbumDao : AlbumDao {
     override suspend fun getAlbumByTitleAndArtist(title: String, artistId: String?): AlbumEntity? {
         return albums.find { it.title.equals(title, ignoreCase = true) && it.artistId == artistId }
     }
+    override suspend fun getAlbumsPaged(limit: Int, offset: Int): List<AlbumEntity> {
+        if (offset >= albums.size) return emptyList()
+        return albums.subList(offset, (offset + limit).coerceAtMost(albums.size))
+    }
 }
 
 class FakeSearchArtistDao : ArtistDao {
@@ -51,6 +55,10 @@ class FakeSearchArtistDao : ArtistDao {
     }
     override suspend fun getArtistByName(name: String): ArtistEntity? {
         return artists.find { it.name.equals(name, ignoreCase = true) }
+    }
+    override suspend fun getArtistsPaged(limit: Int, offset: Int): List<ArtistEntity> {
+        if (offset >= artists.size) return emptyList()
+        return artists.subList(offset, (offset + limit).coerceAtMost(artists.size))
     }
 }
 

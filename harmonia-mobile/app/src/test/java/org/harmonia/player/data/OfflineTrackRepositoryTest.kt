@@ -71,6 +71,32 @@ class FakeTrackDao : TrackDao {
 
     override suspend fun getTrackCount(): Int = tracksFlow.value.size
 
+    override suspend fun getTracksPaged(limit: Int, offset: Int): List<TrackWithDetails> {
+        val list = tracksFlow.value
+        if (offset >= list.size) return emptyList()
+        return list.subList(offset, (offset + limit).coerceAtMost(list.size))
+    }
+
+    override suspend fun getTracksByAlbumPaged(albumId: String, limit: Int, offset: Int): List<TrackWithDetails> {
+        val list = tracksFlow.value.filter { it.track.albumId == albumId }
+        if (offset >= list.size) return emptyList()
+        return list.subList(offset, (offset + limit).coerceAtMost(list.size))
+    }
+
+    override suspend fun getTracksByAlbum(albumId: String): List<TrackWithDetails> {
+        return tracksFlow.value.filter { it.track.albumId == albumId }
+    }
+
+    override suspend fun getTracksByArtistPaged(artistId: String, limit: Int, offset: Int): List<TrackWithDetails> {
+        val list = tracksFlow.value.filter { it.track.artistId == artistId }
+        if (offset >= list.size) return emptyList()
+        return list.subList(offset, (offset + limit).coerceAtMost(list.size))
+    }
+
+    override suspend fun getTracksByArtist(artistId: String): List<TrackWithDetails> {
+        return tracksFlow.value.filter { it.track.artistId == artistId }
+    }
+
     fun seedTrackWithDetails(detail: TrackWithDetails) {
         tracksFlow.value = tracksFlow.value + detail
     }

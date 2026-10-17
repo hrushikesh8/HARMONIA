@@ -22,12 +22,15 @@ interface AlbumDao {
     fun observeAlbumsByArtist(artistId: String): Flow<List<AlbumEntity>>
 
     @Query("""
-        SELECT * FROM mobile_albums 
-        WHERE title LIKE '%' || :query || '%' 
+        SELECT * FROM mobile_albums
+        WHERE title LIKE '%' || :query || '%'
            OR artist_id IN (SELECT id FROM mobile_artists WHERE name LIKE '%' || :query || '%')
         ORDER BY title COLLATE NOCASE ASC
     """)
     fun searchAlbums(query: String): Flow<List<AlbumEntity>>
+
+    @Query("SELECT * FROM mobile_albums ORDER BY title COLLATE NOCASE ASC, id ASC LIMIT :limit OFFSET :offset")
+    suspend fun getAlbumsPaged(limit: Int, offset: Int): List<AlbumEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAlbums(albums: List<AlbumEntity>)

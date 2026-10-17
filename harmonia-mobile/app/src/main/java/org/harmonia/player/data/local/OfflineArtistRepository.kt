@@ -54,4 +54,18 @@ class OfflineArtistRepository(
         }
         artistDao.upsertArtists(entities)
     }
+
+    override suspend fun getArtistsPaged(limit: Int, offset: Int): List<Artist> {
+        return artistDao.getArtistsPaged(limit, offset).map { entity ->
+            Artist(
+                id = entity.id,
+                name = entity.name,
+                sortName = entity.sortName,
+                mbid = entity.mbid,
+                artworkHash = entity.artworkHash,
+                createdAt = entity.createdAt,
+                updatedAt = entity.updatedAt
+            )
+        }
+    }
 }

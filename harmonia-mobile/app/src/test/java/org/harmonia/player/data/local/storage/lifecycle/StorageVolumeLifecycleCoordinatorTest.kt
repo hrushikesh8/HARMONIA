@@ -1,6 +1,9 @@
 package org.harmonia.player.data.local.storage.lifecycle
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -29,7 +32,8 @@ class StorageVolumeLifecycleCoordinatorTest {
     private val scannedSources = mutableListOf<Pair<StorageSource, ScanMode>>()
 
     private val fakeDao = object : StorageSourceDao {
-        override fun observeAllSources() = flowOf(fakeSources.toList())
+        var throwError = false
+        override fun observeAllSources() = if (throwError) kotlinx.coroutines.flow.flow { throw RuntimeException("Simulated DAO failure") } else flowOf(fakeSources.toList())
         override fun observeEnabledSources() = flowOf(fakeSources.filter { it.isEnabled })
         override suspend fun getSourceById(id: String) = fakeSources.find { it.id == id }
         override suspend fun getAllSources() = fakeSources.toList()
@@ -222,6 +226,30 @@ class StorageVolumeLifecycleCoordinatorTest {
 
         coordinator.stopMonitoring()
         org.junit.Assert.assertNull(fakePlatformBridge.registeredListener)
+    }
+
+    @Test
+    fun restart_monitoring_restores_platform_listener_and_refreshes_storage_state() = testScope.runTest {
+        // Initial start
+        coordinator.startMonitoring()
+        advanceUntilIdle()
+        org.junit.Assert.assertNotNull(fakePlatformBridge.registeredListener)
+        assertTrue(coordinator.runtimeStates.value["mediastore_vol_1234"]?.isAvailable == true)
+
+        // Stop monitoring
+        coordinator.stopMonitoring()
+        org.junit.Assert.assertNull(fakePlatformBridge.registeredListener)
+
+        // While stopped, physical volume was ejected
+        fakePlatformBridge.mountedVolumes.clear()
+
+        // Restart monitoring: must restore platform listener and refresh storage state
+        coordinator.startMonitoring()
+        org.junit.Assert.assertNotNull(fakePlatformBridge.registeredListener)
+        advanceUntilIdle()
+
+        // State must be refreshed to unavailable
+        assertFalse(coordinator.runtimeStates.value["mediastore_vol_1234"]?.isAvailable == true)
     }
 
     @Test
@@ -420,5 +448,117 @@ class StorageVolumeLifecycleCoordinatorTest {
         val trailingSlash = "content://com.android.externalstorage.documents/tree/primary%3AMusic/"
         val idTrailing = StorageSource.SafDocumentTree.deriveCanonicalId(trailingSlash)
         assertTrue(idExt != idTrailing)
+    }
+
+    @Test
+    fun initial_readiness_awaits_revalidation_completion_and_populates_state() = testScope.runTest {
+        val externalStorage = StorageSourceEntity(
+            id = "src_init_test",
+            type = "MEDIA_STORE_PRIMARY",
+            uri = "content://media/external",
+            displayName = "Primary Storage",
+            isRemovable = false,
+            isEnabled = true
+        )
+        fakeSources.add(externalStorage)
+
+        val ready = coordinator.awaitInitialReadiness()
+        advanceUntilIdle()
+
+        assertTrue(ready)
+        assertTrue(coordinator.isSourceAvailable("src_init_test"))
+    }
+
+    @Test
+    fun repeated_startMonitoring_is_idempotent() = testScope.runTest {
+        coordinator.startMonitoring()
+        coordinator.startMonitoring()
+        advanceUntilIdle()
+
+        assertTrue(coordinator.awaitInitialReadiness())
+    }
+
+    @Test
+    fun concurrent_readiness_callers_share_same_initialization() = testScope.runTest {
+        val externalStorage = StorageSourceEntity(
+            id = "src_concurrent_test",
+            type = "MEDIA_STORE_PRIMARY",
+            uri = "content://media/external",
+            displayName = "Primary Storage",
+            isRemovable = false,
+            isEnabled = true
+        )
+        fakeSources.add(externalStorage)
+
+        val deferred1 = async { coordinator.awaitInitialReadiness() }
+        val deferred2 = async { coordinator.awaitInitialReadiness() }
+        advanceUntilIdle()
+
+        assertTrue(deferred1.await())
+        assertTrue(deferred2.await())
+        assertTrue(coordinator.isSourceAvailable("src_concurrent_test"))
+    }
+
+    @Test
+    fun successful_readiness_occurring_only_after_revalidation() = testScope.runTest {
+        val externalStorage = StorageSourceEntity(
+            id = "src_timing_test",
+            type = "MEDIA_STORE_PRIMARY",
+            uri = "content://media/external",
+            displayName = "Primary Storage",
+            isRemovable = false,
+            isEnabled = true
+        )
+        fakeSources.add(externalStorage)
+
+        val deferred = async { coordinator.awaitInitialReadiness() }
+        // Before revalidation completes, readiness is not complete
+        assertFalse(deferred.isCompleted)
+
+        advanceUntilIdle()
+
+        // After revalidation completes, readiness is true and source is available
+        assertTrue(deferred.isCompleted)
+        assertTrue(deferred.await())
+        assertTrue(coordinator.isSourceAvailable("src_timing_test"))
+    }
+
+    @Test
+    fun initialization_failure_returns_false_and_fails_closed() = testScope.runTest {
+        val externalStorage = StorageSourceEntity(
+            id = "src_fail_test",
+            type = "MEDIA_STORE_PRIMARY",
+            uri = "content://media/external",
+            displayName = "Primary Storage",
+            isRemovable = false,
+            isEnabled = true
+        )
+        fakeSources.add(externalStorage)
+        fakeDao.throwError = true
+
+        coordinator.startMonitoring()
+        advanceUntilIdle()
+
+        // Readiness must return false
+        val ready = coordinator.awaitInitialReadiness()
+        assertFalse(ready)
+
+        // Source must NOT be available (fail-closed)
+        assertFalse(coordinator.isSourceAvailable("src_fail_test"))
+    }
+
+    @Test
+    fun cancellation_propagates_correctly_and_is_not_swallowed() = testScope.runTest {
+        val job = launch {
+            coordinator.awaitInitialReadiness()
+        }
+        job.cancel(kotlinx.coroutines.CancellationException("Explicit test cancellation"))
+
+        try {
+            job.join()
+            assertTrue(job.isCancelled)
+        } catch (e: Exception) {
+            assertTrue(e is kotlinx.coroutines.CancellationException)
+        }
     }
 }

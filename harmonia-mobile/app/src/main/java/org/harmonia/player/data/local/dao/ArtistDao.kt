@@ -19,12 +19,15 @@ interface ArtistDao {
     suspend fun getArtistByName(name: String): ArtistEntity?
 
     @Query("""
-        SELECT * FROM mobile_artists 
-        WHERE name LIKE '%' || :query || '%' 
+        SELECT * FROM mobile_artists
+        WHERE name LIKE '%' || :query || '%'
            OR (sort_name IS NOT NULL AND sort_name LIKE '%' || :query || '%')
         ORDER BY sort_name COLLATE NOCASE ASC
     """)
     fun searchArtists(query: String): Flow<List<ArtistEntity>>
+
+    @Query("SELECT * FROM mobile_artists ORDER BY sort_name COLLATE NOCASE ASC, id ASC LIMIT :limit OFFSET :offset")
+    suspend fun getArtistsPaged(limit: Int, offset: Int): List<ArtistEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertArtists(artists: List<ArtistEntity>)

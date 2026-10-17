@@ -327,6 +327,7 @@ class StorageVolumeLifecycleIntegrationTest {
         override suspend fun revalidateAllSources(): Map<String, SourceRuntimeState> = _states.value
         override suspend fun revalidateSource(source: StorageSource): SourceRuntimeState =
             _states.value[source.id] ?: SourceRuntimeState(source.id, true, true, true)
+        override suspend fun awaitInitialReadiness(): Boolean = true
         override fun startMonitoring() {}
         override fun stopMonitoring() {}
     }

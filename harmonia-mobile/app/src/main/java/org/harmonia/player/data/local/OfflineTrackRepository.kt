@@ -62,4 +62,24 @@ class OfflineTrackRepository(
     override suspend fun deleteTrack(id: String) {
         trackDao.deleteTrackById(id)
     }
+
+    override suspend fun getTracksPaged(limit: Int, offset: Int): List<Track> {
+        return trackDao.getTracksPaged(limit, offset).map { it.toDomainTrack() }
+    }
+
+    override suspend fun getTracksByAlbumPaged(albumId: String, limit: Int, offset: Int): List<Track> {
+        return trackDao.getTracksByAlbumPaged(albumId, limit, offset).map { it.toDomainTrack() }
+    }
+
+    override suspend fun getTracksByAlbum(albumId: String): List<Track> {
+        return trackDao.getTracksByAlbum(albumId).map { it.toDomainTrack() }
+    }
+
+    override suspend fun getTracksByArtistPaged(artistId: String, limit: Int, offset: Int): List<Track> {
+        return trackDao.getTracksByArtistPaged(artistId, limit, offset).map { it.toDomainTrack() }
+    }
+
+    override suspend fun getTracksByArtist(artistId: String): List<Track> {
+        return trackDao.getTracksByArtist(artistId).map { it.toDomainTrack() }
+    }
 }

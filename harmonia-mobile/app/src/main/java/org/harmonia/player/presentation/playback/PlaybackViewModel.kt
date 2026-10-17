@@ -13,13 +13,16 @@ import org.harmonia.player.domain.model.PlaybackState
 import org.harmonia.player.domain.model.QueueItem
 import org.harmonia.player.domain.model.RepeatMode
 import org.harmonia.player.domain.model.Track
+import org.harmonia.player.domain.model.audio.SleepTimerPreset
+import org.harmonia.player.domain.model.audio.SleepTimerState
 import org.harmonia.player.domain.playback.PlaybackPort
 import org.harmonia.player.domain.repository.TrackRepository
 
 data class PlayerUiState(
     val playbackState: PlaybackState = PlaybackState(),
     val currentTrack: Track? = null,
-    val queue: List<QueueItem> = emptyList()
+    val queue: List<QueueItem> = emptyList(),
+    val sleepTimerState: SleepTimerState = SleepTimerState()
 )
 
 class PlaybackViewModel(
@@ -29,15 +32,17 @@ class PlaybackViewModel(
 
     val uiState: StateFlow<PlayerUiState> = combine(
         playbackPort.playbackState,
-        playbackPort.queue
-    ) { state, queue ->
+        playbackPort.queue,
+        playbackPort.sleepTimerState
+    ) { state, queue, sleepTimer ->
         val currentTrack = state.currentTrackId?.let { id ->
             queue.firstOrNull { it.trackId == id }?.track ?: trackRepository.getTrackById(id)
         }
         PlayerUiState(
             playbackState = state,
             currentTrack = currentTrack,
-            queue = queue
+            queue = queue,
+            sleepTimerState = sleepTimer
         )
     }.stateIn(
         scope = viewModelScope,
@@ -79,5 +84,26 @@ class PlaybackViewModel(
                 playbackPort.play()
             }
         }
+    }
+
+    fun startSleepTimer(preset: SleepTimerPreset) {
+        val durationMs = preset.durationMs
+        if (durationMs != null) {
+            playbackPort.startSleepTimer(durationMs)
+        } else {
+            playbackPort.startSleepTimerEndOfTrack()
+        }
+    }
+
+    fun startSleepTimer(durationMs: Long) {
+        playbackPort.startSleepTimer(durationMs)
+    }
+
+    fun startSleepTimerEndOfTrack() {
+        playbackPort.startSleepTimerEndOfTrack()
+    }
+
+    fun cancelSleepTimer() {
+        playbackPort.cancelSleepTimer()
     }
 }

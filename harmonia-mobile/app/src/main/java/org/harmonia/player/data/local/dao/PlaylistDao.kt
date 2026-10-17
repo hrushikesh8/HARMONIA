@@ -32,12 +32,22 @@ interface PlaylistDao {
     """)
     fun observePlaylistsWithCount(): Flow<List<PlaylistWithCount>>
 
+    @Query("""
+        SELECT p.*, COUNT(i.id) AS track_count
+        FROM mobile_playlists p
+        LEFT JOIN mobile_playlist_items i ON p.id = i.playlist_id
+        GROUP BY p.id
+        ORDER BY p.updated_at DESC, p.id ASC
+        LIMIT :limit OFFSET :offset
+    """)
+    suspend fun getPlaylistsWithCountPaged(limit: Int, offset: Int): List<PlaylistWithCount>
+
     @Query("SELECT * FROM mobile_playlists WHERE id = :id LIMIT 1")
     suspend fun getPlaylistById(id: String): PlaylistEntity?
 
     @Query("""
-        SELECT * FROM mobile_playlists 
-        WHERE name LIKE '%' || :query || '%' 
+        SELECT * FROM mobile_playlists
+        WHERE name LIKE '%' || :query || '%'
            OR (description IS NOT NULL AND description LIKE '%' || :query || '%')
         ORDER BY name COLLATE NOCASE ASC
     """)
@@ -60,6 +70,9 @@ interface PlaylistDao {
 
     @Query("SELECT * FROM mobile_playlist_items WHERE playlist_id = :playlistId ORDER BY position ASC")
     suspend fun getItemsForPlaylist(playlistId: String): List<PlaylistItemEntity>
+
+    @Query("SELECT * FROM mobile_playlist_items WHERE playlist_id = :playlistId ORDER BY position ASC, id ASC LIMIT :limit OFFSET :offset")
+    suspend fun getPlaylistItemsPaged(playlistId: String, limit: Int, offset: Int): List<PlaylistItemEntity>
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertItem(item: PlaylistItemEntity)
