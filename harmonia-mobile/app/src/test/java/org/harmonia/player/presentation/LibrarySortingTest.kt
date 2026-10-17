@@ -150,4 +150,11 @@ class LibrarySortingTest {
         val state = viewModel.uiState.first { it.selectedTab == LibraryTab.ALBUMS }
         assertEquals(LibraryTab.ALBUMS, state.selectedTab)
     }
+
+    @Test
+    fun `library tab selection switches to favorites state`() = runBlocking {
+        viewModel.selectTab(LibraryTab.FAVORITES)
+        val state = viewModel.uiState.first { it.selectedTab == LibraryTab.FAVORITES }
+        assertEquals(LibraryTab.FAVORITES, state.selectedTab)
+    }
 }

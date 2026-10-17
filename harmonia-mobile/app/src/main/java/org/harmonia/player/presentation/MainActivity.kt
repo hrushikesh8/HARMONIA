@@ -39,6 +39,7 @@ import org.harmonia.player.presentation.navigation.HarmoniaNavDestination
 import org.harmonia.player.presentation.playback.MiniPlayer
 import org.harmonia.player.presentation.playback.NowPlayingSheet
 import org.harmonia.player.presentation.playback.PlaybackViewModel
+import org.harmonia.player.presentation.personalization.PersonalizationViewModel
 import org.harmonia.player.presentation.playlists.PlaylistDetailScreen
 import org.harmonia.player.presentation.playlists.PlaylistsScreen
 import org.harmonia.player.presentation.settings.SettingsScreen
@@ -70,12 +71,14 @@ enum class NavigationTab(
 
 @Composable
 fun MainAppContainer(
-    playbackViewModel: PlaybackViewModel = viewModel()
+    playbackViewModel: PlaybackViewModel = viewModel(),
+    personalizationViewModel: PersonalizationViewModel = viewModel()
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(NavigationTab.HOME) }
     var selectedPlaylistId by rememberSaveable { mutableStateOf<String?>(null) }
     var showNowPlayingSheet by remember { mutableStateOf(false) }
     val playerUiState by playbackViewModel.uiState.collectAsState()
+    val personalizationUiState by personalizationViewModel.uiState.collectAsState()
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -135,6 +138,7 @@ fun MainAppContainer(
                     onShuffleAllClick = { playbackViewModel.shuffleAll() }
                 )
                 NavigationTab.LIBRARY -> LibraryScreen(
+                    personalizationViewModel = personalizationViewModel,
                     onTrackClick = { tracks, clickedIndex ->
                         playbackViewModel.playTrackList(tracks, clickedIndex)
                     }
@@ -186,6 +190,8 @@ fun MainAppContainer(
                 },
                 onNext = { playbackViewModel.next() },
                 onClick = { showNowPlayingSheet = true },
+                isFavorite = personalizationUiState.isFavorite,
+                onToggleFavorite = { personalizationViewModel.toggleFavorite() },
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
 
@@ -208,7 +214,15 @@ fun MainAppContainer(
                     onQueueItemClick = { idx -> playbackViewModel.jumpToQueueIndex(idx) },
                     onToggleShuffle = { playbackViewModel.toggleShuffle() },
                     onCycleRepeat = { playbackViewModel.cycleRepeat() },
-                    onDismiss = { showNowPlayingSheet = false }
+                    sleepTimerState = playerUiState.sleepTimerState,
+                    onStartSleepTimer = { preset -> playbackViewModel.startSleepTimer(preset) },
+                    onCancelSleepTimer = { playbackViewModel.cancelSleepTimer() },
+                    onDismiss = { showNowPlayingSheet = false },
+                    isFavorite = personalizationUiState.isFavorite,
+                    rating = personalizationUiState.rating,
+                    onToggleFavorite = { personalizationViewModel.toggleFavorite() },
+                    onSetRating = { r -> personalizationViewModel.setRating(r) },
+                    onClearRating = { personalizationViewModel.clearRating() }
                 )
             }
         }

@@ -3,6 +3,8 @@ package org.harmonia.player.presentation.playback
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,11 +16,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -27,6 +31,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -44,23 +49,24 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.harmonia.player.design.theme.AcousticCharcoal
-import org.harmonia.player.design.theme.AcousticTeal
-import org.harmonia.player.design.theme.BorderSlate
 import org.harmonia.player.design.theme.HarmoniaIcons
-import org.harmonia.player.design.theme.MutedSlate
-import org.harmonia.player.design.theme.ObsidianSpace
-import org.harmonia.player.design.theme.PureSignalWhite
-import org.harmonia.player.design.theme.StudioSlate
+import org.harmonia.player.design.theme.HarmoniaThemeTokens
+import org.harmonia.player.design.theme.hairlineBorder
+import org.harmonia.player.design.theme.touchTarget48
 import org.harmonia.player.domain.model.PlaybackState
 import org.harmonia.player.domain.model.QueueItem
 import org.harmonia.player.domain.model.RepeatMode
 import org.harmonia.player.domain.model.Track
 import org.harmonia.player.presentation.components.HarmoniaArtwork
+import org.harmonia.player.presentation.personalization.FavoriteButton
+import org.harmonia.player.presentation.personalization.RatingDialog
+import org.harmonia.player.domain.model.audio.SleepTimerMode
+import org.harmonia.player.domain.model.audio.SleepTimerPreset
+import org.harmonia.player.domain.model.audio.SleepTimerState
 import java.util.Locale
 
 /**
- * Now Playing Modal Bottom Sheet featuring full transport controls, seek bar, and queue sheet.
+ * Now Playing Modal Bottom Sheet featuring full transport controls, seek bar, queue sheet, and sleep timer.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,10 +81,20 @@ fun NowPlayingSheet(
     onQueueItemClick: (Int) -> Unit,
     onToggleShuffle: () -> Unit,
     onCycleRepeat: () -> Unit,
-    onDismiss: () -> Unit
+    sleepTimerState: SleepTimerState = SleepTimerState(),
+    onStartSleepTimer: (SleepTimerPreset) -> Unit = {},
+    onCancelSleepTimer: () -> Unit = {},
+    onDismiss: () -> Unit,
+    isFavorite: Boolean = false,
+    rating: Int? = null,
+    onToggleFavorite: () -> Unit = {},
+    onSetRating: (Int) -> Unit = {},
+    onClearRating: () -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showQueue by remember { mutableStateOf(false) }
+    var showSleepTimerDialog by remember { mutableStateOf(false) }
+    var showRatingDialog by remember { mutableStateOf(false) }
 
     var isUserSeeking by remember { mutableStateOf(false) }
     var seekSliderPosition by remember { mutableFloatStateOf(0f) }
@@ -90,17 +106,46 @@ fun NowPlayingSheet(
         playbackState.currentPositionMs
     }
 
+    if (showSleepTimerDialog) {
+        SleepTimerDialog(
+            sleepTimerState = sleepTimerState,
+            onSelectPreset = onStartSleepTimer,
+            onCancelTimer = onCancelSleepTimer,
+            onDismiss = { showSleepTimerDialog = false }
+        )
+    }
+
+    if (showRatingDialog && currentTrack != null) {
+        RatingDialog(
+            currentRating = rating,
+            onRatingSelected = { newRating ->
+                onSetRating(newRating)
+            },
+            onClearRating = {
+                onClearRating()
+                showRatingDialog = false
+            },
+            onDismissRequest = { showRatingDialog = false },
+            trackTitle = currentTrack.title,
+            artistName = currentTrack.artistName
+        )
+    }
+
+    val colors = HarmoniaThemeTokens.colors
+    val spacing = HarmoniaThemeTokens.spacing
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = ObsidianSpace,
-        contentColor = PureSignalWhite
+        containerColor = colors.backgroundRoot,
+        contentColor = colors.textPrimary
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = spacing.large)
+                .padding(bottom = spacing.xLarge),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Header Bar
@@ -115,18 +160,50 @@ fun NowPlayingSheet(
                         letterSpacing = 2.sp,
                         fontWeight = FontWeight.Bold
                     ),
-                    color = AcousticTeal
+                    color = colors.primarySignal
                 )
-                IconButton(onClick = { showQueue = !showQueue }) {
-                    Icon(
-                        imageVector = HarmoniaIcons.QueueMusic,
-                        contentDescription = if (showQueue) "Show Now Playing" else "Show Queue",
-                        tint = if (showQueue) AcousticTeal else MutedSlate
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = { showSleepTimerDialog = true },
+                        modifier = Modifier
+                            .touchTarget48()
+                            .semantics {
+                                contentDescription = if (sleepTimerState.isActive) {
+                                    val modeDesc = if (sleepTimerState.mode == SleepTimerMode.END_OF_TRACK) "End of track" else formatRemainingTimer(sleepTimerState.remainingDurationMs)
+                                    "Sleep timer active, $modeDesc remaining"
+                                } else {
+                                    "Set sleep timer"
+                                }
+                            }
+                    ) {
+                        Icon(
+                            imageVector = HarmoniaIcons.Timer,
+                            contentDescription = null,
+                            tint = if (sleepTimerState.isActive) colors.primarySignal else colors.textSecondary
+                        )
+                    }
+                    if (sleepTimerState.isActive) {
+                        Text(
+                            text = if (sleepTimerState.mode == SleepTimerMode.END_OF_TRACK) "End" else formatRemainingTimer(sleepTimerState.remainingDurationMs),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = colors.primarySignal,
+                            modifier = Modifier.padding(end = 4.dp)
+                        )
+                    }
+                    IconButton(
+                        onClick = { showQueue = !showQueue },
+                        modifier = Modifier.touchTarget48()
+                    ) {
+                        Icon(
+                            imageVector = HarmoniaIcons.QueueMusic,
+                            contentDescription = if (showQueue) "Show Now Playing" else "Show Queue",
+                            tint = if (showQueue) colors.primarySignal else colors.textSecondary
+                        )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(spacing.standard))
 
             if (showQueue) {
                 // Queue View
@@ -137,52 +214,110 @@ fun NowPlayingSheet(
                     modifier = Modifier.height(380.dp)
                 )
             } else {
-                // Large Artwork
+                // Large Responsive Artwork (fillMaxWidth 0.85f, max 320dp, prevents clipping under 200% font scale)
                 HarmoniaArtwork(
                     artworkHash = currentTrack?.artworkHash,
                     modifier = Modifier
                         .fillMaxWidth(0.85f)
+                        .sizeIn(maxWidth = 320.dp, maxHeight = 320.dp)
                         .aspectRatio(1f),
                     size = 280.dp,
-                    cornerRadius = 20.dp,
+                    cornerRadius = 16.dp,
                     contentDescription = currentTrack?.let { "${it.title} Artwork" } ?: "Album Artwork"
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(spacing.large))
 
-                // Track Title and Artist
-                Text(
-                    text = currentTrack?.title ?: "No Track Playing",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 22.sp
-                    ),
-                    color = PureSignalWhite,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = listOfNotNull(currentTrack?.artistName, currentTrack?.albumTitle).joinToString(" • ")
-                        .ifEmpty { "Harmonia Native Audio" },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MutedSlate,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                // Track Title, Artist, and Personalization Actions (Favorite & Rating)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = currentTrack?.title ?: "No Track Playing",
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 22.sp
+                            ),
+                            color = colors.textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = listOfNotNull(currentTrack?.artistName, currentTrack?.albumTitle).joinToString(" • ")
+                                .ifEmpty { "Harmonia Native Audio" },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    // Personalization Controls: Star Rating trigger & Favorite Button
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        // Rating Chip / Button (opens RatingDialog)
+                        IconButton(
+                            onClick = { showRatingDialog = true },
+                            enabled = currentTrack != null,
+                            modifier = Modifier
+                                .touchTarget48()
+                                .semantics {
+                                    contentDescription = if (rating != null) {
+                                        "Rating: $rating of 5 stars"
+                                    } else {
+                                        "Rate track"
+                                    }
+                                }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (rating != null) HarmoniaIcons.Star else HarmoniaIcons.StarBorder,
+                                    contentDescription = null,
+                                    tint = if (rating != null) colors.statusWarning else colors.textSecondary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                if (rating != null) {
+                                    Text(
+                                        text = "$rating",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = colors.statusWarning
+                                    )
+                                }
+                            }
+                        }
+
+                        // Favorite Toggle Button
+                        FavoriteButton(
+                            isFavorite = isFavorite,
+                            onToggleFavorite = onToggleFavorite,
+                            enabled = currentTrack != null
+                        )
+                    }
+                }
 
                 // Storage Disconnection / Playback Error Banner
                 if (playbackState.errorMessage != null) {
                     val errorMsg = playbackState.errorMessage
                     val isStorageDisconnected = errorMsg == PlaybackState.STORAGE_DISCONNECTED_MESSAGE
-                    Spacer(modifier = Modifier.height(14.dp))
+                    val errorCardShape = RoundedCornerShape(8.dp)
+                    Spacer(modifier = Modifier.height(spacing.medium))
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(StudioSlate)
+                            .clip(errorCardShape)
+                            .background(colors.surfaceContainer)
+                            .hairlineBorder(color = if (isStorageDisconnected) colors.statusWarning else colors.statusError, shape = errorCardShape)
                             .semantics {
                                 contentDescription = if (isStorageDisconnected) {
                                     PlaybackState.STORAGE_DISCONNECTED_MESSAGE
@@ -190,21 +325,21 @@ fun NowPlayingSheet(
                                     errorMsg
                                 }
                             }
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                            .padding(horizontal = spacing.medium, vertical = spacing.small),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = HarmoniaIcons.Settings,
                             contentDescription = null,
-                            tint = AcousticTeal,
+                            tint = if (isStorageDisconnected) colors.statusWarning else colors.statusError,
                             modifier = Modifier.size(20.dp)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(spacing.small))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = if (isStorageDisconnected) "Storage Disconnected" else "Playback Error",
                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                color = PureSignalWhite
+                                color = colors.textPrimary
                             )
                             Text(
                                 text = if (isStorageDisconnected) {
@@ -213,13 +348,13 @@ fun NowPlayingSheet(
                                     errorMsg
                                 },
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MutedSlate
+                                color = colors.textSecondary
                             )
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(spacing.standard))
 
                 // Seek Progress Bar
                 val sliderValue = if (totalDurationMs > 0) {
@@ -238,15 +373,20 @@ fun NowPlayingSheet(
                         isUserSeeking = false
                         onSeekTo((seekSliderPosition * totalDurationMs).toLong())
                     },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .touchTarget48()
+                        .semantics {
+                            contentDescription = "Playback seek slider"
+                        },
                     colors = SliderDefaults.colors(
-                        thumbColor = AcousticTeal,
-                        activeTrackColor = AcousticTeal,
-                        inactiveTrackColor = StudioSlate
+                        thumbColor = colors.primarySignal,
+                        activeTrackColor = colors.primarySignal,
+                        inactiveTrackColor = colors.surfaceContainer
                     )
                 )
 
-                // Time indicators
+                // Time indicators (Tabular alignment)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
@@ -254,71 +394,83 @@ fun NowPlayingSheet(
                     Text(
                         text = formatTime(currentPositionMs),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MutedSlate
+                        color = colors.textSecondary
                     )
                     Text(
                         text = formatTime(totalDurationMs),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MutedSlate
+                        color = colors.textSecondary
                     )
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(spacing.large))
 
-                // Full Transport Controls
+                // Full Transport Controls (All with strict 48dp minimum bounds)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Shuffle
-                    IconButton(onClick = onToggleShuffle) {
+                    // Shuffle Toggle
+                    IconButton(
+                        onClick = onToggleShuffle,
+                        modifier = Modifier.touchTarget48()
+                    ) {
                         Text(
                             text = "SHF",
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            color = if (playbackState.shuffleMode) AcousticTeal else MutedSlate
+                            color = if (playbackState.shuffleMode) colors.primarySignal else colors.textSecondary
                         )
                     }
 
-                    // Previous
-                    IconButton(onClick = onPrevious) {
+                    // Previous Track
+                    IconButton(
+                        onClick = onPrevious,
+                        modifier = Modifier.touchTarget48()
+                    ) {
                         Icon(
                             imageVector = HarmoniaIcons.SkipPrevious,
                             contentDescription = "Previous Track",
-                            tint = PureSignalWhite,
+                            tint = colors.textPrimary,
                             modifier = Modifier.size(32.dp)
                         )
                     }
 
-                    // Play/Pause Big Button
+                    // Play/Pause Big Button (64dp circular focal point)
                     Box(
                         modifier = Modifier
                             .size(64.dp)
                             .clip(CircleShape)
-                            .background(AcousticTeal)
+                            .background(colors.primarySignal)
                             .clickable(onClick = onPlayPause),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = if (playbackState.isPlaying) HarmoniaIcons.Pause else HarmoniaIcons.Play,
                             contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
-                            tint = ObsidianSpace,
+                            tint = colors.backgroundRoot,
                             modifier = Modifier.size(36.dp)
                         )
                     }
 
-                    // Next
-                    IconButton(onClick = onNext) {
+                    // Next Track
+                    IconButton(
+                        onClick = onNext,
+                        modifier = Modifier.touchTarget48()
+                    ) {
                         Icon(
                             imageVector = HarmoniaIcons.SkipNext,
                             contentDescription = "Next Track",
-                            tint = PureSignalWhite,
+                            tint = colors.textPrimary,
                             modifier = Modifier.size(32.dp)
                         )
                     }
 
-                    // Repeat
-                    IconButton(onClick = onCycleRepeat) {
+                    // Repeat Mode Toggle
+                    IconButton(
+                        onClick = onCycleRepeat,
+                        modifier = Modifier.touchTarget48()
+                    ) {
                         Text(
                             text = when (playbackState.repeatMode) {
                                 RepeatMode.OFF -> "RPT"
@@ -326,7 +478,7 @@ fun NowPlayingSheet(
                                 RepeatMode.ONE -> "ONE"
                             },
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            color = if (playbackState.repeatMode != RepeatMode.OFF) AcousticTeal else MutedSlate
+                            color = if (playbackState.repeatMode != RepeatMode.OFF) colors.primarySignal else colors.textSecondary
                         )
                     }
                 }
@@ -342,12 +494,13 @@ private fun QueueView(
     onItemClick: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = HarmoniaThemeTokens.colors
     if (queue.isEmpty()) {
         Box(
             modifier = modifier.fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
-            Text(text = "Queue is empty", color = MutedSlate)
+            Text(text = "Queue is empty", color = colors.textSecondary)
         }
     } else {
         LazyColumn(
@@ -360,7 +513,7 @@ private fun QueueView(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))
-                        .background(if (isCurrent) StudioSlate else AcousticCharcoal)
+                        .background(if (isCurrent) colors.surfaceContainer else colors.surfaceElevated)
                         .clickable { onItemClick(idx) }
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -368,7 +521,7 @@ private fun QueueView(
                     Text(
                         text = "${idx + 1}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (isCurrent) AcousticTeal else MutedSlate,
+                        color = if (isCurrent) colors.primarySignal else colors.textSecondary,
                         modifier = Modifier.width(28.dp)
                     )
                     HarmoniaArtwork(
@@ -384,14 +537,14 @@ private fun QueueView(
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
                             ),
-                            color = if (isCurrent) AcousticTeal else PureSignalWhite,
+                            color = if (isCurrent) colors.primarySignal else colors.textPrimary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = item.track?.artistName ?: "",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MutedSlate,
+                            color = colors.textSecondary,
                             maxLines = 1
                         )
                     }
@@ -406,4 +559,126 @@ private fun formatTime(ms: Long): String {
     val minutes = totalSec / 60
     val seconds = totalSec % 60
     return String.format(Locale.US, "%d:%02d", minutes, seconds)
+}
+
+private fun formatRemainingTimer(ms: Long): String {
+    val totalSec = (ms / 1000).coerceAtLeast(0)
+    val minutes = totalSec / 60
+    val seconds = totalSec % 60
+    return if (minutes >= 60) {
+        val hours = minutes / 60
+        val remMin = minutes % 60
+        String.format(Locale.US, "%d:%02d:%02d", hours, remMin, seconds)
+    } else {
+        String.format(Locale.US, "%d:%02d", minutes, seconds)
+    }
+}
+
+@Composable
+private fun SleepTimerDialog(
+    sleepTimerState: SleepTimerState,
+    onSelectPreset: (SleepTimerPreset) -> Unit,
+    onCancelTimer: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val colors = HarmoniaThemeTokens.colors
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = colors.surfaceElevated,
+        titleContentColor = colors.textPrimary,
+        textContentColor = colors.textSecondary,
+        title = {
+            Text(
+                text = "SLEEP TIMER",
+                style = MaterialTheme.typography.labelMedium.copy(
+                    letterSpacing = 1.5.sp,
+                    fontWeight = FontWeight.Bold
+                ),
+                color = colors.primarySignal
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (sleepTimerState.isActive) {
+                    val remainingText = if (sleepTimerState.mode == SleepTimerMode.END_OF_TRACK) {
+                        "Active: End of current track"
+                    } else {
+                        "Active: ${formatRemainingTimer(sleepTimerState.remainingDurationMs)} remaining"
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(colors.surfaceContainer)
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = remainingText,
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = colors.primarySignal
+                        )
+                    }
+                }
+
+                SleepTimerPreset.entries.forEach { preset ->
+                    val isSelected = sleepTimerState.isActive && (
+                        (preset == SleepTimerPreset.END_OF_TRACK && sleepTimerState.mode == SleepTimerMode.END_OF_TRACK) ||
+                        (preset != SleepTimerPreset.END_OF_TRACK && sleepTimerState.mode == SleepTimerMode.DURATION && sleepTimerState.targetDurationMs == preset.durationMs)
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isSelected) colors.surfaceContainer else colors.surfaceElevated)
+                            .border(1.dp, if (isSelected) colors.primarySignal else colors.borderStructural, RoundedCornerShape(8.dp))
+                            .clickable {
+                                onSelectPreset(preset)
+                                onDismiss()
+                            }
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = preset.label,
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            ),
+                            color = if (isSelected) colors.primarySignal else colors.textPrimary
+                        )
+                        if (isSelected) {
+                            Text(
+                                text = "Active",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = colors.primarySignal
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (sleepTimerState.isActive) {
+                TextButton(
+                    onClick = {
+                        onCancelTimer()
+                        onDismiss()
+                    }
+                ) {
+                    Text(text = "Turn Off Timer", color = colors.textPrimary)
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = "Close", color = colors.textSecondary)
+            }
+        }
+    )
 }

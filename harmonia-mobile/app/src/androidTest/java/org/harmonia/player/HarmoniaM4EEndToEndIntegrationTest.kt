@@ -320,6 +320,7 @@ class HarmoniaM4EEndToEndIntegrationTest {
         override suspend fun revalidateAllSources(): Map<String, SourceRuntimeState> = emptyMap()
         override suspend fun revalidateSource(source: StorageSource): SourceRuntimeState =
             SourceRuntimeState(sourceId = source.id, isAvailable = true, isMounted = true, hasPermission = true)
+        override suspend fun awaitInitialReadiness(): Boolean = true
         override fun startMonitoring() {}
         override fun stopMonitoring() {}
     }

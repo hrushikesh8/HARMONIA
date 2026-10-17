@@ -1,9 +1,7 @@
 package org.harmonia.player.presentation.playback
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,18 +24,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.harmonia.player.design.theme.AcousticCharcoal
-import org.harmonia.player.design.theme.AcousticTeal
-import org.harmonia.player.design.theme.BorderSlate
 import org.harmonia.player.design.theme.HarmoniaIcons
-import org.harmonia.player.design.theme.MutedSlate
-import org.harmonia.player.design.theme.PureSignalWhite
-import org.harmonia.player.design.theme.StudioSlate
+import org.harmonia.player.design.theme.HarmoniaThemeTokens
+import org.harmonia.player.design.theme.hairlineBorder
+import org.harmonia.player.design.theme.touchTarget48
 import org.harmonia.player.domain.model.PlaybackState
 import org.harmonia.player.domain.model.Track
+import org.harmonia.player.presentation.components.HarmoniaArtwork
+import org.harmonia.player.presentation.personalization.FavoriteButton
 
 /**
  * Compact persistent mini-player docked above the bottom navigation bar.
+ * Adheres to the Obsidian Acoustic Instrument design system (40dp artwork, 2dp progress, 48dp touch targets).
  */
 @Composable
 fun MiniPlayer(
@@ -46,11 +44,16 @@ fun MiniPlayer(
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isFavorite: Boolean = false,
+    onToggleFavorite: (() -> Unit)? = null
 ) {
     if (currentTrack == null && playbackState.currentTrackId == null) {
         return
     }
+
+    val colors = HarmoniaThemeTokens.colors
+    val spacing = HarmoniaThemeTokens.spacing
 
     val title = currentTrack?.title ?: "Unknown Track"
     val subtitle = listOfNotNull(currentTrack?.artistName, currentTrack?.albumTitle)
@@ -62,39 +65,41 @@ fun MiniPlayer(
         0f
     }
 
+    val miniPlayerShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-            .background(AcousticCharcoal)
-            .border(1.dp, BorderSlate, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+            .clip(miniPlayerShape)
+            .background(colors.surfaceElevated)
+            .hairlineBorder(color = colors.borderStructural, shape = miniPlayerShape, width = 1.dp)
             .clickable(onClick = onClick)
     ) {
-        // Track Progress Bar
+        // Track Progress Hairline Indicator (2dp)
         LinearProgressIndicator(
             progress = { progress },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(3.dp),
-            color = AcousticTeal,
-            trackColor = StudioSlate
+                .height(2.dp),
+            color = colors.primarySignal,
+            trackColor = colors.surfaceContainer
         )
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 6.dp),
+                .padding(horizontal = spacing.standard, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Track Art via sandboxed HarmoniaArtwork
-            org.harmonia.player.presentation.components.HarmoniaArtwork(
+            // Track Art thumbnail (40dp) via sandboxed HarmoniaArtwork
+            HarmoniaArtwork(
                 artworkHash = currentTrack?.artworkHash,
-                size = 44.dp,
+                size = 40.dp,
                 cornerRadius = 8.dp,
                 contentDescription = "Artwork for $title"
             )
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(spacing.medium))
 
             // Track metadata
             Column(
@@ -103,41 +108,49 @@ fun MiniPlayer(
                 Text(
                     text = title,
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = PureSignalWhite,
+                    color = colors.textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                    color = MutedSlate,
+                    color = colors.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
 
-            // Transport controls (48dp accessible touch targets)
+            // Transport controls (strict 48dp accessible touch targets)
+            if (onToggleFavorite != null) {
+                FavoriteButton(
+                    isFavorite = isFavorite,
+                    onToggleFavorite = onToggleFavorite,
+                    enabled = currentTrack != null
+                )
+            }
+
             IconButton(
                 onClick = onPlayPause,
-                modifier = Modifier.size(48.dp)
+                modifier = Modifier.touchTarget48()
             ) {
                 Icon(
                     imageVector = if (playbackState.isPlaying) HarmoniaIcons.Pause else HarmoniaIcons.Play,
                     contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
-                    tint = PureSignalWhite,
-                    modifier = Modifier.size(26.dp)
+                    tint = colors.textPrimary,
+                    modifier = Modifier.size(24.dp)
                 )
             }
 
             IconButton(
                 onClick = onNext,
-                modifier = Modifier.size(48.dp)
+                modifier = Modifier.touchTarget48()
             ) {
                 Icon(
                     imageVector = HarmoniaIcons.SkipNext,
                     contentDescription = "Next Track",
-                    tint = PureSignalWhite,
-                    modifier = Modifier.size(26.dp)
+                    tint = colors.textPrimary,
+                    modifier = Modifier.size(24.dp)
                 )
             }
         }

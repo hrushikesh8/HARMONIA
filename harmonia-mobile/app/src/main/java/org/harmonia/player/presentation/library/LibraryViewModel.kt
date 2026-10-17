@@ -33,7 +33,8 @@ import org.harmonia.player.domain.scanner.MediaReconciliationEngine
 enum class LibraryTab {
     TRACKS,
     ALBUMS,
-    ARTISTS
+    ARTISTS,
+    FAVORITES
 }
 
 enum class TrackSortOrder {

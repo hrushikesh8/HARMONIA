@@ -120,6 +120,11 @@ class TestPort : PlaybackPort {
     override fun setVolume(volume: Float) {
         lastVolume = volume
     }
+
+    override val sleepTimerState = MutableStateFlow(org.harmonia.player.domain.model.audio.SleepTimerState())
+    override fun startSleepTimer(durationMs: Long) {}
+    override fun startSleepTimerEndOfTrack() {}
+    override fun cancelSleepTimer() {}
 }
 
 class TestTrackRepo : TrackRepository {
@@ -243,6 +248,7 @@ class NowPlayingAndMiniPlayerUiTest {
         composeTestRule.onNodeWithContentDescription("Previous Track").assertIsDisplayed()
         composeTestRule.onAllNodesWithContentDescription("Next Track").onFirst().assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Show Queue").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Playback seek slider").assertIsDisplayed()
 
         // Test previous track click
         composeTestRule.onNodeWithContentDescription("Previous Track").performClick()
