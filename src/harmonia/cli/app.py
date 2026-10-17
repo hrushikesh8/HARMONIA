@@ -7,6 +7,7 @@ from rich.console import Console
 
 from harmonia import __version__
 from harmonia.cli.analyze import analyze_cmd
+from harmonia.cli.catalog import export_cmd, import_catalog_cmd
 from harmonia.cli.duplicates import duplicates_app
 from harmonia.cli.import_ import run_import
 from harmonia.cli.library import (
@@ -66,6 +67,8 @@ app.command("analyze", help="Measure objective audio signal properties (ebur128,
 app.command("serve", help="Launch the local HTTP REST API server.")(serve_cmd)
 app.command("ui", help="Launch the Harmonia desktop web UI.")(ui_cmd)
 app.command("init-db", help="Initialize the SQLite database schema.")(init_db_cmd)
+app.command("export", help="Export the library catalog to a portable JSON bundle.")(export_cmd)
+app.command("import-catalog", help="Import a portable JSON catalog bundle into the library.")(import_catalog_cmd)
 
 
 def version_callback(value: bool) -> None:

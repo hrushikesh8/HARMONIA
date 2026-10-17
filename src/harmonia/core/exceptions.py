@@ -121,3 +121,26 @@ class ValidationError(HarmoniaError):
         self.field = field
         self.reason = reason
         super().__init__(f"Validation error on '{field}': {reason}")
+
+
+# ── Catalog Portability errors ───────────────────────────────────────────────
+
+
+class CatalogError(HarmoniaError):
+    """Base class for catalog export and import errors."""
+
+
+class CatalogValidationError(CatalogError):
+    """Bundle structure or schema validation failure."""
+
+
+class CatalogIntegrityError(CatalogError):
+    """Integrity check failure (checksum mismatch)."""
+
+
+class CatalogVersionError(CatalogError):
+    """Unsupported catalog bundle schema version."""
+
+
+class CatalogConflictError(CatalogError):
+    """Conflict with existing library records during import."""
