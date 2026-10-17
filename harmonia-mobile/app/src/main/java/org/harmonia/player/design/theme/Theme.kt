@@ -30,27 +30,48 @@ private val DarkColorScheme = darkColorScheme(
     onError = PureSignalWhite
 )
 
+val LocalHarmoniaColors = androidx.compose.runtime.staticCompositionLocalOf { DarkHarmoniaSemanticColors }
+
+object HarmoniaThemeTokens {
+    val colors: HarmoniaSemanticColors
+        @Composable
+        get() = LocalHarmoniaColors.current
+
+    val spacing: HarmoniaSpacing
+        @Composable
+        get() = LocalHarmoniaSpacing.current
+}
+
 @Composable
 fun HarmoniaTheme(
+    darkTheme: Boolean = true,
     content: @Composable () -> Unit
 ) {
+    val semanticColors = if (darkTheme) DarkHarmoniaSemanticColors else LightHarmoniaSemanticColors
+    val colorScheme = if (darkTheme) DarkColorScheme else DarkColorScheme // Base M3 scheme uses dark for now
+
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as? Activity)?.window
             if (window != null) {
-                window.statusBarColor = ObsidianSpace.toArgb()
-                window.navigationBarColor = ObsidianSpace.toArgb()
-                WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
-                WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = false
+                window.statusBarColor = semanticColors.backgroundRoot.toArgb()
+                window.navigationBarColor = semanticColors.backgroundRoot.toArgb()
+                WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+                WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !darkTheme
             }
         }
     }
 
-    MaterialTheme(
-        colorScheme = DarkColorScheme,
-        typography = HarmoniaTypography,
-        shapes = HarmoniaShapes,
-        content = content
-    )
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalHarmoniaColors provides semanticColors,
+        LocalHarmoniaSpacing provides HarmoniaSpacing()
+    ) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = HarmoniaTypography,
+            shapes = HarmoniaShapes,
+            content = content
+        )
+    }
 }

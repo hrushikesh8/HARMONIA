@@ -573,4 +573,152 @@ object HarmoniaIcons {
             close()
         }
     }.build()
+
+    val Timer: ImageVector = ImageVector.Builder(
+        name = "Timer",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(15f, 1f)
+            horizontalLineTo(9f)
+            verticalLineToRelative(2f)
+            horizontalLineToRelative(6f)
+            verticalLineTo(1f)
+            close()
+            moveTo(19.03f, 7.39f)
+            lineToRelative(1.42f, -1.42f)
+            curveToRelative(-0.43f, -0.51f, -0.9f, -0.99f, -1.41f, -1.41f)
+            lineToRelative(-1.42f, 1.42f)
+            curveTo(16.07f, 4.74f, 14.12f, 4f, 12f, 4f)
+            curveToRelative(-4.97f, 0f, -9f, 4.03f, -9f, 9f)
+            curveToRelative(0f, 4.97f, 4.02f, 9f, 9f, 9f)
+            reflectiveCurveToRelative(9f, -4.03f, 9f, -9f)
+            curveToRelative(0f, -2.12f, -0.74f, -4.07f, -1.97f, -5.61f)
+            close()
+            moveTo(12f, 20f)
+            curveToRelative(-3.87f, 0f, -7f, -3.13f, -7f, -7f)
+            reflectiveCurveToRelative(3.13f, -7f, 7f, -7f)
+            reflectiveCurveToRelative(7f, 3.13f, 7f, 7f)
+            reflectiveCurveToRelative(-3.13f, 7f, -7f, 7f)
+            close()
+            moveTo(11f, 8f)
+            horizontalLineToRelative(2f)
+            verticalLineToRelative(6f)
+            horizontalLineToRelative(-2f)
+            close()
+        }
+    }.build()
+
+    val Favorite: ImageVector = ImageVector.Builder(
+        name = "Favorite",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(12f, 21.35f)
+            lineToRelative(-1.45f, -1.32f)
+            curveTo(5.4f, 15.36f, 2f, 12.28f, 2f, 8.5f)
+            curveTo(2f, 5.42f, 4.42f, 3f, 7.5f, 3f)
+            curveToRelative(1.74f, 0f, 3.41f, 0.81f, 4.5f, 2.09f)
+            curveTo(13.09f, 3.81f, 14.76f, 3f, 16.5f, 3f)
+            curveTo(19.58f, 3f, 22f, 5.42f, 22f, 8.5f)
+            curveToRelative(0f, 3.78f, -3.4f, 6.86f, -8.55f, 11.54f)
+            lineTo(12f, 21.35f)
+            close()
+        }
+    }.build()
+
+    val FavoriteBorder: ImageVector = ImageVector.Builder(
+        name = "FavoriteBorder",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(16.5f, 3f)
+            curveToRelative(-1.74f, 0f, -3.41f, 0.81f, -4.5f, 2.09f)
+            curveTo(10.91f, 3.81f, 9.24f, 3f, 7.5f, 3f)
+            curveTo(4.42f, 3f, 2f, 5.42f, 2f, 8.5f)
+            curveToRelative(0f, 3.78f, 3.4f, 6.86f, 8.55f, 11.54f)
+            lineTo(12f, 21.35f)
+            lineToRelative(1.45f, -1.32f)
+            curveTo(18.6f, 15.36f, 22f, 12.28f, 22f, 8.5f)
+            curveTo(22f, 5.42f, 19.58f, 3f, 16.5f, 3f)
+            close()
+            moveTo(12.1f, 18.55f)
+            lineToRelative(-0.1f, 0.1f)
+            lineToRelative(-0.1f, -0.1f)
+            curveTo(7.14f, 14.24f, 4f, 11.39f, 4f, 8.5f)
+            curveTo(4f, 6.5f, 5.5f, 5f, 7.5f, 5f)
+            curveToRelative(1.54f, 0f, 3.04f, 0.99f, 3.57f, 2.36f)
+            horizontalLineToRelative(1.87f)
+            curveTo(13.46f, 5.99f, 14.96f, 5f, 16.5f, 5f)
+            curveToRelative(2f, 0f, 3.5f, 1.5f, 3.5f, 3.5f)
+            curveToRelative(0f, 2.89f, -3.14f, 5.74f, -7.9f, 10.05f)
+            close()
+        }
+    }.build()
+
+    val Star: ImageVector = ImageVector.Builder(
+        name = "Star",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(12f, 17.27f)
+            lineTo(18.18f, 21f)
+            lineToRelative(-1.64f, -7.03f)
+            lineTo(22f, 9.24f)
+            lineToRelative(-7.19f, -0.61f)
+            lineTo(12f, 2f)
+            lineTo(9.19f, 8.63f)
+            lineTo(2f, 9.24f)
+            lineToRelative(5.46f, 4.73f)
+            lineTo(5.82f, 21f)
+            close()
+        }
+    }.build()
+
+    val StarBorder: ImageVector = ImageVector.Builder(
+        name = "StarBorder",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(22f, 9.24f)
+            lineToRelative(-7.19f, -0.62f)
+            lineTo(12f, 2f)
+            lineTo(9.19f, 8.63f)
+            lineTo(2f, 9.24f)
+            lineToRelative(5.46f, 4.73f)
+            lineTo(5.82f, 21f)
+            lineTo(12f, 17.27f)
+            lineTo(18.18f, 21f)
+            lineToRelative(-1.63f, -7.03f)
+            lineTo(22f, 9.24f)
+            close()
+            moveTo(12f, 15.4f)
+            lineToRelative(-3.76f, 2.27f)
+            lineToRelative(1f, -4.28f)
+            lineToRelative(-3.32f, -2.88f)
+            lineToRelative(4.38f, -0.38f)
+            lineTo(12f, 6.1f)
+            lineToRelative(1.71f, 4.04f)
+            lineToRelative(4.38f, 0.38f)
+            lineToRelative(-3.32f, 2.88f)
+            lineToRelative(1f, 4.28f)
+            lineTo(12f, 15.4f)
+            close()
+        }
+    }.build()
 }
