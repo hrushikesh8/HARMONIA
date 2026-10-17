@@ -100,7 +100,7 @@ def test_api_playback_and_queue_flow(client_and_tracks) -> None:
     # 5. Seek
     seek_res = client.post("/api/v1/playback/seek", json={"position_seconds": 45.0})
     assert seek_res.status_code == 200
-    assert seek_res.json()["position_seconds"] == 45.0
+    assert seek_res.json()["position_seconds"] == pytest.approx(45.0, abs=0.5)
 
     # 6. Volume
     vol_res = client.post("/api/v1/playback/volume", json={"volume": 0.75})

@@ -11,6 +11,7 @@ from rich.console import Console
 
 from harmonia.api.app import create_app
 from harmonia.core.config import HarmoniaConfig
+from harmonia.infrastructure.audio.backend import DesktopAudioBackend
 
 console = Console()
 
@@ -37,7 +38,7 @@ def serve_cmd(
 
         threading.Timer(0.5, lambda: webbrowser.open(f"http://{bind_host}:{bind_port}")).start()
 
-    app = create_app(config)
+    app = create_app(config, audio_backend=DesktopAudioBackend())
     uvicorn.run(app, host=bind_host, port=bind_port, reload=reload)
 
 

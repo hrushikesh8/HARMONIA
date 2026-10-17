@@ -14,6 +14,10 @@ dependencies = [
     "alembic>=1.13",
     "rich>=13.0",
     "watchdog>=4.0",
+    "miniaudio>=1.71",
+    "fastapi>=0.142.4",
+    "uvicorn>=0.54.0",
+    "httpx>=0.28.1",
 ]
 
 [project.optional-dependencies]
@@ -88,3 +92,10 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-v --tb=short"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+]

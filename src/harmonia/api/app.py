@@ -31,6 +31,7 @@ from harmonia.application.playback_service import PlaybackService
 from harmonia.core.config import HarmoniaConfig
 from harmonia.core.database import create_database_engine, create_session_factory, init_database
 from harmonia.core.exceptions import HarmoniaError
+from harmonia.infrastructure.audio.backend import DesktopAudioBackend
 from harmonia.infrastructure.persistence.listening_event_repo import (
     SqliteListeningEventRepository,
 )
@@ -49,6 +50,7 @@ def create_app(
     config: HarmoniaConfig | None = None,
     session_factory: Callable[[], Session] | None = None,
     analysis_service: AudioAnalysisService | None = None,
+    audio_backend: DesktopAudioBackend | None = None,
 ) -> FastAPI:
     """Create and configure a FastAPI application instance."""
     app_config = config or HarmoniaConfig.load()
@@ -76,6 +78,7 @@ def create_app(
         track_repo=SqliteTrackRepository(playback_session),
         listening_event_repo=SqliteListeningEventRepository(playback_session),
         snapshot_repo=SqlitePlaybackSnapshotRepository(playback_session),
+        audio_backend=audio_backend,
         session=playback_session,
     )
     playback_service.restore_snapshot()

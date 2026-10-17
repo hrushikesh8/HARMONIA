@@ -17,7 +17,10 @@ from harmonia.domain.values.playback import (
     RepeatMode,
     StreamUriSource,
 )
-from harmonia.infrastructure.audio.backend import AudioBackend, VirtualAudioBackend
+from harmonia.infrastructure.audio.backend import (
+    AudioBackend,
+    VirtualAudioBackend,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -72,7 +75,7 @@ class _PlaybackSession:
             self.last_tick = now
         self.ended_at_sec = current_pos
 
-    def finalize(self, final_pos: float) -> ListeningEvent:
+    def finalize(self, final_pos: float, force_completed: bool = False) -> ListeningEvent:
         if self.last_tick is not None:
             elapsed = time.monotonic() - self.last_tick
             if elapsed > 0:
@@ -80,12 +83,18 @@ class _PlaybackSession:
             self.last_tick = None
         self.ended_at_sec = final_pos
 
+        duration_listened = (
+            max(self.listened_seconds, self.track_duration)
+            if force_completed and self.track_duration > 0
+            else self.listened_seconds
+        )
+
         return ListeningEvent.create(
             track_id=self.track_id,
             track_file_id=self.track_file_id,
             started_at_sec=self.started_at_sec,
             ended_at_sec=self.ended_at_sec,
-            duration_listened_seconds=self.listened_seconds,
+            duration_listened_seconds=duration_listened,
             track_duration_seconds=self.track_duration,
             playback_source=self.playback_source,
             event_id=self.session_id,
@@ -110,7 +119,8 @@ class PlaybackService:
         self._track_repo = track_repo
         self._listening_event_repo = listening_event_repo
         self._snapshot_repo = snapshot_repo
-        self._backend: AudioBackend = audio_backend or VirtualAudioBackend()
+        self._backend: AudioBackend = audio_backend if audio_backend is not None else VirtualAudioBackend()
+        self._backend.set_eof_callback(self._on_backend_eof)
         self._db_session = session
 
         # Internal Queue State
@@ -478,16 +488,51 @@ class PlaybackService:
 
         return False
 
+    def _on_backend_eof(self) -> None:
+        """Invoked when the physical audio backend signals EOF / track completion."""
+        logger.info("Audio backend signaled EOF for active track")
+        pos = self._state.duration_seconds if self._state.duration_seconds > 0 else self._backend.get_position()
+        self._finalize_active_session(pos, force_completed=True)
+
+        if self._state.repeat_mode == RepeatMode.ONE and self._current_item is not None:
+            self.seek(0.0)
+            self._start_active_track()
+            return
+
+        if self._advance_to_next():
+            self._start_active_track()
+        else:
+            self._current_item = None
+            self._backend.stop()
+            self._state.status = PlaybackStatus.STOPPED
+            self._state.position_seconds = 0.0
+            self._state.current_track_id = None
+            self._state.current_track_file_id = None
+            self._state.active_session_id = None
+            self._save_snapshot()
+
     def _start_active_track(self) -> None:
         """Load and start playback of the current active track."""
         if self._current_item is None:
             return
 
         source = self._resolve_playback_source(self._current_item)
-        if source:
+        if not source:
+            self._handle_playback_error("No audio source available for track")
+            return
+
+        try:
             self._backend.load(source)
             self._backend.set_volume(self._state.volume)
             self._backend.play()
+        except Exception as exc:
+            logger.error(
+                "Failed to load or play track %s: %s",
+                self._current_item.track_id,
+                exc,
+            )
+            self._handle_playback_error(f"Playback failed: {exc}")
+            return
 
         self._state.status = PlaybackStatus.PLAYING
         self._state.current_track_id = self._current_item.track_id
@@ -507,12 +552,27 @@ class PlaybackService:
 
         self._save_snapshot()
 
-    def _finalize_active_session(self, final_pos: float) -> None:
+    def _handle_playback_error(self, message: str) -> None:
+        """Safely halt playback upon decoder failure or missing track file."""
+        pos = 0.0
+        try:
+            pos = self._backend.get_position()
+            self._backend.stop()
+        except Exception:
+            pass
+        self._finalize_active_session(pos)
+        self._state.status = PlaybackStatus.STOPPED
+        self._state.position_seconds = 0.0
+        self._state.active_session_id = None
+        self._save_snapshot()
+        logger.warning("Playback halted due to error: %s", message)
+
+    def _finalize_active_session(self, final_pos: float, force_completed: bool = False) -> None:
         """Commit factual ListeningEvent for the concluded session."""
         if self._active_session is None:
             return
 
-        event = self._active_session.finalize(final_pos)
+        event = self._active_session.finalize(final_pos, force_completed=force_completed)
         try:
             self._listening_event_repo.add(event)
             if self._db_session:
@@ -543,15 +603,8 @@ class PlaybackService:
         from pathlib import Path
 
         file_path = Path(best_file.file_path)
-        if file_path.is_file():
-            return LocalFileSource(
-                file_path=file_path,
-                mime_type=f"audio/{best_file.format.value}",
-            )
-
-        # Fallback to HTTP stream
-        return StreamUriSource(
-            stream_url=f"/api/v1/tracks/{item.track_id}/stream",
+        return LocalFileSource(
+            file_path=file_path,
             mime_type=f"audio/{best_file.format.value}",
         )
 
