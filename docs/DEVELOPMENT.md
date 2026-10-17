@@ -1,4 +1,7 @@
-# Harmonia Development Guide
+# Harmonia Development Guide — Desktop & Core Server
+
+> [!NOTE]
+> **Scope Notice:** This guide covers local environment setup, CLI operations, migrations, and test execution for the **Harmonia Desktop & Core Server** Python project (`src/harmonia/`). For development on the native Android player, see the [Harmonia Mobile Subproject](#harmonia-mobile-subproject) section below. For ecosystem status, consult the master roadmap at [`docs/ROADMAP.md`](ROADMAP.md).
 
 ## Prerequisites
 
@@ -12,7 +15,8 @@
 
 1. **Clone repository and enter directory**:
    ```powershell
-   cd c:\Users\Hrushikesh Bunni\Downloads\H\PROJECTS\HARMONIA
+   git clone <repository-url> harmonia
+   cd harmonia
    ```
 
 2. **Install dependencies (or activate environment)**:
@@ -81,3 +85,20 @@ $env:PYTHONPATH="src"; pytest
 # Run with test coverage
 $env:PYTHONPATH="src"; pytest --cov=harmonia
 ```
+
+---
+
+## Harmonia Mobile Subproject
+
+Harmonia Mobile resides in the [`harmonia-mobile/`](../harmonia-mobile/) directory and is built using the Android Gradle plugin, Kotlin 2.0+, and Android SDK 35 (minSdk 26).
+
+- **Project Directory:** `harmonia-mobile/`
+- **Architecture & Implementation:** See [`docs/ROADMAP.md`](ROADMAP.md), [`docs/MOBILE_M4_ARCHITECTURE.md`](MOBILE_M4_ARCHITECTURE.md), [`docs/MOBILE_M5_ARCHITECTURE.md`](MOBILE_M5_ARCHITECTURE.md), and [`docs/knowledge/`](knowledge/README.md).
+- **Gradle Tasks (via PowerShell / Gradle wrapper):**
+  ```powershell
+  cd harmonia-mobile
+  # Run JVM unit tests
+  .\gradlew.bat testDebugUnitTest
+  # Assemble debug APK
+  .\gradlew.bat assembleDebug
+  ```

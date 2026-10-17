@@ -1,8 +1,18 @@
-# Harmonia Architecture
+# Harmonia Architecture — Desktop & Core Server
+
+**Document Classification:** Desktop & Core Server Architectural Specification
+**Status:** ACTIVE & AUTHORITATIVE (Desktop Subsystem)
+**Cross-Platform References:**
+- Master Roadmap: [`docs/ROADMAP.md`](ROADMAP.md)
+- Mobile Architecture (Android Native): [`docs/MOBILE_M4_ARCHITECTURE.md`](MOBILE_M4_ARCHITECTURE.md), [`docs/MOBILE_M5_ARCHITECTURE.md`](MOBILE_M5_ARCHITECTURE.md)
+- Knowledge Base: [`docs/knowledge/`](knowledge/README.md)
+
+> [!NOTE]
+> **Subsystem Scope:** This document specifies the architectural model for the **Harmonia Desktop & Core Server** application (`src/harmonia/`), implemented in Python with clean architecture, SQLite WAL mode, Mutagen, and FFmpeg/EBUR128. For the native Android player architecture, consult the Mobile architecture specifications linked above.
 
 ## Overview
 
-**Harmonia** is the deterministic music infrastructure and personal music library system. It is designed to be:
+**Harmonia Desktop** is the deterministic music infrastructure and personal music library system. It is designed to be:
 - **Local-first & offline**: Operates completely without network access or cloud dependencies.
 - **Deterministic**: Pure logic with no probabilistic or AI components.
 - **Modular**: Adheres strictly to pragmatic Clean Architecture principles.

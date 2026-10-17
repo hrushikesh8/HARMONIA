@@ -1,4 +1,13 @@
-# Harmonia Data Model
+# Harmonia Data Model — Desktop Relational Schema
+
+**Document Classification:** Desktop Relational Data Model (SQLAlchemy / SQLite WAL)
+**Status:** ACTIVE & AUTHORITATIVE (Desktop Subsystem)
+**Related Schemas:**
+- Mobile Room Database Schema: See [`docs/MOBILE_M5_ARCHITECTURE.md`](MOBILE_M5_ARCHITECTURE.md), [`docs/MOBILE_ARCHITECTURE_v0.1.md:§11.2`](MOBILE_ARCHITECTURE_v0.1.md), and [`ADR-036`](knowledge/adr/ADR-036-personalization-persistence-schema-v5.md)
+- Master Roadmap: [`docs/ROADMAP.md`](ROADMAP.md)
+
+> [!NOTE]
+> **Subsystem Scope:** This document defines the relational entity-relationship schema implemented in Python with SQLAlchemy 2.0 and Alembic for the **Harmonia Desktop & Core Server** library database (`src/harmonia/infrastructure/database/`).
 
 ## Entity Relationship Overview
 

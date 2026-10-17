@@ -1,11 +1,16 @@
 # Harmonia Mobile v0.1 — Architecture Design Document
 
-**Status:** Proposed Architecture (Subject to M0.1 Reconciliation)  
-**Version:** 0.1.1  
-**Date:** October 2026  
-**Document Author:** Harmonia Engineering Architecture Group  
-**Classification:** Core System Specification  
-**Architecture Reconciliation:** See [`docs/MOBILE_ARCHITECTURE_RECONCILIATION.md`](file:///c:/Users/Hrushikesh%20Bunni/Downloads/H/PROJECTS/HARMONIA/docs/MOBILE_ARCHITECTURE_RECONCILIATION.md) for authoritative M0.1 decisions (Room SQLite, Android-First Native, SwiftUI on iOS, Media3 Extractor, and MediaLibraryService for Android Auto).
+**Status:** Proposed Architecture (Subject to M0.1 Reconciliation)
+**Version:** 0.1.1
+**Date:** October 2026
+**Document Author:** Harmonia Engineering Architecture Group
+**Classification:** Historical Core System Specification (M0 Baseline)
+**Architecture Reconciliation:** See [`docs/MOBILE_ARCHITECTURE_RECONCILIATION.md`](MOBILE_ARCHITECTURE_RECONCILIATION.md) for authoritative M0.1 decisions (Room SQLite, Android-First Native, SwiftUI on iOS, Media3 Extractor, and MediaLibraryService for Android Auto) and [`docs/ROADMAP.md`](ROADMAP.md) for the active master roadmap.
+
+> [!IMPORTANT]
+> **Historical Baseline & Superseded Proposals Notice (Stage 4):**
+> This document preserves the historical **Milestone M0** architectural proposal as originally authored in October 2026. Several early exploratory technology proposals evaluated in §3 and §4 (such as Kotlin Multiplatform / Compose Multiplatform and SQLDelight) were **formally superseded by M0.1 architectural decisions** documented in [`docs/MOBILE_ARCHITECTURE_RECONCILIATION.md`](MOBILE_ARCHITECTURE_RECONCILIATION.md) (which established Android-First Native Jetpack Compose, Room SQLite, and AndroidX Media3).
+> This document is retained for historical traceability and domain boundary definition. Do not interpret superseded exploratory sections as active architecture. Consult [`docs/ROADMAP.md`](ROADMAP.md) and [`docs/knowledge/`](knowledge/README.md) for current implementation records and invariants.
 
 ---
 
@@ -271,19 +276,18 @@ CREATE TABLE mobile_playlist_items (
     UNIQUE(playlist_id, position)
 );
 
--- Personal Annotations (Bidirectional Sync with Deterministic Merge)
+-- Personal Annotations (Dedicated Schema v5: Local-first persistence)
+-- Active favorite indicated by row presence; unfavoriting performs row deletion.
 CREATE TABLE mobile_favorites (
     track_id TEXT PRIMARY KEY NOT NULL REFERENCES mobile_tracks(id) ON DELETE CASCADE,
-    is_favorite INTEGER NOT NULL,
-    client_updated_at INTEGER NOT NULL,
-    is_synced INTEGER NOT NULL DEFAULT 0
+    client_updated_at INTEGER NOT NULL
 );
 
+-- User ratings strictly integer 1..5; unrated/cleared indicated by absence of row.
 CREATE TABLE mobile_ratings (
     track_id TEXT PRIMARY KEY NOT NULL REFERENCES mobile_tracks(id) ON DELETE CASCADE,
     rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
-    client_updated_at INTEGER NOT NULL,
-    is_synced INTEGER NOT NULL DEFAULT 0
+    client_updated_at INTEGER NOT NULL
 );
 
 -- Listening Telemetry (Immutable Append-Only Log)
@@ -512,18 +516,22 @@ To prevent data loss and eliminate ambiguous race conditions, conflict handling 
   3. Items explicitly deleted on either device are removed, provided the deletion timestamp is newer than the item's addition timestamp.
   4. If an order conflict occurs that cannot be resolved cleanly, the system performs a non-destructive branch: Mobile retains `Playlist Name (Mobile)` while syncing the desktop version as canonical.
 
-### 11.2 Tombstone Deletion for Favorites and Ratings
-- Soft deletes are recorded via tombstones:
-  ```json
-  {
-    "track_id": "a98f12c4-...",
-    "entity": "favorite",
-    "is_favorite": false,
-    "timestamp_ms": 1791456000000,
-    "device_id": "mobile-pixel-8"
-  }
-  ```
-- If Node A receives a favorite deletion at $T_2$ and Node B attempts to send a favorite creation from $T_1$ (where $T_1 < T_2$), the deletion persists. If timestamps match exactly, the lexicographically higher `device_id` breaks the tie deterministically.
+### 11.2 Synchronization & Tombstone Strategy for Favorites and Ratings
+- **Local Persistence (Schema v5):** Local operational tables (`mobile_favorites`, `mobile_ratings`) use row presence/deletion semantics to keep database size compact and queries fast without unbounded tombstone accumulation. The `client_updated_at` column represents the timestamp of active user mutation and does **not** itself represent deletions.
+- **Future Milestone M6 (LocalSync) Conflict Resolution:**
+  - Milestone M6 will introduce a dedicated mutation-journal / tombstone synchronization table (e.g. `mobile_sync_tombstones(id, entity_type, entity_id, is_deleted, timestamp_ms, device_id)`).
+  - Soft deletes during synchronization are recorded via this sync journal:
+   ```json
+   {
+     "track_id": "a98f12c4-...",
+     "entity": "favorite",
+     "is_deleted": true,
+     "timestamp_ms": 1791456000000,
+     "device_id": "mobile-pixel-8"
+   }
+   ```
+  - If Node A receives a favorite deletion at $T_2$ and Node B attempts to send a favorite creation from $T_1$ (where $T_1 < T_2$), the deletion persists. If timestamps match exactly, the lexicographically higher `device_id` breaks the tie deterministically.
+  - This keeps operational domain tables clean in local mode while enabling mathematically deterministic Last-Write-Wins (LWW) conflict resolution when network synchronization is active.
 
 ### 11.3 Listening Event Merging
 - All listening events utilize UUIDv7 identifiers (which embed millisecond-precision Unix timestamps in the high 48 bits followed by cryptographically random bits).
