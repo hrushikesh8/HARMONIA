@@ -21,6 +21,8 @@ from sqlalchemy import (
     String,
     Text,
     Uuid,
+    desc,
+    func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -55,7 +57,7 @@ class ArtistModel(Base):
     tracks: Mapped[list[TrackModel]] = relationship(back_populates="artist")
 
     __table_args__ = (
-        Index("ix_artists_name_lower", "name"),
+        Index("ix_artists_name_lower", func.lower(name)),
         Index("ix_artists_sort_name", "sort_name"),
     )
 
@@ -94,6 +96,8 @@ class AlbumModel(Base):
         Index("ix_albums_title", "title"),
         Index("ix_albums_artist_id", "artist_id"),
         Index("ix_albums_year", "year"),
+        Index("ix_albums_artist_title_lower", "artist_id", func.lower(title)),
+        Index("ix_albums_artist_year", "artist_id", desc("year")),
     )
 
 
@@ -145,6 +149,8 @@ class TrackModel(Base):
         Index("ix_tracks_artist_id", "artist_id"),
         Index("ix_tracks_album_id", "album_id"),
         Index("ix_tracks_genre", "genre"),
+        Index("ix_tracks_album_disc_track", "album_id", "disc_number", "track_number"),
+        Index("ix_tracks_artist_title", "artist_id", "title"),
     )
 
 
@@ -188,6 +194,7 @@ class TrackFileModel(Base):
         Index("ix_track_files_track_id", "track_id"),
         Index("ix_track_files_file_hash", "file_hash"),
         Index("ix_track_files_format", "format"),
+        Index("ix_track_files_track_quality", "track_id", desc("quality_score")),
     )
 
 
@@ -240,6 +247,14 @@ class MetadataFieldModel(Base):
         Index("ix_metadata_fields_entity", "entity_type", "entity_id"),
         Index("ix_metadata_fields_entity_field", "entity_type", "entity_id", "field_name"),
         Index("ix_metadata_fields_provider", "provider"),
+        Index(
+            "ix_metadata_fields_entity_field_priority",
+            "entity_type",
+            "entity_id",
+            "field_name",
+            desc("priority"),
+            "created_at",
+        ),
     )
 
 
@@ -358,6 +373,11 @@ class ListeningEventModel(Base):
         Index("ix_listening_events_track_id", "track_id"),
         Index("ix_listening_events_timestamp", "timestamp_utc"),
         Index("ix_listening_events_track_file_id", "track_file_id"),
+        Index(
+            "ix_listening_events_track_timestamp",
+            "track_id",
+            desc("timestamp_utc"),
+        ),
     )
 
 

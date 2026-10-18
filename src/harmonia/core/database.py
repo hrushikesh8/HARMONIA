@@ -20,14 +20,26 @@ logger = get_logger(__name__)
 
 
 def _enable_sqlite_pragmas(dbapi_conn: object, _connection_record: object) -> None:
-    """Enable WAL mode and foreign keys on every new SQLite connection.
+    """Enable WAL mode, foreign keys, and performance tuning on every new SQLite connection.
 
     Called via SQLAlchemy's connection-pool event system.
+    Configures:
+    - WAL journal mode for concurrent readers and writer.
+    - Foreign key constraints enforcement.
+    - 5000ms busy timeout to prevent busy lock failures.
+    - NORMAL synchronous mode for high write throughput while maintaining database consistency in WAL mode.
+    - 64MB cache size (-64000) for large-library indexing and query planning.
+    - In-memory temporary tables and sorting (temp_store=MEMORY).
+    - Memory-mapped I/O (mmap_size=256MB) for low-overhead page reads.
     """
     cursor = dbapi_conn.cursor()  # type: ignore[union-attr]
     cursor.execute("PRAGMA journal_mode=WAL")
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.execute("PRAGMA busy_timeout=5000")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.execute("PRAGMA cache_size=-64000")
+    cursor.execute("PRAGMA temp_store=MEMORY")
+    cursor.execute("PRAGMA mmap_size=268435456")
     cursor.close()
 
 
