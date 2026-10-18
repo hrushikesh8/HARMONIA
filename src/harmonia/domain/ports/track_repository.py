@@ -97,6 +97,10 @@ class TrackRepository(Protocol):
         """Delete a physical track file record."""
         ...
 
+    def get_files_by_directory_prefix(self, prefix: str) -> list[TrackFile]:
+        """Look up all track files whose file_path is within the directory prefix."""
+        ...
+
     # ── Tags ──────────────────────────────────────────────────────────────
 
     def add_tag(self, tag: Tag) -> None:

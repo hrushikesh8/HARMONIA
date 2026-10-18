@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
@@ -182,6 +183,60 @@ class SqliteTrackRepository:
         self._session.delete(model)
         self._session.flush()
         return True
+
+    def get_files_by_directory_prefix(self, prefix: str) -> list[TrackFile]:
+        """Look up all track files whose file_path is within the directory prefix.
+
+        Applies SQL-level path prefix filtering for ASCII prefixes to avoid scanning
+        the entire database in Python, then verifies Path.resolve().is_relative_to() on
+        matching candidates for strict safety.
+
+        For non-ASCII prefixes, falls back to full candidate retrieval because SQLite's
+        built-in LIKE operator only performs case-folding on ASCII (a-z) and would produce
+        false negatives on Unicode case variations (e.g. 'É' vs 'é').
+        """
+        raw_str = str(prefix).strip()
+        if not raw_str:
+            return []
+
+        target_dir = Path(prefix).resolve()
+        resolved_str = str(target_dir)
+
+        # Check if the query prefix contains any non-ASCII characters.
+        # SQLite's built-in LIKE operator only performs case-insensitive matching for ASCII.
+        # For non-ASCII prefixes, LIKE could silently drop matches where casing differs
+        # (e.g. 'édith_piaf' vs 'Édith_Piaf'). In that case, we fall back to scanning
+        # all track files and relying on Python's path verification.
+        is_ascii = raw_str.isascii() and resolved_str.isascii()
+
+        if is_ascii:
+            posix_p = resolved_str.replace("\\", "/").rstrip("/")
+            win_p = resolved_str.replace("/", "\\").rstrip("\\")
+            raw_posix = raw_str.replace("\\", "/").rstrip("/")
+            raw_win = raw_str.replace("/", "\\").rstrip("\\")
+
+            stmt = select(TrackFileModel).where(
+                TrackFileModel.file_path.like(posix_p + "/%")
+                | TrackFileModel.file_path.like(win_p + "\\%")
+                | TrackFileModel.file_path.like(raw_posix + "/%")
+                | TrackFileModel.file_path.like(raw_win + "\\%")
+                | (TrackFileModel.file_path == posix_p)
+                | (TrackFileModel.file_path == win_p)
+                | (TrackFileModel.file_path == raw_posix)
+                | (TrackFileModel.file_path == raw_win)
+            )
+        else:
+            stmt = select(TrackFileModel)
+
+        models = self._session.scalars(stmt).all()
+        results: list[TrackFile] = []
+        for m in models:
+            try:
+                if Path(m.file_path).resolve().is_relative_to(target_dir):
+                    results.append(_model_to_track_file(m))
+            except (ValueError, OSError):
+                pass
+        return results
 
     # ── Tags ──────────────────────────────────────────────────────────────
 

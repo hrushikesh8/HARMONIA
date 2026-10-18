@@ -52,9 +52,34 @@ def scan_directory(
 
     logger.info("Scanning directory: %s", directory)
 
+    visited_dirs: set[tuple[int, int]] = set()
+    if follow_symlinks:
+        try:
+            root_stat = directory.stat()
+            visited_dirs.add((root_stat.st_dev, root_stat.st_ino))
+        except OSError:
+            pass
+
     for root, dirs, files in os.walk(str(directory), followlinks=follow_symlinks):
         # Skip hidden directories.
         dirs[:] = [d for d in dirs if not d.startswith(".")]
+
+        # Loop protection for recursive symlinks
+        if follow_symlinks:
+            pruned_dirs: list[str] = []
+            for d in dirs:
+                d_path = Path(root) / d
+                try:
+                    st = d_path.stat()
+                    key = (st.st_dev, st.st_ino)
+                    if key in visited_dirs:
+                        logger.debug("Skipping recursive symlink loop in directory: %s", d_path)
+                        continue
+                    visited_dirs.add(key)
+                    pruned_dirs.append(d)
+                except OSError:
+                    continue
+            dirs[:] = pruned_dirs
 
         for filename in files:
             # Skip hidden files.

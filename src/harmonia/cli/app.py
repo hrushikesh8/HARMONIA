@@ -22,6 +22,7 @@ from harmonia.cli.library import (
 )
 from harmonia.cli.search import reindex_cmd, search_cmd
 from harmonia.cli.serve import serve_cmd, ui_cmd
+from harmonia.cli.watch import watch_cmd
 
 console = Console()
 
@@ -69,6 +70,7 @@ app.command("ui", help="Launch the Harmonia desktop web UI.")(ui_cmd)
 app.command("init-db", help="Initialize the SQLite database schema.")(init_db_cmd)
 app.command("export", help="Export the library catalog to a portable JSON bundle.")(export_cmd)
 app.command("import-catalog", help="Import a portable JSON catalog bundle into the library.")(import_catalog_cmd)
+app.command("watch", help="Watch library directories and automatically update the catalog.")(watch_cmd)
 
 
 def version_callback(value: bool) -> None:
