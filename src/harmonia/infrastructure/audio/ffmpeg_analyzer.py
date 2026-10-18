@@ -17,7 +17,9 @@ from harmonia.core.exceptions import (
 from harmonia.domain.ports.audio_analyzer import (
     SignalAnalysisResult,
     TechnicalAudioProperties,
+    TranscodeAnalysisResult,
 )
+from harmonia.infrastructure.audio.transcode_detector import SpectralTranscodeDetector
 
 LOSSLESS_CODECS = {
     "flac",
@@ -52,6 +54,11 @@ class FFmpegAudioAnalyzer:
         self.ffprobe_bin = ffprobe_bin
         self.ffmpeg_bin = ffmpeg_bin
         self.timeout_seconds = timeout_seconds
+        self._transcode_detector = SpectralTranscodeDetector(
+            ffprobe_bin=ffprobe_bin,
+            ffmpeg_bin=ffmpeg_bin,
+            timeout_seconds=timeout_seconds,
+        )
 
     def check_tools_available(self) -> tuple[bool, bool]:
         """Check if ffprobe and ffmpeg are accessible on system PATH."""
@@ -281,3 +288,11 @@ class FFmpegAudioAnalyzer:
             analyzer_version=self.ANALYZER_VERSION,
             config_version=self.CONFIG_VERSION,
         )
+
+    def check_transcode(
+        self,
+        file_path: Path,
+        tech_props: TechnicalAudioProperties | None = None,
+    ) -> TranscodeAnalysisResult:
+        """Perform spectral analysis to check for suspicious lossy-to-lossless upconvert cutoffs."""
+        return self._transcode_detector.check_transcode(file_path, tech_props=tech_props)

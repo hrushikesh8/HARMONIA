@@ -3,8 +3,53 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, runtime_checkable
+
+
+class TranscodeClassification(StrEnum):
+    """Categorical outcome of suspicious spectral cutoff analysis."""
+
+    SUSPICIOUS_CUTOFF = "suspicious_cutoff"
+    NO_SUSPICIOUS_CUTOFF = "no_suspicious_cutoff"
+    INSUFFICIENT_EVIDENCE = "insufficient_evidence"
+    ANALYSIS_UNAVAILABLE = "analysis_unavailable"
+
+
+class TranscodeReasonCode(StrEnum):
+    """Structured machine-readable reason code clarifying the classification."""
+
+    UNSUPPORTED_CONTAINER = "unsupported_container"
+    LOW_SAMPLE_RATE = "low_sample_rate"
+    SHORT_DURATION = "short_duration"
+    SILENCE_OR_LOW_ENERGY = "silence_or_low_energy"
+    NATURAL_ROLLOFF_OR_SPEECH = "natural_rolloff_or_speech"
+    BANDLIMITED_BELOW_SEARCH_RANGE = "bandlimited_below_search_range"
+    INSUFFICIENT_FRAMES = "insufficient_frames"
+    BANDWIDTH_EXCEEDED = "bandwidth_exceeded"
+    SUSPICIOUS_CUTOFF_DETECTED = "suspicious_cutoff_detected"
+    NO_SUSPICIOUS_CUTOFF_DETECTED = "no_suspicious_cutoff_detected"
+    TOOL_MISSING = "tool_missing"
+    TIMEOUT = "timeout"
+    DECODE_ERROR = "decode_error"
+    CORRUPT_OR_UNPARSEABLE = "corrupt_or_unparseable"
+    ANALYSIS_FAILED = "analysis_failed"
+
+
+@dataclass(frozen=True)
+class TranscodeAnalysisResult:
+    """Factual, objective result of spectral cutoff and transcode detection."""
+
+    classification: TranscodeClassification
+    is_lossless_container: bool
+    cutoff_frequency_hz: int | None = None
+    cutoff_steepness_db_per_khz: float | None = None
+    high_frequency_ratio_db: float | None = None
+    duration_analyzed_sec: float = 0.0
+    details: str = ""
+    error: str | None = None
+    reason_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -41,6 +86,7 @@ class SignalAnalysisResult:
     config_version: str = "1.0.0"
 
 
+@runtime_checkable
 class AudioAnalyzer(Protocol):
     """Interface for running technical probes and signal analysis on audio files."""
 
@@ -50,4 +96,8 @@ class AudioAnalyzer(Protocol):
 
     def analyze_signal(self, file_path: Path) -> SignalAnalysisResult:
         """Decode and measure objective audio signal characteristics (ffmpeg ebur128)."""
+        ...
+
+    def check_transcode(self, file_path: Path) -> TranscodeAnalysisResult:
+        """Analyze audio for suspicious artificial spectral cutoffs (lossy upconverts)."""
         ...

@@ -13,6 +13,7 @@ from rich.table import Table
 from harmonia.application.audio_analysis_service import AudioAnalysisService
 from harmonia.core.config import HarmoniaConfig
 from harmonia.core.database import create_database_engine, create_session_factory, init_database
+from harmonia.domain.ports import TranscodeClassification
 from harmonia.infrastructure.persistence.track_repo import SqliteTrackRepository
 
 console = Console()
@@ -22,6 +23,10 @@ def analyze_cmd(
     target: Annotated[str | None, typer.Argument(help="UUID of Track or TrackFile to analyze (or omit with --all)")] = None,
     all_: Annotated[bool, typer.Option("--all", "-a", help="Analyze all audio files in the library")] = False,
     force: Annotated[bool, typer.Option("--force", "-f", help="Force re-analysis even if already completed and fresh")] = False,
+    check_transcode: Annotated[
+        bool,
+        typer.Option("--check-transcode", help="Check for suspicious spectral cutoffs characteristic of lossy upconverts"),
+    ] = False,
     config_path: Annotated[Path | None, typer.Option("--config", "-c", help="Path to config TOML file")] = None,
     db_path: Annotated[Path | None, typer.Option("--db", help="Path to SQLite database file")] = None,
 ) -> None:
@@ -76,6 +81,43 @@ def analyze_cmd(
 
         if not files_to_analyze:
             console.print("[yellow]No audio files found to analyze.[/yellow]")
+            return
+
+        if check_transcode:
+            console.print(f"[bold cyan]Checking {len(files_to_analyze)} file(s) for suspicious spectral cutoffs...[/bold cyan]")
+            table = Table(title="Spectral Cutoff / Transcode Analysis", show_header=True, header_style="bold magenta")
+            table.add_column("File ID", style="dim")
+            table.add_column("Classification", style="bold")
+            table.add_column("Cutoff Freq", justify="right")
+            table.add_column("Drop Slope", justify="right")
+            table.add_column("Upper HF Ratio", justify="right")
+            table.add_column("Details", style="dim")
+
+            with console.status("[bold green]Evaluating spectral cutoffs...[/bold green]"):
+                for fid in files_to_analyze:
+                    res = service.check_file_transcode(fid)
+                    if res.classification == TranscodeClassification.SUSPICIOUS_CUTOFF:
+                        class_style = "[bold red]SUSPICIOUS_CUTOFF[/bold red]"
+                    elif res.classification == TranscodeClassification.NO_SUSPICIOUS_CUTOFF:
+                        class_style = "[bold green]NO_SUSPICIOUS_CUTOFF[/bold green]"
+                    elif res.classification == TranscodeClassification.INSUFFICIENT_EVIDENCE:
+                        class_style = "[yellow]INSUFFICIENT_EVIDENCE[/yellow]"
+                    else:
+                        class_style = "[dim red]ANALYSIS_UNAVAILABLE[/dim red]"
+
+                    cutoff_str = f"{res.cutoff_frequency_hz:.0f} Hz" if res.cutoff_frequency_hz is not None else "-"
+                    slope_str = f"{res.cutoff_steepness_db_per_khz:.1f} dB/kHz" if res.cutoff_steepness_db_per_khz is not None else "-"
+                    ratio_str = f"{res.high_frequency_ratio_db:.1f} dB" if res.high_frequency_ratio_db is not None else "-"
+
+                    table.add_row(
+                        str(fid)[:8] + "...",
+                        class_style,
+                        cutoff_str,
+                        slope_str,
+                        ratio_str,
+                        res.details,
+                    )
+            console.print(table)
             return
 
         console.print(f"[bold cyan]Analyzing {len(files_to_analyze)} audio file(s)...[/bold cyan]")

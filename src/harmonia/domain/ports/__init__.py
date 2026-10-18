@@ -11,6 +11,9 @@ from harmonia.domain.ports.audio_analyzer import (
     AudioAnalyzer,
     SignalAnalysisResult,
     TechnicalAudioProperties,
+    TranscodeAnalysisResult,
+    TranscodeClassification,
+    TranscodeReasonCode,
 )
 from harmonia.domain.ports.duplicate_candidate_repository import DuplicateCandidateRepository
 from harmonia.domain.ports.listening_event_repository import ListeningEventRepository
@@ -36,4 +39,7 @@ __all__ = [
     "SignalAnalysisResult",
     "TechnicalAudioProperties",
     "TrackRepository",
+    "TranscodeAnalysisResult",
+    "TranscodeClassification",
+    "TranscodeReasonCode",
 ]

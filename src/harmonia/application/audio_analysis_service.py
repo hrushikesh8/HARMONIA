@@ -15,7 +15,7 @@ from uuid import UUID
 
 from harmonia.core.exceptions import AudioAnalysisError
 from harmonia.domain.entities.audio_analysis import AnalysisStatus, AudioAnalysis
-from harmonia.domain.ports.audio_analyzer import AudioAnalyzer
+from harmonia.domain.ports.audio_analyzer import AudioAnalyzer, TranscodeAnalysisResult
 from harmonia.infrastructure.audio.ffmpeg_analyzer import FFmpegAudioAnalyzer
 from harmonia.infrastructure.persistence.audio_analysis_repo import (
     SqliteAudioAnalysisRepository,
@@ -61,6 +61,21 @@ class AudioAnalysisService:
         with self.session_factory() as session:
             repo = SqliteAudioAnalysisRepository(session)
             return repo.get_by_track_id(track_id)
+
+    def check_file_transcode(self, track_file_id: UUID) -> TranscodeAnalysisResult:
+        """Inspect a TrackFile for suspicious spectral cutoffs characteristic of lossy upconverts."""
+        with self.session_factory() as session:
+            track_repo = SqliteTrackRepository(session)
+            tf = track_repo.get_file_by_id(track_file_id)
+            if not tf:
+                raise AudioAnalysisError(str(track_file_id), f"TrackFile '{track_file_id}' not found")
+            file_path = Path(tf.file_path)
+
+        if hasattr(self.analyzer, "check_transcode"):
+            return self.analyzer.check_transcode(file_path)
+        raise AudioAnalysisError(
+            str(file_path), "Active analyzer does not support transcode detection"
+        )
 
     # ── Synchronous Execution ─────────────────────────────────────────────────
 
