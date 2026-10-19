@@ -4,7 +4,7 @@ import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.session.LibraryResult
-import androidx.media3.session.SessionResult
+import androidx.media3.session.SessionError
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -287,12 +287,12 @@ class MediaItemTreeResolverTest {
         // Missing entity
         val missingAlbumFuture = resolver.getItem("album:missing_id")
         testDispatcher.scheduler.advanceUntilIdle()
-        assertEquals(SessionResult.RESULT_ERROR_BAD_VALUE, missingAlbumFuture.get().resultCode)
+        assertEquals(SessionError.ERROR_BAD_VALUE, missingAlbumFuture.get().resultCode)
 
         // Malformed ID
         val malformedFuture = resolver.getItem("unknown_prefix:123")
         testDispatcher.scheduler.advanceUntilIdle()
-        assertEquals(SessionResult.RESULT_ERROR_BAD_VALUE, malformedFuture.get().resultCode)
+        assertEquals(SessionError.ERROR_BAD_VALUE, malformedFuture.get().resultCode)
     }
 
     @Test
@@ -509,7 +509,7 @@ class MediaItemTreeResolverTest {
         testDispatcher.scheduler.advanceUntilIdle()
         val result = childrenFuture.get()
 
-        assertEquals(SessionResult.RESULT_ERROR_UNKNOWN, result.resultCode)
+        assertEquals(SessionError.ERROR_UNKNOWN, result.resultCode)
     }
 
     @Test
@@ -1000,6 +1000,327 @@ class MediaItemTreeResolverTest {
 
         newResolver.release()
         assertTrue(newResolver.isReleased)
+    }
+
+    // --- Voice-Search Playback Resolution Regression Tests (M5-R2.1) ---
+
+    @Test
+    fun resolvePlayableMediaItems_withValidSearchQuery_resolvesMatchingPlayableTrack() {
+        val file = createTestLocalFile("f_vs1", "t_vs1", "content://media/external/audio/media/101")
+        val track = Track(
+            id = "t_vs1",
+            title = "Kind of Blue",
+            artistName = "Miles Davis",
+            albumTitle = "Kind of Blue",
+            durationSec = 300.0,
+            localFile = file
+        )
+        fakeTrackRepo.tracks.add(track)
+        fakeLocalFileRepo.files["t_vs1"] = listOf(file)
+        fakeSearchRepo.tracksToReturn = listOf(track)
+
+        val searchItem = MediaItem.Builder()
+            .setMediaId("")
+            .setRequestMetadata(
+                MediaItem.RequestMetadata.Builder()
+                    .setSearchQuery("Kind of Blue")
+                    .build()
+            )
+            .build()
+
+        val future = resolver.resolvePlayableMediaItems(listOf(searchItem))
+        testDispatcher.scheduler.advanceUntilIdle()
+        val resolved = future.get()
+
+        assertEquals(1, resolved.size)
+        val playable = resolved[0]
+        assertEquals("track:t_vs1", playable.mediaId)
+        assertEquals("Kind of Blue", playable.mediaMetadata.title)
+        assertEquals("Miles Davis", playable.mediaMetadata.artist)
+        assertEquals("Kind of Blue", playable.mediaMetadata.albumTitle)
+        assertTrue(playable.mediaMetadata.isPlayable == true)
+    }
+
+    @Test
+    fun resolvePlayableMediaItems_withWhitespaceInSearchQuery_normalizesAndResolves() {
+        val file = createTestLocalFile("f_vs_ws", "t_vs_ws", "content://media/external/audio/media/102")
+        val track = Track(
+            id = "t_vs_ws",
+            title = "So What",
+            artistName = "Miles Davis",
+            durationSec = 240.0,
+            localFile = file
+        )
+        fakeTrackRepo.tracks.add(track)
+        fakeLocalFileRepo.files["t_vs_ws"] = listOf(file)
+        fakeSearchRepo.tracksToReturn = listOf(track)
+
+        val searchItem = MediaItem.Builder()
+            .setMediaId("")
+            .setRequestMetadata(
+                MediaItem.RequestMetadata.Builder()
+                    .setSearchQuery("   So What   \t\n")
+                    .build()
+            )
+            .build()
+
+        val future = resolver.resolvePlayableMediaItems(listOf(searchItem))
+        testDispatcher.scheduler.advanceUntilIdle()
+        val resolved = future.get()
+
+        assertEquals(1, resolved.size)
+        assertEquals("track:t_vs_ws", resolved[0].mediaId)
+    }
+
+    @Test
+    fun resolvePlayableMediaItems_withBlankOrEmptySearchQuery_returnsEmptyListDeterministically() {
+        val file = createTestLocalFile("f_any", "t_any", "content://media/any")
+        fakeSearchRepo.tracksToReturn = listOf(
+            Track(id = "t_any", title = "Any Track", durationSec = 100.0, localFile = file)
+        )
+
+        // 1. Completely empty query
+        val emptyItem = MediaItem.Builder()
+            .setMediaId("")
+            .setRequestMetadata(MediaItem.RequestMetadata.Builder().setSearchQuery("").build())
+            .build()
+
+        val fEmpty = resolver.resolvePlayableMediaItems(listOf(emptyItem))
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertTrue(fEmpty.get().isEmpty())
+
+        // 2. Whitespace-only query
+        val whitespaceItem = MediaItem.Builder()
+            .setMediaId("")
+            .setRequestMetadata(MediaItem.RequestMetadata.Builder().setSearchQuery("   \t  ").build())
+            .build()
+
+        val fWs = resolver.resolvePlayableMediaItems(listOf(whitespaceItem))
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertTrue(fWs.get().isEmpty())
+    }
+
+    @Test
+    fun resolvePlayableMediaItems_withNoMatchingTracks_returnsEmptyListDeterministically() {
+        fakeSearchRepo.tracksToReturn = emptyList()
+
+        val searchItem = MediaItem.Builder()
+            .setMediaId("")
+            .setRequestMetadata(MediaItem.RequestMetadata.Builder().setSearchQuery("NonExistent Song").build())
+            .build()
+
+        val future = resolver.resolvePlayableMediaItems(listOf(searchItem))
+        testDispatcher.scheduler.advanceUntilIdle()
+        val resolved = future.get()
+
+        assertTrue(resolved.isEmpty())
+    }
+
+    @Test
+    fun resolvePlayableMediaItems_withMissingOrUnverifiedLocalFiles_failsSafelyWithoutCrash() {
+        // Track 1: missing local file entirely
+        val trackNoFile = Track(id = "t_nofile", title = "No File", durationSec = 100.0)
+        fakeTrackRepo.tracks.add(trackNoFile)
+
+        // Track 2: unverified local file
+        val fileUnver = createTestLocalFile("f_unver", "t_unver", "content://media/external/audio/media/unver", isVerified = false)
+        val trackUnverified = Track(id = "t_unver", title = "Unverified", durationSec = 100.0, localFile = fileUnver)
+        fakeTrackRepo.tracks.add(trackUnverified)
+        fakeLocalFileRepo.files["t_unver"] = listOf(fileUnver)
+
+        // Track 3: unavailable offline
+        val fileOnline = createTestLocalFile("f_online", "t_online", "content://media/external/audio/media/online", isVerified = true)
+        val trackOnlineOnly = Track(id = "t_online", title = "Online", durationSec = 100.0, localFile = null, availability = org.harmonia.player.domain.model.LocalFileAvailability.UNAVAILABLE)
+        fakeTrackRepo.tracks.add(trackOnlineOnly)
+        fakeLocalFileRepo.files["t_online"] = listOf(fileOnline)
+
+        fakeSearchRepo.tracksToReturn = listOf(trackNoFile, trackUnverified, trackOnlineOnly)
+
+        val searchItem = MediaItem.Builder()
+            .setMediaId("")
+            .setRequestMetadata(MediaItem.RequestMetadata.Builder().setSearchQuery("Offline Check").build())
+            .build()
+
+        val future = resolver.resolvePlayableMediaItems(listOf(searchItem))
+        testDispatcher.scheduler.advanceUntilIdle()
+        val resolved = future.get()
+
+        // All invalid or unverified files must be safely omitted without crashing
+        assertTrue(resolved.isEmpty())
+    }
+
+    @Test
+    fun resolvePlayableMediaItems_withUnmountedStorageSource_failsSafelyWithoutCrash() {
+        fakeCoordinator.putState(
+            SourceRuntimeState(
+                sourceId = "src_disconnected",
+                isAvailable = false,
+                isMounted = false,
+                hasPermission = true
+            )
+        )
+        val file = createTestLocalFile("f_disc", "t_disc", "content://media/external/audio/media/disc", sourceId = "src_disconnected")
+        val track = Track(id = "t_disc", title = "Disconnected Source", durationSec = 100.0, localFile = file)
+        fakeTrackRepo.tracks.add(track)
+        fakeLocalFileRepo.files["t_disc"] = listOf(file)
+        fakeSearchRepo.tracksToReturn = listOf(track)
+
+        val searchItem = MediaItem.Builder()
+            .setMediaId("")
+            .setRequestMetadata(MediaItem.RequestMetadata.Builder().setSearchQuery("Disconnected").build())
+            .build()
+
+        val future = resolver.resolvePlayableMediaItems(listOf(searchItem))
+        testDispatcher.scheduler.advanceUntilIdle()
+        val resolved = future.get()
+
+        assertTrue(resolved.isEmpty())
+    }
+
+    @Test
+    fun resolvePlayableMediaItems_withMultipleSearchMatches_resolvesAllMatchingTracksInDeterministicOrder() {
+        val f1 = createTestLocalFile("f_m1", "t_multi1", "content://media/m1")
+        val f2 = createTestLocalFile("f_m2", "t_multi2", "content://media/m2")
+        val t1 = Track(id = "t_multi1", title = "Autumn Leaves", artistName = "Bill Evans", durationSec = 200.0, localFile = f1)
+        val t2 = Track(id = "t_multi2", title = "Blue in Green", artistName = "Miles Davis", durationSec = 300.0, localFile = f2)
+        fakeTrackRepo.tracks.addAll(listOf(t1, t2))
+        fakeLocalFileRepo.files["t_multi1"] = listOf(f1)
+        fakeLocalFileRepo.files["t_multi2"] = listOf(f2)
+        fakeSearchRepo.tracksToReturn = listOf(t1, t2)
+
+        val searchItem = MediaItem.Builder()
+            .setMediaId("")
+            .setRequestMetadata(MediaItem.RequestMetadata.Builder().setSearchQuery("Jazz").build())
+            .build()
+
+        val future = resolver.resolvePlayableMediaItems(listOf(searchItem))
+        testDispatcher.scheduler.advanceUntilIdle()
+        val resolved = future.get()
+
+        assertEquals(2, resolved.size)
+        assertEquals("track:t_multi1", resolved[0].mediaId)
+        assertEquals("track:t_multi2", resolved[1].mediaId)
+    }
+
+    @Test
+    fun resolvePlayableMediaItems_preservesOrdinaryMediaIdAndUriPlayback() {
+        val file = createTestLocalFile("f_ord", "t_ord", "content://media/external/audio/media/ord_1")
+        val track = Track(id = "t_ord", title = "Ordinary Track", durationSec = 150.0, localFile = file)
+        fakeTrackRepo.tracks.add(track)
+        fakeLocalFileRepo.files["t_ord"] = listOf(file)
+        fakeLocalFileRepo.filesByUri["content://media/external/audio/media/ord_1"] = file
+
+        // 1. Direct canonical media ID: "track:t_ord"
+        val mediaIdItem = MediaItem.Builder().setMediaId("track:t_ord").build()
+        val f1 = resolver.resolvePlayableMediaItems(listOf(mediaIdItem))
+        testDispatcher.scheduler.advanceUntilIdle()
+        val res1 = f1.get()
+        assertEquals(1, res1.size)
+        assertEquals("track:t_ord", res1[0].mediaId)
+
+        // 2. Direct URI: "content://media/external/audio/media/ord_1"
+        val uriItem = MediaItem.Builder().setMediaId("content://media/external/audio/media/ord_1").build()
+        val f2 = resolver.resolvePlayableMediaItems(listOf(uriItem))
+        testDispatcher.scheduler.advanceUntilIdle()
+        val res2 = f2.get()
+        assertEquals(1, res2.size)
+        assertEquals("track:t_ord", res2[0].mediaId)
+    }
+
+    @Test
+    fun resolvePlayableMediaItems_whenSearchRepositoryThrows_failsSafelyWithoutCrash() {
+        fakeSearchRepo.throwError = true
+
+        val searchItem = MediaItem.Builder()
+            .setMediaId("")
+            .setRequestMetadata(MediaItem.RequestMetadata.Builder().setSearchQuery("Error Test").build())
+            .build()
+
+        val future = resolver.resolvePlayableMediaItems(listOf(searchItem))
+        testDispatcher.scheduler.advanceUntilIdle()
+        val resolved = future.get()
+
+        // Fails closed gracefully with empty list, no unhandled exception
+        assertTrue(resolved.isEmpty())
+    }
+
+    @Test
+    fun resolvePlayableMediaItems_searchResolution_preservesAuthoritativeQueueSemantics() {
+        val file = createTestLocalFile("f_search_q", "t_search_q", "content://media/external/audio/media/search_q")
+        val track = Track(
+            id = "t_search_q",
+            title = "Queue Test Track",
+            artistName = "Artist Q",
+            albumTitle = "Album Q",
+            durationSec = 180.0,
+            localFile = file
+        )
+        fakeTrackRepo.tracks.add(track)
+        fakeLocalFileRepo.files["t_search_q"] = listOf(file)
+        fakeSearchRepo.tracksToReturn = listOf(track)
+
+        val searchItem = MediaItem.Builder()
+            .setMediaId("")
+            .setRequestMetadata(
+                MediaItem.RequestMetadata.Builder()
+                    .setSearchQuery("Queue Test")
+                    .build()
+            )
+            .build()
+
+        val future = resolver.resolvePlayableMediaItems(listOf(searchItem))
+        testDispatcher.scheduler.advanceUntilIdle()
+        val resolved = future.get()
+        assertEquals(1, resolved.size)
+        val playable = resolved[0]
+        assertEquals("track:t_search_q", playable.mediaId)
+
+        // Verify downstream controller queue integration
+        val fakeStateRepo = FakePlaybackStateRepository()
+        val fakeEventRepo = FakeListeningEventRepository()
+        val playerProxy = java.lang.reflect.Proxy.newProxyInstance(
+            androidx.media3.common.Player::class.java.classLoader,
+            arrayOf(androidx.media3.common.Player::class.java),
+            java.lang.reflect.InvocationHandler { _, method, _ ->
+                when (method.name) {
+                    "addListener" -> null
+                    "removeListener" -> null
+                    "getPlaybackState" -> androidx.media3.common.Player.STATE_READY
+                    "isPlaying" -> true
+                    "getCurrentMediaItemIndex" -> 0
+                    else -> null
+                }
+            }
+        ) as androidx.media3.common.Player
+
+        val controller = HarmoniaPlayerController(
+            context = null,
+            playbackStateRepository = fakeStateRepo,
+            listeningEventRepository = fakeEventRepo,
+            trackRepository = fakeTrackRepo,
+            localFileRepository = fakeLocalFileRepo,
+            storageVolumeLifecycleCoordinator = fakeCoordinator,
+            playerOverride = playerProxy,
+            scope = testScope
+        )
+
+        val rawDbTrackId = HarmoniaPlayerController.extractDatabaseTrackId(playable.mediaId)
+        assertEquals("t_search_q", rawDbTrackId)
+
+        val listener = controller.getPlayerListenerForTesting()
+        assertNotNull(listener)
+        listener!!.onMediaItemTransition(playable, 0)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("t_search_q", controller.playbackState.value.currentTrackId)
+        assertEquals("f_search_q", controller.playbackState.value.currentLocalFileId)
+        assertEquals(180_000L, controller.playbackState.value.durationMs)
+
+        val lastEvent = fakeEventRepo.recordedEvents.lastOrNull()
+        assertNotNull(lastEvent)
+        assertEquals(ListeningEventType.STARTED, lastEvent!!.eventType)
+        assertEquals("t_search_q", lastEvent.trackId)
+        assertEquals("f_search_q", lastEvent.localFileId)
     }
 
     // --- In-Memory Fake Repositories ---

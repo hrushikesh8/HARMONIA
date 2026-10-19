@@ -1,5 +1,6 @@
 package org.harmonia.player.service.equalizer
 
+import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
@@ -70,6 +71,7 @@ class PlaybackServiceEqualizerBridge(
     /**
      * Attaches the bridge to the authoritative [ExoPlayer].
      */
+    @OptIn(UnstableApi::class)
     fun attachToPlayer(player: ExoPlayer) {
         attachToSessionSource(
             currentAudioSessionId = player.audioSessionId,
@@ -81,6 +83,7 @@ class PlaybackServiceEqualizerBridge(
     /**
      * Internal attach method supporting test seams without requiring full native ExoPlayer stubbing.
      */
+    @OptIn(UnstableApi::class)
     internal fun attachToSessionSource(
         currentAudioSessionId: Int,
         addListener: (AnalyticsListener) -> Unit,

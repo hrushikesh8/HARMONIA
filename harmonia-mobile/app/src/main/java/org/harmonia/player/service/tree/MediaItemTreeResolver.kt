@@ -3,14 +3,16 @@ package org.harmonia.player.service.tree
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
+import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaConstants
 import androidx.media3.session.MediaLibraryService.LibraryParams
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.media3.session.MediaSession
-import androidx.media3.session.SessionResult
+import androidx.media3.session.SessionError
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -192,6 +194,7 @@ class MediaItemTreeResolver(
         return Futures.immediateFuture(LibraryResult.ofItem(rootItem, params))
     }
 
+    @OptIn(UnstableApi::class)
     fun getChildren(
         parentId: String,
         page: Int,
@@ -253,7 +256,7 @@ class MediaItemTreeResolver(
                         val albumId = parentId.removePrefix(ALBUM_PREFIX)
                         val album = albumRepository.getAlbumById(albumId)
                         if (album == null) {
-                            LibraryResult.ofError(SessionResult.RESULT_ERROR_BAD_VALUE)
+                            LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
                         } else {
                             val pagination = calculatePagination(page, pageSize)
                             if (pagination == null) {
@@ -270,7 +273,7 @@ class MediaItemTreeResolver(
                         val artistId = parentId.removePrefix(ARTIST_PREFIX)
                         val artist = artistRepository.getArtistById(artistId)
                         if (artist == null) {
-                            LibraryResult.ofError(SessionResult.RESULT_ERROR_BAD_VALUE)
+                            LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
                         } else {
                             val pagination = calculatePagination(page, pageSize)
                             if (pagination == null) {
@@ -287,7 +290,7 @@ class MediaItemTreeResolver(
                         val playlistId = parentId.removePrefix(PLAYLIST_PREFIX)
                         val playlist = playlistRepository.getPlaylistById(playlistId)
                         if (playlist == null) {
-                            LibraryResult.ofError(SessionResult.RESULT_ERROR_BAD_VALUE)
+                            LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
                         } else {
                             val pagination = calculatePagination(page, pageSize)
                             if (pagination == null) {
@@ -303,18 +306,19 @@ class MediaItemTreeResolver(
                     }
                     else -> {
                         // Leaf item (track:{id}) or malformed parent ID
-                        LibraryResult.ofError(SessionResult.RESULT_ERROR_BAD_VALUE)
+                        LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
                     }
                 }
             } catch (ce: CancellationException) {
                 throw ce
             } catch (e: Exception) {
                 Log.e(TAG, "Error resolving children for parentId: $parentId", e)
-                LibraryResult.ofError(SessionResult.RESULT_ERROR_UNKNOWN)
+                LibraryResult.ofError(SessionError.ERROR_UNKNOWN)
             }
         }
     }
 
+    @OptIn(UnstableApi::class)
     fun getItem(mediaId: String): ListenableFuture<LibraryResult<MediaItem>> {
         return launchFuture {
             try {
@@ -328,33 +332,33 @@ class MediaItemTreeResolver(
                         val albumId = mediaId.removePrefix(ALBUM_PREFIX)
                         val album = albumRepository.getAlbumById(albumId)
                         if (album != null) LibraryResult.ofItem(albumToMediaItem(album), null)
-                        else LibraryResult.ofError(SessionResult.RESULT_ERROR_BAD_VALUE)
+                        else LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
                     }
                     mediaId.startsWith(ARTIST_PREFIX) -> {
                         val artistId = mediaId.removePrefix(ARTIST_PREFIX)
                         val artist = artistRepository.getArtistById(artistId)
                         if (artist != null) LibraryResult.ofItem(artistToMediaItem(artist), null)
-                        else LibraryResult.ofError(SessionResult.RESULT_ERROR_BAD_VALUE)
+                        else LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
                     }
                     mediaId.startsWith(PLAYLIST_PREFIX) -> {
                         val playlistId = mediaId.removePrefix(PLAYLIST_PREFIX)
                         val playlist = playlistRepository.getPlaylistById(playlistId)
                         if (playlist != null) LibraryResult.ofItem(playlistToMediaItem(playlist), null)
-                        else LibraryResult.ofError(SessionResult.RESULT_ERROR_BAD_VALUE)
+                        else LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
                     }
                     mediaId.startsWith(TRACK_PREFIX) -> {
                         val trackId = mediaId.removePrefix(TRACK_PREFIX)
                         val track = trackRepository.getTrackById(trackId)
                         if (track != null) LibraryResult.ofItem(trackToMediaItem(track), null)
-                        else LibraryResult.ofError(SessionResult.RESULT_ERROR_BAD_VALUE)
+                        else LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
                     }
-                    else -> LibraryResult.ofError(SessionResult.RESULT_ERROR_BAD_VALUE)
+                    else -> LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
                 }
             } catch (ce: CancellationException) {
                 throw ce
             } catch (e: Exception) {
                 Log.e(TAG, "Error resolving item for mediaId: $mediaId", e)
-                LibraryResult.ofError(SessionResult.RESULT_ERROR_UNKNOWN)
+                LibraryResult.ofError(SessionError.ERROR_UNKNOWN)
             }
         }
     }
@@ -366,6 +370,7 @@ class MediaItemTreeResolver(
      */
     private fun normalizeSearchQuery(query: String): String = query.trim()
 
+    @OptIn(UnstableApi::class)
     fun search(
         session: MediaLibrarySession?,
         browser: MediaSession.ControllerInfo?,
@@ -401,11 +406,12 @@ class MediaItemTreeResolver(
                 throw ce
             } catch (e: Exception) {
                 Log.e(TAG, "Error executing search for query: $query", e)
-                LibraryResult.ofError(SessionResult.RESULT_ERROR_UNKNOWN)
+                LibraryResult.ofError(SessionError.ERROR_UNKNOWN)
             }
         }
     }
 
+    @OptIn(UnstableApi::class)
     fun getSearchResult(
         query: String,
         page: Int,
@@ -438,7 +444,7 @@ class MediaItemTreeResolver(
                 throw ce
             } catch (e: Exception) {
                 Log.e(TAG, "Error retrieving search results for query: $query", e)
-                LibraryResult.ofError(SessionResult.RESULT_ERROR_UNKNOWN)
+                LibraryResult.ofError(SessionError.ERROR_UNKNOWN)
             }
         }
     }
@@ -498,6 +504,22 @@ class MediaItemTreeResolver(
                         for (pi in items) {
                             val playable = resolveTrackToPlayableMediaItem(pi.trackId, pi.track)
                             if (playable != null) resolved.add(playable)
+                        }
+                    }
+                    !item.requestMetadata.searchQuery.isNullOrBlank() -> {
+                        val query = normalizeSearchQuery(item.requestMetadata.searchQuery!!)
+                        if (query.isNotEmpty()) {
+                            try {
+                                val matchingTracks = searchRepository.searchTracks(query).first()
+                                for (track in matchingTracks) {
+                                    val playable = resolveTrackToPlayableMediaItem(track.id, track)
+                                    if (playable != null) resolved.add(playable)
+                                }
+                            } catch (ce: CancellationException) {
+                                throw ce
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Error resolving tracks for voice search query: $query", e)
+                            }
                         }
                     }
                     else -> {
@@ -597,6 +619,7 @@ class MediaItemTreeResolver(
         return items.subList(offset, toIndex)
     }
 
+    @OptIn(UnstableApi::class)
     private fun albumToMediaItem(album: Album): MediaItem {
         val extras = Bundle().apply {
             putInt(
@@ -627,6 +650,7 @@ class MediaItemTreeResolver(
             .build()
     }
 
+    @OptIn(UnstableApi::class)
     private fun artistToMediaItem(artist: Artist): MediaItem {
         val extras = Bundle().apply {
             putInt(
@@ -652,6 +676,7 @@ class MediaItemTreeResolver(
             .build()
     }
 
+    @OptIn(UnstableApi::class)
     private fun playlistToMediaItem(playlist: Playlist): MediaItem {
         val extras = Bundle().apply {
             putInt(
@@ -682,6 +707,7 @@ class MediaItemTreeResolver(
             .build()
     }
 
+    @OptIn(UnstableApi::class)
     private fun trackToMediaItem(track: Track): MediaItem {
         val extras = Bundle().apply {
             putInt(
@@ -711,6 +737,7 @@ class MediaItemTreeResolver(
             .build()
     }
 
+    @OptIn(UnstableApi::class)
     private fun buildCategoryNode(
         id: String,
         title: String,
