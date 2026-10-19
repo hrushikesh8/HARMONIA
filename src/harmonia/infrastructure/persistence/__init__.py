@@ -8,6 +8,9 @@ from harmonia.infrastructure.persistence.audio_analysis_repo import (
 from harmonia.infrastructure.persistence.duplicate_candidate_repo import (
     SqliteDuplicateCandidateRepository,
 )
+from harmonia.infrastructure.persistence.favorite_repo import (
+    SqliteFavoriteRepository,
+)
 from harmonia.infrastructure.persistence.listening_event_repo import (
     SqliteListeningEventRepository,
 )
@@ -33,6 +36,12 @@ from harmonia.infrastructure.persistence.models import (
 from harmonia.infrastructure.persistence.playback_snapshot_repo import (
     SqlitePlaybackSnapshotRepository,
 )
+from harmonia.infrastructure.persistence.playlist_repo import (
+    SqlitePlaylistRepository,
+)
+from harmonia.infrastructure.persistence.rating_repo import (
+    SqliteRatingRepository,
+)
 from harmonia.infrastructure.persistence.search_repo import SqliteSearchRepository
 from harmonia.infrastructure.persistence.track_repo import SqliteTrackRepository
 
@@ -52,9 +61,12 @@ __all__ = [
     "SqliteArtistRepository",
     "SqliteAudioAnalysisRepository",
     "SqliteDuplicateCandidateRepository",
+    "SqliteFavoriteRepository",
     "SqliteListeningEventRepository",
     "SqliteMetadataFieldRepository",
     "SqlitePlaybackSnapshotRepository",
+    "SqlitePlaylistRepository",
+    "SqliteRatingRepository",
     "SqliteSearchRepository",
     "SqliteTrackRepository",
     "TagModel",

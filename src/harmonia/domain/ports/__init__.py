@@ -16,11 +16,14 @@ from harmonia.domain.ports.audio_analyzer import (
     TranscodeReasonCode,
 )
 from harmonia.domain.ports.duplicate_candidate_repository import DuplicateCandidateRepository
+from harmonia.domain.ports.favorite_repository import FavoriteRepository
 from harmonia.domain.ports.listening_event_repository import ListeningEventRepository
 from harmonia.domain.ports.metadata_field_repository import MetadataFieldRepository
 from harmonia.domain.ports.metadata_provider import MetadataProvider
 from harmonia.domain.ports.playback_port import PlaybackPort
 from harmonia.domain.ports.playback_snapshot_repository import PlaybackSnapshotRepository
+from harmonia.domain.ports.playlist_repository import PlaylistRepository
+from harmonia.domain.ports.rating_repository import RatingRepository
 from harmonia.domain.ports.search_repository import SearchRepository
 from harmonia.domain.ports.track_repository import TrackRepository
 
@@ -30,11 +33,14 @@ __all__ = [
     "AudioAnalysisRepository",
     "AudioAnalyzer",
     "DuplicateCandidateRepository",
+    "FavoriteRepository",
     "ListeningEventRepository",
     "MetadataFieldRepository",
     "MetadataProvider",
     "PlaybackPort",
     "PlaybackSnapshotRepository",
+    "PlaylistRepository",
+    "RatingRepository",
     "SearchRepository",
     "SignalAnalysisResult",
     "TechnicalAudioProperties",
