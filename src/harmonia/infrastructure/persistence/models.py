@@ -13,6 +13,7 @@ from uuid import uuid4
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     Float,
     ForeignKey,
@@ -20,6 +21,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     Uuid,
     desc,
     func,
@@ -403,3 +405,95 @@ class PlaybackQueueSnapshotModel(Base):
     )
 
 
+# ── Personalization (Playlists, PlaylistItems, Favorites, Ratings) ─────────────
+
+
+class PlaylistModel(Base):
+    __tablename__ = "playlists"
+
+    id: Mapped[str] = mapped_column(Uuid(), primary_key=True, default=uuid4)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(1000))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
+    # Relationships
+    items: Mapped[list[PlaylistItemModel]] = relationship(
+        back_populates="playlist",
+        cascade="all, delete-orphan",
+        order_by="PlaylistItemModel.position",
+    )
+
+    __table_args__ = (
+        Index("ix_playlists_name_lower", func.lower(name)),
+        Index("ix_playlists_updated_at", desc("updated_at")),
+    )
+
+
+class PlaylistItemModel(Base):
+    __tablename__ = "playlist_items"
+
+    id: Mapped[str] = mapped_column(Uuid(), primary_key=True, default=uuid4)
+    playlist_id: Mapped[str] = mapped_column(
+        Uuid(), ForeignKey("playlists.id", ondelete="CASCADE"), nullable=False
+    )
+    track_id: Mapped[str] = mapped_column(
+        Uuid(), ForeignKey("tracks.id", ondelete="RESTRICT"), nullable=False
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    position_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    added_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+    # Relationships
+    playlist: Mapped[PlaylistModel] = relationship(back_populates="items")
+    track: Mapped[TrackModel] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint("playlist_id", "position", name="uq_playlist_items_playlist_position"),
+        Index("ix_playlist_items_playlist_id", "playlist_id"),
+        Index("ix_playlist_items_track_id", "track_id"),
+        Index("ix_playlist_items_playlist_position_key", "playlist_id", "position_key"),
+    )
+
+
+class FavoriteModel(Base):
+    __tablename__ = "favorites"
+
+    track_id: Mapped[str] = mapped_column(
+        Uuid(), ForeignKey("tracks.id", ondelete="RESTRICT"), primary_key=True
+    )
+    client_updated_at: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # Relationships
+    track: Mapped[TrackModel] = relationship()
+
+    __table_args__ = (
+        Index("ix_favorites_client_updated_at", desc("client_updated_at")),
+    )
+
+
+class RatingModel(Base):
+    __tablename__ = "ratings"
+
+    track_id: Mapped[str] = mapped_column(
+        Uuid(), ForeignKey("tracks.id", ondelete="RESTRICT"), primary_key=True
+    )
+    rating: Mapped[int] = mapped_column(Integer, nullable=False)
+    client_updated_at: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # Relationships
+    track: Mapped[TrackModel] = relationship()
+
+    __table_args__ = (
+        CheckConstraint("rating >= 1 AND rating <= 5", name="ck_ratings_rating_range"),
+        Index("ix_ratings_rating", "rating"),
+        Index("ix_ratings_client_updated_at", desc("client_updated_at")),
+    )
