@@ -20,6 +20,11 @@ from harmonia.cli.library import (
     list_tracks_cmd,
     track_cmd,
 )
+from harmonia.cli.personalization import (
+    favorite_app,
+    playlist_app,
+    rating_app,
+)
 from harmonia.cli.search import reindex_cmd, search_cmd
 from harmonia.cli.serve import serve_cmd, ui_cmd
 from harmonia.cli.watch import watch_cmd
@@ -54,6 +59,9 @@ def list_default(ctx: typer.Context) -> None:
 
 app.add_typer(list_app, name="list")
 app.add_typer(duplicates_app, name="duplicates")
+app.add_typer(playlist_app, name="playlist")
+app.add_typer(favorite_app, name="favorite")
+app.add_typer(rating_app, name="rating")
 
 # ── Standalone Commands ───────────────────────────────────────────────────────
 
