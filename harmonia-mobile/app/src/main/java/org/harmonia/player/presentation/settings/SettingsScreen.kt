@@ -43,6 +43,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -619,12 +620,13 @@ private fun EqualizerBandSlider(
                 .touchTarget48()
                 .semantics {
                     contentDescription = "Equalizer band ${formatFrequency(band.centerFreqHz)}"
+                    stateDescription = formatDb(band.currentLevelMb)
                 }
         )
     }
 }
 
-private fun formatFrequency(freqHz: Int): String {
+internal fun formatFrequency(freqHz: Int): String {
     return if (freqHz >= 1000) {
         val kHz = freqHz / 1000.0
         if (freqHz % 1000 == 0) "${freqHz / 1000} kHz" else String.format(Locale.US, "%.1f kHz", kHz)
@@ -633,7 +635,7 @@ private fun formatFrequency(freqHz: Int): String {
     }
 }
 
-private fun formatDb(levelMb: Short): String {
+internal fun formatDb(levelMb: Short): String {
     val db = levelMb.toDouble() / 100.0
     val sign = if (db > 0) "+" else ""
     return "$sign${String.format(Locale.US, "%.1f dB", db)}"

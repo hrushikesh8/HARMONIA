@@ -12,3 +12,8 @@ app/build/
 .cxx
 local.properties
 *.apk
+
+# Release signing credentials and keystores (M-REL.1)
+*.jks
+*.keystore
+keystore.properties

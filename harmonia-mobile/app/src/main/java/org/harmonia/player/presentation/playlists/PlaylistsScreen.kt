@@ -53,6 +53,7 @@ import org.harmonia.player.design.theme.BorderSlate
 import org.harmonia.player.design.theme.HarmoniaIcons
 import org.harmonia.player.design.theme.MutedSlate
 import org.harmonia.player.design.theme.ObsidianSpace
+import org.harmonia.player.design.theme.touchTarget48
 import org.harmonia.player.design.theme.PureSignalWhite
 import org.harmonia.player.domain.model.Playlist
 import org.harmonia.player.presentation.components.HarmoniaArtwork
@@ -229,11 +230,13 @@ private fun PlaylistRowCard(
             Box {
                 IconButton(
                     onClick = { showMenu = true },
-                    modifier = Modifier.semantics { contentDescription = "Options for ${playlist.name}" }
+                    modifier = Modifier
+                        .touchTarget48()
+                        .semantics { contentDescription = "Options for ${playlist.name}" }
                 ) {
                     Icon(
                         imageVector = HarmoniaIcons.MoreVert,
-                        contentDescription = "Options for ${playlist.name}",
+                        contentDescription = null,
                         tint = MutedSlate
                     )
                 }

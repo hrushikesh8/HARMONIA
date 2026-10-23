@@ -101,4 +101,33 @@ Harmonia Mobile resides in the [`harmonia-mobile/`](../harmonia-mobile/) directo
   .\gradlew.bat testDebugUnitTest
   # Assemble debug APK
   .\gradlew.bat assembleDebug
+  # Assemble unsigned release APK (local development)
+  .\gradlew.bat assembleRelease
   ```
+
+- **Release Signing Configuration (M-REL.1):**
+  Production release signing is configured via environment variables. In the absence of credentials, `./gradlew.bat assembleRelease` generates an explicitly unsigned APK (`app-release-unsigned.apk`) for local verification.
+
+  Required environment variables for signed release packaging:
+  - `HARMONIA_KEYSTORE_PATH`: Path to the `.jks` or `.keystore` file (absolute or relative to project root).
+  - `HARMONIA_KEYSTORE_PASSWORD`: Password for the keystore.
+  - `HARMONIA_KEY_ALIAS`: Alias of the signing key.
+  - `HARMONIA_KEY_PASSWORD`: Password for the signing key.
+
+  To build a signed release APK:
+  ```powershell
+  $env:HARMONIA_KEYSTORE_PATH = "C:\path\to\release.jks"
+  $env:HARMONIA_KEYSTORE_PASSWORD = "keystore-password"
+  $env:HARMONIA_KEY_ALIAS = "harmonia-key-alias"
+  $env:HARMONIA_KEY_PASSWORD = "key-password"
+
+  .\gradlew.bat assembleRelease
+  ```
+
+  To enforce that release signing is mandatory (failing if credentials are missing):
+  ```powershell
+  .\gradlew.bat assembleRelease -PrequireSigning=true
+  ```
+
+  > [!SECURITY]
+  > Never hardcode or commit keystores (`*.jks`, `*.keystore`) or credential properties (`keystore.properties`) into version control. These patterns are gitignored.

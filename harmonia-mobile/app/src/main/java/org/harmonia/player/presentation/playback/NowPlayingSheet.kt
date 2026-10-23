@@ -42,7 +42,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -414,10 +417,16 @@ fun NowPlayingSheet(
                     // Shuffle Toggle
                     IconButton(
                         onClick = onToggleShuffle,
-                        modifier = Modifier.touchTarget48()
+                        modifier = Modifier
+                            .touchTarget48()
+                            .semantics {
+                                role = Role.Button
+                                contentDescription = getShuffleAccessibilityLabel(playbackState.shuffleMode)
+                            }
                     ) {
                         Text(
                             text = "SHF",
+                            modifier = Modifier.clearAndSetSemantics { },
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             color = if (playbackState.shuffleMode) colors.primarySignal else colors.textSecondary
                         )
@@ -469,7 +478,12 @@ fun NowPlayingSheet(
                     // Repeat Mode Toggle
                     IconButton(
                         onClick = onCycleRepeat,
-                        modifier = Modifier.touchTarget48()
+                        modifier = Modifier
+                            .touchTarget48()
+                            .semantics {
+                                role = Role.Button
+                                contentDescription = getRepeatAccessibilityLabel(playbackState.repeatMode)
+                            }
                     ) {
                         Text(
                             text = when (playbackState.repeatMode) {
@@ -477,6 +491,7 @@ fun NowPlayingSheet(
                                 RepeatMode.ALL -> "ALL"
                                 RepeatMode.ONE -> "ONE"
                             },
+                            modifier = Modifier.clearAndSetSemantics { },
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             color = if (playbackState.repeatMode != RepeatMode.OFF) colors.primarySignal else colors.textSecondary
                         )
@@ -682,3 +697,13 @@ private fun SleepTimerDialog(
         }
     )
 }
+
+internal fun getShuffleAccessibilityLabel(shuffleMode: Boolean): String =
+    if (shuffleMode) "Shuffle on" else "Shuffle off"
+
+internal fun getRepeatAccessibilityLabel(repeatMode: RepeatMode): String =
+    when (repeatMode) {
+        RepeatMode.OFF -> "Repeat off"
+        RepeatMode.ALL -> "Repeat all"
+        RepeatMode.ONE -> "Repeat one"
+    }

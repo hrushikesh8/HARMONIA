@@ -197,18 +197,13 @@ class HarmoniaM4EEndToEndIntegrationTest {
 
         // Duplicate registration of the same folder must NOT duplicate source entries
         settingsVm.registerSafFolder(safUri, "MicroSD Music Renamed")
-        val sourcesInDb = runBlocking { ServiceLocator.getStorageSourceRepository().observeAllSources() }
-        composeTestRule.waitUntil(3000) {
-            runBlocking {
-                val list = ServiceLocator.getStorageSourceRepository().getSourceById(
-                    StorageSource.SafDocumentTree.deriveCanonicalId(safUri)
-                )
-                list != null
-            }
+        composeTestRule.waitUntil(5000) {
+            composeTestRule.onAllNodesWithText("MicroSD Music Renamed").fetchSemanticsNodes().isNotEmpty()
         }
+        composeTestRule.onNodeWithText("MicroSD Music Renamed").assertIsDisplayed()
 
         // Verify Toggle action disables the source
-        composeTestRule.onNodeWithContentDescription("Toggle MicroSD Music").performClick()
+        composeTestRule.onNodeWithContentDescription("Toggle MicroSD Music Renamed").performClick()
         composeTestRule.waitUntil(5000) {
             runBlocking {
                 val source = ServiceLocator.getStorageSourceRepository().getSourceById(

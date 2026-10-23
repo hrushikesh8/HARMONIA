@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
@@ -12,7 +15,7 @@ android {
         applicationId = "org.harmonia.player"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
+        versionCode = 2
         versionName = "0.1.0"
         javaCompileOptions {
             annotationProcessorOptions {
@@ -21,10 +24,104 @@ android {
         }
     }
 
+    // ── Release Signing Configuration (M-REL.1) ───────────────────────────────
+    val envKeystorePath: String? = System.getenv("HARMONIA_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
+    val envKeystorePassword: String? = System.getenv("HARMONIA_KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() }
+    val envKeyAlias: String? = System.getenv("HARMONIA_KEY_ALIAS")?.takeIf { it.isNotBlank() }
+    val envKeyPassword: String? = System.getenv("HARMONIA_KEY_PASSWORD")?.takeIf { it.isNotBlank() }
+
+    // Optional local keystore.properties fallback (gitignored)
+    val keystoreProps = Properties()
+    val propsFile = rootProject.file("keystore.properties").takeIf { it.exists() }
+        ?: project.file("keystore.properties").takeIf { it.exists() }
+    if (propsFile != null) {
+        FileInputStream(propsFile).use { stream ->
+            keystoreProps.load(stream)
+        }
+    }
+
+    fun getProp(key: String): String? {
+        val value: String? = keystoreProps.getProperty(key)
+        return if (!value.isNullOrBlank()) value else null
+    }
+
+    val resolvedKeystorePath: String? = envKeystorePath
+        ?: getProp("HARMONIA_KEYSTORE_PATH")
+        ?: getProp("storeFile")
+
+    val resolvedKeystorePassword: String? = envKeystorePassword
+        ?: getProp("HARMONIA_KEYSTORE_PASSWORD")
+        ?: getProp("storePassword")
+
+    val resolvedKeyAlias: String? = envKeyAlias
+        ?: getProp("HARMONIA_KEY_ALIAS")
+        ?: getProp("keyAlias")
+
+    val resolvedKeyPassword: String? = envKeyPassword
+        ?: getProp("HARMONIA_KEY_PASSWORD")
+        ?: getProp("keyPassword")
+
+    val isExplicitSigningRequested = System.getenv("HARMONIA_REQUIRE_SIGNING")?.toBooleanStrictOrNull() == true ||
+        (project.hasProperty("requireSigning") && project.property("requireSigning").toString().toBoolean()) ||
+        (project.hasProperty("harmoniaRequireSigning") && project.property("harmoniaRequireSigning").toString().toBoolean())
+
+    val hasAnySigningInput = resolvedKeystorePath != null ||
+        resolvedKeystorePassword != null ||
+        resolvedKeyAlias != null ||
+        resolvedKeyPassword != null
+
+    // Validation: when signing is explicitly requested or partial inputs are provided
+    if (isExplicitSigningRequested || hasAnySigningInput) {
+        val missingInputs = mutableListOf<String>()
+        if (resolvedKeystorePath == null) missingInputs.add("HARMONIA_KEYSTORE_PATH")
+        if (resolvedKeystorePassword == null) missingInputs.add("HARMONIA_KEYSTORE_PASSWORD")
+        if (resolvedKeyAlias == null) missingInputs.add("HARMONIA_KEY_ALIAS")
+        if (resolvedKeyPassword == null) missingInputs.add("HARMONIA_KEY_PASSWORD")
+
+        if (missingInputs.isNotEmpty()) {
+            throw GradleException(
+                "Release signing was requested or partially configured, but the following required inputs are missing: " +
+                    missingInputs.joinToString(", ") +
+                    ". All four inputs (HARMONIA_KEYSTORE_PATH, HARMONIA_KEYSTORE_PASSWORD, HARMONIA_KEY_ALIAS, HARMONIA_KEY_PASSWORD) are required to produce a signed release build."
+            )
+        }
+
+        val keystoreFile = file(resolvedKeystorePath!!)
+        if (!keystoreFile.exists()) {
+            throw GradleException(
+                "Release keystore file specified by HARMONIA_KEYSTORE_PATH does not exist: ${keystoreFile.absolutePath}"
+            )
+        }
+    }
+
+    val isSigningConfigured = resolvedKeystorePath != null &&
+        resolvedKeystorePassword != null &&
+        resolvedKeyAlias != null &&
+        resolvedKeyPassword != null &&
+        file(resolvedKeystorePath).exists()
+
+    signingConfigs {
+        if (isSigningConfigured) {
+            create("release") {
+                storeFile = file(resolvedKeystorePath!!)
+                storePassword = resolvedKeystorePassword
+                keyAlias = resolvedKeyAlias
+                keyPassword = resolvedKeyPassword
+                enableV1Signing = true
+                enableV2Signing = true
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (isSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            } else {
+                signingConfig = null
+            }
         }
     }
     compileOptions {
