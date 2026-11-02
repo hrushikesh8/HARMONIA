@@ -20,7 +20,8 @@ class HarmoniaApp : Application() {
             listeningEventRepository = ServiceLocator.getListeningEventRepository(),
             trackRepository = ServiceLocator.getTrackRepository(),
             localFileRepository = ServiceLocator.getLocalFileRepository(),
-            storageVolumeLifecycleCoordinator = ServiceLocator.getStorageVolumeLifecycleCoordinator()
+            storageVolumeLifecycleCoordinator = ServiceLocator.getStorageVolumeLifecycleCoordinator(),
+            userPreferencesRepository = ServiceLocator.getUserPreferencesRepository()
         )
         ServiceLocator.setPlaybackPort(playerController)
     }

@@ -110,8 +110,16 @@ class DefaultStorageVolumeLifecycleCoordinator(
     }
 
     override fun isSourceAvailable(sourceId: String): Boolean {
-        val state = _runtimeStates.value[sourceId] ?: return false
-        return state.isAvailable && state.isMounted && state.hasPermission
+        val state = _runtimeStates.value[sourceId]
+        if (state != null) {
+            return state.isAvailable && state.isMounted && state.hasPermission
+        }
+        // If initial revalidation has not completed yet or primary storage is being resolved,
+        // primary internal storage on Android is physically available by default.
+        if (sourceId == StorageSource.MediaStorePrimary.ID) {
+            return true
+        }
+        return false
     }
 
     override fun onVolumeUnmounted(volumeId: String) {
@@ -214,7 +222,23 @@ class DefaultStorageVolumeLifecycleCoordinator(
     }
 
     override suspend fun revalidateAllSources(): Map<String, SourceRuntimeState> {
-        val sources = storageSourceDao.observeAllSources().firstOrNull() ?: emptyList()
+        var sources = storageSourceDao.observeAllSources().firstOrNull() ?: emptyList()
+        if (sources.isEmpty()) {
+            try {
+                storageSourceDao.upsertSource(
+                    StorageSourceEntity(
+                        id = StorageSource.MediaStorePrimary.ID,
+                        type = "MEDIA_STORE_PRIMARY",
+                        uri = "content://media/external/audio/media",
+                        displayName = "Internal Audio Storage",
+                        isRemovable = false,
+                        isEnabled = true,
+                        lastScannedAt = 0L
+                    )
+                )
+                sources = storageSourceDao.observeAllSources().firstOrNull() ?: sources
+            } catch (_: Exception) {}
+        }
         val states = mutableMapOf<String, SourceRuntimeState>()
 
         for (sourceEntity in sources) {

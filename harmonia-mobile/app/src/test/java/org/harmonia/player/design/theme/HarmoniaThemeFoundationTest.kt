@@ -47,7 +47,7 @@ class HarmoniaThemeFoundationTest {
     @Test
     fun testDarkTheme_primaryTextOnObsidian_exceedsWcagAaa() {
         val contrast = calculateContrastRatio(DarkHarmoniaSemanticColors.textPrimary, DarkHarmoniaSemanticColors.backgroundRoot)
-        // Expected ~17.70:1, WCAG AAA threshold is 7.0:1
+        // Expected ~18.69:1, WCAG AAA threshold is 7.0:1
         assertTrue("Expected contrast > 7.0 but was $contrast", contrast >= 7.0)
         assertTrue("Expected contrast > 17.0 but was $contrast", contrast > 17.0)
     }
@@ -55,64 +55,63 @@ class HarmoniaThemeFoundationTest {
     @Test
     fun testDarkTheme_primarySignalOnObsidian_exceedsWcagAaa() {
         val contrast = calculateContrastRatio(DarkHarmoniaSemanticColors.primarySignal, DarkHarmoniaSemanticColors.backgroundRoot)
-        // Expected ~10.19:1, WCAG AAA threshold is 7.0:1
-        assertTrue("Expected contrast > 7.0 but was $contrast", contrast >= 7.0)
-        assertTrue("Expected contrast > 10.0 but was $contrast", contrast > 10.0)
+        // Sonic Amber on Obsidian exceeds WCAG AAA threshold (7.0:1, expected ~9.77:1)
+        assertTrue("Expected contrast >= 7.0 (WCAG AAA) but was $contrast", contrast >= 7.0)
     }
 
     @Test
     fun testDarkTheme_secondaryTextOnElevatedSurface_exceedsWcagAa() {
         val contrast = calculateContrastRatio(DarkHarmoniaSemanticColors.textSecondary, DarkHarmoniaSemanticColors.surfaceElevated)
-        // Expected ~5.95:1, WCAG AA threshold is 4.5:1
+        // Expected ~7.75:1, WCAG AA threshold is 4.5:1, exceeds even AAA (7.0:1)
         assertTrue("Expected contrast >= 4.5 but was $contrast", contrast >= 4.5)
     }
 
     @Test
     fun testDarkTheme_violetAccentOnObsidian_meetsLargeTextAndUiIconThreshold() {
         val contrast = calculateContrastRatio(DarkHarmoniaSemanticColors.secondarySignal, DarkHarmoniaSemanticColors.backgroundRoot)
-        // Expected ~3.65:1, meets WCAG AA for large text / UI icons (>= 3.0:1)
+        // Cerulean on Obsidian is ~7.56:1, meets and exceeds WCAG AA for large text / UI icons (>= 3.0:1)
         assertTrue("Expected contrast >= 3.0 for large text/icons but was $contrast", contrast >= 3.0)
     }
 
     @Test
     fun testLightTheme_primaryTextOnSlateDay_exceedsWcagAaa() {
         val contrast = calculateContrastRatio(LightHarmoniaSemanticColors.textPrimary, LightHarmoniaSemanticColors.backgroundRoot)
-        // Expected ~16.49:1, WCAG AAA threshold is 7.0:1
+        // Expected ~18.13:1, WCAG AAA threshold is 7.0:1
         assertTrue("Expected contrast > 7.0 but was $contrast", contrast >= 7.0)
     }
 
     @Test
     fun testLightTheme_deepTealOnSlateDay_exceedsWcagAa() {
         val contrast = calculateContrastRatio(LightHarmoniaSemanticColors.primarySignal, LightHarmoniaSemanticColors.backgroundRoot)
-        // DeepTeal (#006064) on SlateDay (#F4F6F9) expected ~6.79:1, exceeds WCAG AA (4.5:1)
+        // DaySonicAmber on ParchmentDay expected ~7.03:1, exceeds WCAG AA (4.5:1) and meets AAA (7.0:1)
         assertTrue("Expected contrast >= 4.5 but was $contrast", contrast >= 4.5)
     }
 
     @Test
     fun testLightTheme_secondaryTextOnSlateDay_exceedsWcagAa() {
         val contrast = calculateContrastRatio(LightHarmoniaSemanticColors.textSecondary, LightHarmoniaSemanticColors.backgroundRoot)
-        // SlateTextSecondary (#475569) on SlateDay (#F4F6F9) expected ~6.9:1, exceeds WCAG AA (4.5:1)
+        // DaySlateSecondary on ParchmentDay expected ~7.07:1, exceeds WCAG AA (4.5:1)
         assertTrue("Expected contrast >= 4.5 but was $contrast", contrast >= 4.5)
     }
 
     @Test
     fun testLightTheme_plumVioletOnSlateDay_meetsLargeTextAndUiIconThreshold() {
         val contrast = calculateContrastRatio(LightHarmoniaSemanticColors.secondarySignal, LightHarmoniaSemanticColors.backgroundRoot)
-        // PlumViolet (#5E35B1) on SlateDay (#F4F6F9) expected ~5.4:1, exceeds 3.0:1
+        // DayCeruleanTechnical on ParchmentDay expected ~5.34:1, exceeds 3.0:1
         assertTrue("Expected contrast >= 3.0 but was $contrast", contrast >= 3.0)
     }
 
     @Test
     fun testLightTheme_statusErrorOnSlateDay_exceedsWcagAa() {
         val contrast = calculateContrastRatio(LightHarmoniaSemanticColors.statusError, LightHarmoniaSemanticColors.backgroundRoot)
-        // DeepRedError (#DC2626) on SlateDay (#F4F6F9) expected ~4.6:1, exceeds WCAG AA (4.5:1)
+        // DeepRedError on ParchmentDay expected ~4.6:1, exceeds WCAG AA (4.5:1)
         assertTrue("Expected contrast >= 4.5 but was $contrast", contrast >= 4.5)
     }
 
     @Test
     fun testLightTheme_statusWarningOnSlateDay_meetsLargeTextAndUiIconThreshold() {
         val contrast = calculateContrastRatio(LightHarmoniaSemanticColors.statusWarning, LightHarmoniaSemanticColors.backgroundRoot)
-        // DeepAmberWarning (#D97706) on SlateDay (#F4F6F9) expected ~3.2:1, exceeds 3.0:1
+        // DeepAmberWarning on ParchmentDay expected ~3.2:1, exceeds 3.0:1
         assertTrue("Expected contrast >= 3.0 but was $contrast", contrast >= 3.0)
     }
 

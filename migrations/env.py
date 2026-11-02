@@ -12,8 +12,8 @@ from sqlalchemy import engine_from_config, pool
 # Ensure src is on sys.path
 sys.path.insert(0, os.path.abspath("src"))
 
-from harmonia.core.config import HarmoniaConfig  # noqa: E402
-from harmonia.infrastructure.persistence.models import Base  # noqa: E402
+from harmonia.core.config import HarmoniaConfig
+from harmonia.infrastructure.persistence.models import Base
 
 config = context.config
 

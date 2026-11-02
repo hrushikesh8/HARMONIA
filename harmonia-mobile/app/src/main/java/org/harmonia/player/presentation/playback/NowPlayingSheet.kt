@@ -3,8 +3,6 @@ package org.harmonia.player.presentation.playback
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,8 +18,10 @@ import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -43,12 +43,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -60,16 +58,16 @@ import org.harmonia.player.domain.model.PlaybackState
 import org.harmonia.player.domain.model.QueueItem
 import org.harmonia.player.domain.model.RepeatMode
 import org.harmonia.player.domain.model.Track
-import org.harmonia.player.presentation.components.HarmoniaArtwork
-import org.harmonia.player.presentation.personalization.FavoriteButton
-import org.harmonia.player.presentation.personalization.RatingDialog
 import org.harmonia.player.domain.model.audio.SleepTimerMode
 import org.harmonia.player.domain.model.audio.SleepTimerPreset
 import org.harmonia.player.domain.model.audio.SleepTimerState
+import org.harmonia.player.presentation.components.HarmoniaArtwork
+import org.harmonia.player.presentation.personalization.FavoriteButton
+import org.harmonia.player.presentation.personalization.RatingDialog
 import java.util.Locale
 
 /**
- * Now Playing Modal Bottom Sheet featuring full transport controls, seek bar, queue sheet, and sleep timer.
+ * Now Playing Modal Bottom Sheet featuring full transport controls, seek bar, queue view, and sleep timer.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -92,7 +90,9 @@ fun NowPlayingSheet(
     rating: Int? = null,
     onToggleFavorite: () -> Unit = {},
     onSetRating: (Int) -> Unit = {},
-    onClearRating: () -> Unit = {}
+    onClearRating: () -> Unit = {},
+    onAlbumClick: ((String) -> Unit)? = null,
+    onArtistClick: ((String) -> Unit)? = null
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showQueue by remember { mutableStateOf(false) }
@@ -195,11 +195,15 @@ fun NowPlayingSheet(
                     }
                     IconButton(
                         onClick = { showQueue = !showQueue },
-                        modifier = Modifier.touchTarget48()
+                        modifier = Modifier
+                            .touchTarget48()
+                            .semantics {
+                                contentDescription = if (showQueue) "Show Now Playing" else "Show Queue"
+                            }
                     ) {
                         Icon(
                             imageVector = HarmoniaIcons.QueueMusic,
-                            contentDescription = if (showQueue) "Show Now Playing" else "Show Queue",
+                            contentDescription = null,
                             tint = if (showQueue) colors.primarySignal else colors.textSecondary
                         )
                     }
@@ -213,25 +217,86 @@ fun NowPlayingSheet(
                 QueueView(
                     queue = queue,
                     activeTrackId = playbackState.currentTrackId,
+                    isPlaying = playbackState.isPlaying,
                     onItemClick = onQueueItemClick,
-                    modifier = Modifier.height(380.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(320.dp)
                 )
+
+                Spacer(modifier = Modifier.height(spacing.medium))
+
+                // Compact current track info row
+                if (currentTrack != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(colors.surfaceElevated)
+                            .padding(horizontal = spacing.medium, vertical = spacing.small),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Now Playing: ",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colors.primarySignal
+                        )
+                        Text(
+                            text = currentTrack.title,
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = colors.textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
             } else {
-                // Large Responsive Artwork (fillMaxWidth 0.85f, max 320dp, prevents clipping under 200% font scale)
-                HarmoniaArtwork(
-                    artworkHash = currentTrack?.artworkHash,
+                // Large Responsive Artwork with Hairline Border
+                Box(
                     modifier = Modifier
                         .fillMaxWidth(0.85f)
-                        .sizeIn(maxWidth = 320.dp, maxHeight = 320.dp)
-                        .aspectRatio(1f),
-                    size = 280.dp,
-                    cornerRadius = 16.dp,
-                    contentDescription = currentTrack?.let { "${it.title} Artwork" } ?: "Album Artwork"
-                )
+                        .sizeIn(maxWidth = 300.dp, maxHeight = 300.dp)
+                        .aspectRatio(1f)
+                        .clip(RoundedCornerShape(16.dp))
+                        .hairlineBorder(colors.borderStructural, RoundedCornerShape(16.dp))
+                        .background(colors.surfaceElevated),
+                    contentAlignment = Alignment.Center
+                ) {
+                    HarmoniaArtwork(
+                        artworkHash = currentTrack?.artworkHash,
+                        modifier = Modifier.fillMaxSize(),
+                        size = 280.dp,
+                        cornerRadius = 16.dp,
+                        contentDescription = currentTrack?.let { "${it.title} Artwork" } ?: "Album Artwork"
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(spacing.large))
 
                 // Track Title, Artist, and Personalization Actions (Favorite & Rating)
+                val displayTitle = remember(currentTrack) {
+                    currentTrack?.let { org.harmonia.player.presentation.util.TrackDisplayUtils.formatDisplayTitle(it) } ?: "No Track Playing"
+                }
+                val formatPillText = remember(currentTrack) {
+                    currentTrack?.localFile?.let { file ->
+                        val fmt = file.format.ifBlank {
+                            file.fileUri.substringAfterLast('.', "")
+                        }.uppercase(Locale.ROOT)
+                        when {
+                            file.bitDepth != null && file.sampleRate != null -> {
+                                val khz = file.sampleRate / 1000.0
+                                val khzStr = if (khz % 1.0 == 0.0) "${khz.toInt()} kHz" else String.format(Locale.US, "%.1f kHz", khz)
+                                "$fmt • ${file.bitDepth}-BIT / $khzStr"
+                            }
+                            file.isLossless -> "$fmt • LOSSLESS"
+                            file.bitrate != null -> "$fmt • ${file.bitrate} KBPS"
+                            fmt.isNotEmpty() -> fmt
+                            else -> null
+                        }
+                    }
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -241,7 +306,7 @@ fun NowPlayingSheet(
                         modifier = Modifier.weight(1f)
                     ) {
                         Text(
-                            text = currentTrack?.title ?: "No Track Playing",
+                            text = displayTitle,
                             style = MaterialTheme.typography.titleLarge.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 22.sp
@@ -251,14 +316,68 @@ fun NowPlayingSheet(
                             overflow = TextOverflow.Ellipsis
                         )
                         Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = listOfNotNull(currentTrack?.artistName, currentTrack?.albumTitle).joinToString(" • ")
-                                .ifEmpty { "Harmonia Native Audio" },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = colors.textSecondary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (!currentTrack?.artistName.isNullOrBlank()) {
+                                Text(
+                                    text = currentTrack.artistName!!,
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                    color = if (onArtistClick != null && currentTrack.artistId != null) colors.secondarySignal else colors.textSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.clickable(enabled = onArtistClick != null && currentTrack.artistId != null) {
+                                        currentTrack.artistId?.let { onArtistClick?.invoke(it) }
+                                    }
+                                )
+                            }
+                            if (!currentTrack?.artistName.isNullOrBlank() && !currentTrack?.albumTitle.isNullOrBlank()) {
+                                Text(
+                                    text = " • ",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = colors.textSecondary
+                                )
+                            }
+                            if (!currentTrack?.albumTitle.isNullOrBlank()) {
+                                Text(
+                                    text = currentTrack.albumTitle!!,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (onAlbumClick != null && currentTrack.albumId != null) colors.secondarySignal else colors.textSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.clickable(enabled = onAlbumClick != null && currentTrack.albumId != null) {
+                                        currentTrack.albumId?.let { onAlbumClick?.invoke(it) }
+                                    }
+                                )
+                            }
+                            if (currentTrack?.artistName.isNullOrBlank() && currentTrack?.albumTitle.isNullOrBlank()) {
+                                Text(
+                                    text = "Harmonia Local Audio",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = colors.textSecondary
+                                )
+                            }
+                        }
+                        if (formatPillText != null) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(colors.surfaceContainer)
+                                    .hairlineBorder(colors.borderStructural, RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = formatPillText,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        letterSpacing = 0.5.sp
+                                    ),
+                                    color = colors.primarySignal
+                                )
+                            }
+                        }
                     }
 
                     // Personalization Controls: Star Rating trigger & Favorite Button
@@ -266,7 +385,6 @@ fun NowPlayingSheet(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        // Rating Chip / Button (opens RatingDialog)
                         IconButton(
                             onClick = { showRatingDialog = true },
                             enabled = currentTrack != null,
@@ -300,7 +418,6 @@ fun NowPlayingSheet(
                             }
                         }
 
-                        // Favorite Toggle Button
                         FavoriteButton(
                             isFavorite = isFavorite,
                             onToggleFavorite = onToggleFavorite,
@@ -356,146 +473,149 @@ fun NowPlayingSheet(
                         }
                     }
                 }
+            }
 
-                Spacer(modifier = Modifier.height(spacing.standard))
+            Spacer(modifier = Modifier.height(spacing.standard))
 
-                // Seek Progress Bar
-                val sliderValue = if (totalDurationMs > 0) {
-                    if (isUserSeeking) seekSliderPosition else (playbackState.currentPositionMs.toFloat() / totalDurationMs.toFloat()).coerceIn(0f, 1f)
-                } else {
-                    0f
-                }
+            // Seek Progress Bar (always accessible)
+            val sliderValue = if (totalDurationMs > 0) {
+                if (isUserSeeking) seekSliderPosition else (playbackState.currentPositionMs.toFloat() / totalDurationMs.toFloat()).coerceIn(0f, 1f)
+            } else {
+                0f
+            }
 
-                Slider(
-                    value = sliderValue,
-                    onValueChange = {
-                        isUserSeeking = true
-                        seekSliderPosition = it
+            Slider(
+                value = sliderValue,
+                onValueChange = {
+                    isUserSeeking = true
+                    seekSliderPosition = it
+                },
+                onValueChangeFinished = {
+                    isUserSeeking = false
+                    onSeekTo((seekSliderPosition * totalDurationMs).toLong())
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .touchTarget48()
+                    .semantics {
+                        contentDescription = "Playback seek slider"
                     },
-                    onValueChangeFinished = {
-                        isUserSeeking = false
-                        onSeekTo((seekSliderPosition * totalDurationMs).toLong())
-                    },
+                colors = SliderDefaults.colors(
+                    thumbColor = colors.primarySignal,
+                    activeTrackColor = colors.primarySignal,
+                    inactiveTrackColor = colors.surfaceContainer
+                )
+            )
+
+            // Time indicators (Tabular alignment)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = formatTime(currentPositionMs),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.textSecondary
+                )
+                Text(
+                    text = formatTime(totalDurationMs),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.textSecondary
+                )
+            }
+
+            Spacer(modifier = Modifier.height(spacing.large))
+
+            // Full Transport Controls (all with strict 48dp minimum bounds)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Shuffle Toggle
+                IconButton(
+                    onClick = onToggleShuffle,
                     modifier = Modifier
-                        .fillMaxWidth()
                         .touchTarget48()
                         .semantics {
-                            contentDescription = "Playback seek slider"
-                        },
-                    colors = SliderDefaults.colors(
-                        thumbColor = colors.primarySignal,
-                        activeTrackColor = colors.primarySignal,
-                        inactiveTrackColor = colors.surfaceContainer
-                    )
-                )
-
-                // Time indicators (Tabular alignment)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                            role = Role.Button
+                            contentDescription = getShuffleAccessibilityLabel(playbackState.shuffleMode)
+                        }
                 ) {
-                    Text(
-                        text = formatTime(currentPositionMs),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colors.textSecondary
-                    )
-                    Text(
-                        text = formatTime(totalDurationMs),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colors.textSecondary
+                    Icon(
+                        imageVector = HarmoniaIcons.Shuffle,
+                        contentDescription = null,
+                        tint = if (playbackState.shuffleMode) colors.primarySignal else colors.textSecondary,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.height(spacing.large))
-
-                // Full Transport Controls (All with strict 48dp minimum bounds)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
+                // Previous Track
+                IconButton(
+                    onClick = onPrevious,
+                    modifier = Modifier.touchTarget48()
                 ) {
-                    // Shuffle Toggle
-                    IconButton(
-                        onClick = onToggleShuffle,
-                        modifier = Modifier
-                            .touchTarget48()
-                            .semantics {
-                                role = Role.Button
-                                contentDescription = getShuffleAccessibilityLabel(playbackState.shuffleMode)
-                            }
-                    ) {
-                        Text(
-                            text = "SHF",
-                            modifier = Modifier.clearAndSetSemantics { },
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            color = if (playbackState.shuffleMode) colors.primarySignal else colors.textSecondary
-                        )
-                    }
+                    Icon(
+                        imageVector = HarmoniaIcons.SkipPrevious,
+                        contentDescription = "Previous Track",
+                        tint = colors.textPrimary,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
 
-                    // Previous Track
-                    IconButton(
-                        onClick = onPrevious,
-                        modifier = Modifier.touchTarget48()
-                    ) {
-                        Icon(
-                            imageVector = HarmoniaIcons.SkipPrevious,
-                            contentDescription = "Previous Track",
-                            tint = colors.textPrimary,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
+                // Play/Pause Big Button (64dp circular focal point in electric blue)
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(colors.primarySignal)
+                        .clickable(onClick = onPlayPause)
+                        .semantics {
+                            role = Role.Button
+                            contentDescription = if (playbackState.isPlaying) "Pause" else "Play"
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (playbackState.isPlaying) HarmoniaIcons.Pause else HarmoniaIcons.Play,
+                        contentDescription = null,
+                        tint = colors.backgroundRoot,
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
 
-                    // Play/Pause Big Button (64dp circular focal point)
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(CircleShape)
-                            .background(colors.primarySignal)
-                            .clickable(onClick = onPlayPause),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = if (playbackState.isPlaying) HarmoniaIcons.Pause else HarmoniaIcons.Play,
-                            contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
-                            tint = colors.backgroundRoot,
-                            modifier = Modifier.size(36.dp)
-                        )
-                    }
+                // Next Track
+                IconButton(
+                    onClick = onNext,
+                    modifier = Modifier.touchTarget48()
+                ) {
+                    Icon(
+                        imageVector = HarmoniaIcons.SkipNext,
+                        contentDescription = "Next Track",
+                        tint = colors.textPrimary,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
 
-                    // Next Track
-                    IconButton(
-                        onClick = onNext,
-                        modifier = Modifier.touchTarget48()
-                    ) {
-                        Icon(
-                            imageVector = HarmoniaIcons.SkipNext,
-                            contentDescription = "Next Track",
-                            tint = colors.textPrimary,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-
-                    // Repeat Mode Toggle
-                    IconButton(
-                        onClick = onCycleRepeat,
-                        modifier = Modifier
-                            .touchTarget48()
-                            .semantics {
-                                role = Role.Button
-                                contentDescription = getRepeatAccessibilityLabel(playbackState.repeatMode)
-                            }
-                    ) {
-                        Text(
-                            text = when (playbackState.repeatMode) {
-                                RepeatMode.OFF -> "RPT"
-                                RepeatMode.ALL -> "ALL"
-                                RepeatMode.ONE -> "ONE"
-                            },
-                            modifier = Modifier.clearAndSetSemantics { },
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            color = if (playbackState.repeatMode != RepeatMode.OFF) colors.primarySignal else colors.textSecondary
-                        )
-                    }
+                // Repeat Mode Toggle
+                IconButton(
+                    onClick = onCycleRepeat,
+                    modifier = Modifier
+                        .touchTarget48()
+                        .semantics {
+                            role = Role.Button
+                            contentDescription = getRepeatAccessibilityLabel(playbackState.repeatMode)
+                        }
+                ) {
+                    Icon(
+                        imageVector = when (playbackState.repeatMode) {
+                            RepeatMode.ONE -> HarmoniaIcons.RepeatOne
+                            else -> HarmoniaIcons.Repeat
+                        },
+                        contentDescription = null,
+                        tint = if (playbackState.repeatMode != RepeatMode.OFF) colors.primarySignal else colors.textSecondary,
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
             }
         }
@@ -506,16 +626,32 @@ fun NowPlayingSheet(
 private fun QueueView(
     queue: List<QueueItem>,
     activeTrackId: String?,
+    isPlaying: Boolean,
     onItemClick: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colors = HarmoniaThemeTokens.colors
+    val spacing = HarmoniaThemeTokens.spacing
+
     if (queue.isEmpty()) {
         Box(
             modifier = modifier.fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
-            Text(text = "Queue is empty", color = colors.textSecondary)
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    imageVector = HarmoniaIcons.QueueMusic,
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp),
+                    tint = colors.textSecondary.copy(alpha = 0.5f)
+                )
+                Spacer(modifier = Modifier.height(spacing.small))
+                Text(
+                    text = "No upcoming tracks in queue",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.textSecondary
+                )
+            }
         }
     } else {
         LazyColumn(
@@ -524,43 +660,78 @@ private fun QueueView(
         ) {
             itemsIndexed(queue, key = { idx, item -> "${item.trackId}_$idx" }) { idx, item ->
                 val isCurrent = item.trackId == activeTrackId
+                val track = item.track
+                val title = track?.let { org.harmonia.player.presentation.util.TrackDisplayUtils.formatDisplayTitle(it) } ?: item.trackId
+                val artist = track?.artistName ?: "Unknown Artist"
+                val durationSec = track?.durationSec ?: 0.0
+                val durationMs = (durationSec * 1000).toLong()
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(8.dp))
-                        .background(if (isCurrent) colors.surfaceContainer else colors.surfaceElevated)
+                        .background(if (isCurrent) colors.primarySignal.copy(alpha = 0.12f) else colors.surfaceElevated)
+                        .hairlineBorder(if (isCurrent) colors.primarySignal.copy(alpha = 0.5f) else colors.borderStructural, RoundedCornerShape(8.dp))
                         .clickable { onItemClick(idx) }
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "${idx + 1}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isCurrent) colors.primarySignal else colors.textSecondary,
-                        modifier = Modifier.width(28.dp)
-                    )
+                    Box(
+                        modifier = Modifier.width(28.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isCurrent && isPlaying) {
+                            Icon(
+                                imageVector = HarmoniaIcons.Play,
+                                contentDescription = "Playing",
+                                modifier = Modifier.size(16.dp),
+                                tint = colors.primarySignal
+                            )
+                        } else {
+                            Text(
+                                text = "${idx + 1}",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = if (isCurrent) colors.primarySignal else colors.textSecondary
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
                     HarmoniaArtwork(
-                        artworkHash = item.track?.artworkHash,
-                        size = 36.dp,
+                        artworkHash = track?.artworkHash,
+                        size = 38.dp,
                         cornerRadius = 6.dp,
-                        contentDescription = null
+                        contentDescription = title
                     )
+
                     Spacer(modifier = Modifier.width(10.dp))
+
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = item.track?.title ?: item.trackId,
+                            text = title,
                             style = MaterialTheme.typography.bodyMedium.copy(
-                                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
+                                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium
                             ),
                             color = if (isCurrent) colors.primarySignal else colors.textPrimary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = item.track?.artistName ?: "",
+                            text = artist,
                             style = MaterialTheme.typography.bodySmall,
                             color = colors.textSecondary,
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    if (durationMs > 0) {
+                        Spacer(modifier = Modifier.width(spacing.small))
+                        Text(
+                            text = formatTime(durationMs),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colors.textSecondary
                         )
                     }
                 }

@@ -721,4 +721,303 @@ object HarmoniaIcons {
             close()
         }
     }.build()
+
+    val Shuffle: ImageVector = ImageVector.Builder(
+        name = "Shuffle",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(10.59f, 9.17f)
+            lineTo(5.41f, 4f)
+            lineTo(4f, 5.41f)
+            lineToRelative(5.17f, 5.17f)
+            lineToRelative(1.42f, -1.41f)
+            close()
+            moveTo(14.5f, 4f)
+            lineToRelative(2.04f, 2.04f)
+            lineTo(4f, 18.59f)
+            lineTo(5.41f, 20f)
+            lineTo(17.96f, 7.46f)
+            lineTo(20f, 9.5f)
+            verticalLineTo(4f)
+            horizontalLineToRelative(-5.5f)
+            close()
+            moveTo(14.83f, 13.41f)
+            lineToRelative(-1.41f, 1.41f)
+            lineToRelative(3.13f, 3.13f)
+            lineTo(14.5f, 20f)
+            horizontalLineTo(20f)
+            verticalLineToRelative(-5.5f)
+            lineToRelative(-2.04f, 2.04f)
+            lineToRelative(-3.13f, -3.13f)
+            close()
+        }
+    }.build()
+
+    val Repeat: ImageVector = ImageVector.Builder(
+        name = "Repeat",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(7f, 7f)
+            horizontalLineToRelative(10f)
+            verticalLineToRelative(3f)
+            lineToRelative(4f, -4f)
+            lineToRelative(-4f, -4f)
+            verticalLineToRelative(3f)
+            horizontalLineTo(5f)
+            verticalLineToRelative(6f)
+            horizontalLineToRelative(2f)
+            verticalLineTo(7f)
+            close()
+            moveTo(17f, 17f)
+            horizontalLineTo(7f)
+            verticalLineToRelative(-3f)
+            lineToRelative(-4f, 4f)
+            lineToRelative(4f, 4f)
+            verticalLineToRelative(-3f)
+            horizontalLineToRelative(12f)
+            verticalLineToRelative(-6f)
+            horizontalLineToRelative(-2f)
+            verticalLineToRelative(4f)
+            close()
+        }
+    }.build()
+
+    val RepeatOne: ImageVector = ImageVector.Builder(
+        name = "RepeatOne",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(7f, 7f)
+            horizontalLineToRelative(10f)
+            verticalLineToRelative(3f)
+            lineToRelative(4f, -4f)
+            lineToRelative(-4f, -4f)
+            verticalLineToRelative(3f)
+            horizontalLineTo(5f)
+            verticalLineToRelative(6f)
+            horizontalLineToRelative(2f)
+            verticalLineTo(7f)
+            close()
+            moveTo(17f, 17f)
+            horizontalLineTo(7f)
+            verticalLineToRelative(-3f)
+            lineToRelative(-4f, 4f)
+            lineToRelative(4f, 4f)
+            verticalLineToRelative(-3f)
+            horizontalLineToRelative(12f)
+            verticalLineToRelative(-6f)
+            horizontalLineToRelative(-2f)
+            verticalLineToRelative(4f)
+            close()
+            moveTo(13f, 15f)
+            verticalLineTo(9f)
+            horizontalLineToRelative(-1.5f)
+            verticalLineToRelative(1f)
+            horizontalLineTo(10f)
+            verticalLineToRelative(1f)
+            horizontalLineToRelative(1.5f)
+            verticalLineToRelative(4f)
+            horizontalLineTo(13f)
+            close()
+        }
+    }.build()
+
+    val Logo: ImageVector = ImageVector.Builder(
+        name = "HarmoniaLogo",
+        defaultWidth = 100.dp,
+        defaultHeight = 100.dp,
+        viewportWidth = 100f,
+        viewportHeight = 100f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(17f, 46f)
+            curveTo(18.66f, 46f, 20f, 47.34f, 20f, 49f)
+            lineTo(20f, 51f)
+            curveTo(20f, 52.66f, 18.66f, 54f, 17f, 54f)
+            curveTo(15.34f, 54f, 14f, 52.66f, 14f, 51f)
+            lineTo(14f, 49f)
+            curveTo(14f, 47.34f, 15.34f, 46f, 17f, 46f)
+            close()
+        }
+        path(fill = SolidColor(Color.White)) {
+            moveTo(83f, 46f)
+            curveTo(84.66f, 46f, 86f, 47.34f, 86f, 49f)
+            lineTo(86f, 51f)
+            curveTo(86f, 52.66f, 84.66f, 54f, 83f, 54f)
+            curveTo(81.34f, 54f, 80f, 52.66f, 80f, 51f)
+            lineTo(80f, 49f)
+            curveTo(80f, 47.34f, 81.34f, 46f, 83f, 46f)
+            close()
+        }
+        path(fill = SolidColor(Color.White)) {
+            moveTo(28.25f, 37f)
+            curveTo(30.04f, 37f, 31.5f, 38.46f, 31.5f, 40.25f)
+            lineTo(31.5f, 59.75f)
+            curveTo(31.5f, 61.54f, 30.04f, 63f, 28.25f, 63f)
+            curveTo(26.46f, 63f, 25f, 61.54f, 25f, 59.75f)
+            lineTo(25f, 40.25f)
+            curveTo(25f, 38.46f, 26.46f, 37f, 28.25f, 37f)
+            close()
+        }
+        path(fill = SolidColor(Color.White)) {
+            moveTo(71.75f, 37f)
+            curveTo(73.54f, 37f, 75f, 38.46f, 75f, 40.25f)
+            lineTo(75f, 59.75f)
+            curveTo(75f, 61.54f, 73.54f, 63f, 71.75f, 63f)
+            curveTo(69.96f, 63f, 68.5f, 61.54f, 68.5f, 59.75f)
+            lineTo(68.5f, 40.25f)
+            curveTo(68.5f, 38.46f, 69.96f, 37f, 71.75f, 37f)
+            close()
+        }
+        path(
+            stroke = SolidColor(Color.White),
+            strokeLineWidth = 7f,
+            strokeLineCap = androidx.compose.ui.graphics.StrokeCap.Round
+        ) {
+            moveTo(40f, 37f)
+            curveTo(40f, 50f, 60f, 50f, 60f, 63f)
+        }
+        path(fill = SolidColor(Color.White)) {
+            moveTo(40f, 18f)
+            curveTo(41.93f, 18f, 43.5f, 19.57f, 43.5f, 21.5f)
+            lineTo(43.5f, 78.5f)
+            curveTo(43.5f, 80.43f, 41.93f, 82f, 40f, 82f)
+            curveTo(38.07f, 82f, 36.5f, 80.43f, 36.5f, 78.5f)
+            lineTo(36.5f, 21.5f)
+            curveTo(36.5f, 19.57f, 38.07f, 18f, 40f, 18f)
+            close()
+        }
+        path(fill = SolidColor(Color.White)) {
+            moveTo(60f, 18f)
+            curveTo(61.93f, 18f, 63.5f, 19.57f, 63.5f, 21.5f)
+            lineTo(63.5f, 78.5f)
+            curveTo(63.5f, 80.43f, 61.93f, 82f, 60f, 82f)
+            curveTo(58.07f, 82f, 56.5f, 80.43f, 56.5f, 78.5f)
+            lineTo(56.5f, 21.5f)
+            curveTo(56.5f, 19.57f, 58.07f, 18f, 60f, 18f)
+            close()
+        }
+    }.build()
+
+    val DirectionsCar: ImageVector = ImageVector.Builder(
+        name = "DirectionsCar",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(18.92f, 6.01f)
+            curveTo(18.72f, 5.42f, 18.16f, 5f, 17.5f, 5f)
+            horizontalLineToRelative(-11f)
+            curveToRelative(-0.66f, 0f, -1.21f, 0.42f, -1.42f, 1.01f)
+            lineTo(3f, 12f)
+            verticalLineToRelative(8f)
+            curveToRelative(0f, 0.55f, 0.45f, 1f, 1f, 1f)
+            horizontalLineToRelative(1f)
+            curveToRelative(0.55f, 0f, 1f, -0.45f, 1f, -1f)
+            verticalLineToRelative(-1f)
+            horizontalLineToRelative(12f)
+            verticalLineToRelative(1f)
+            curveToRelative(0f, 0.55f, 0.45f, 1f, 1f, 1f)
+            horizontalLineToRelative(1f)
+            curveToRelative(0.55f, 0f, 1f, -0.45f, 1f, -1f)
+            verticalLineToRelative(-8f)
+            lineToRelative(-2.08f, -5.99f)
+            close()
+            moveTo(6.85f, 7f)
+            horizontalLineToRelative(10.29f)
+            lineToRelative(1.08f, 3.11f)
+            horizontalLineTo(5.77f)
+            lineTo(6.85f, 7f)
+            close()
+            moveTo(19f, 17f)
+            horizontalLineTo(5f)
+            verticalLineToRelative(-5f)
+            horizontalLineToRelative(14f)
+            verticalLineToRelative(5f)
+            close()
+        }
+    }.build()
+
+    val ArrowBack: ImageVector = ImageVector.Builder(
+        name = "ArrowBack",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(20f, 11f)
+            horizontalLineTo(7.83f)
+            lineToRelative(5.59f, -5.59f)
+            lineTo(12f, 4f)
+            lineToRelative(-8f, 8f)
+            lineToRelative(8f, 8f)
+            lineToRelative(1.41f, -1.41f)
+            lineTo(7.83f, 13f)
+            horizontalLineTo(20f)
+            verticalLineToRelative(-2f)
+            close()
+        }
+    }.build()
+
+    val ChevronRight: ImageVector = ImageVector.Builder(
+        name = "ChevronRight",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(10f, 6f)
+            lineTo(8.59f, 7.41f)
+            lineTo(13.17f, 12f)
+            lineToRelative(-4.58f, 4.59f)
+            lineTo(10f, 18f)
+            lineToRelative(6f, -6f)
+            close()
+        }
+    }.build()
+
+    val Info: ImageVector = ImageVector.Builder(
+        name = "Info",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(12f, 2f)
+            curveTo(6.48f, 2f, 2f, 6.48f, 2f, 12f)
+            reflectiveCurveToRelative(4.48f, 10f, 10f, 10f)
+            reflectiveCurveToRelative(10f, -4.48f, 10f, -10f)
+            reflectiveCurveTo(17.52f, 2f, 12f, 2f)
+            close()
+            moveTo(13f, 17f)
+            horizontalLineToRelative(-2f)
+            verticalLineToRelative(-6f)
+            horizontalLineToRelative(2f)
+            verticalLineToRelative(6f)
+            close()
+            moveTo(13f, 9f)
+            horizontalLineToRelative(-2f)
+            verticalLineTo(7f)
+            horizontalLineToRelative(2f)
+            verticalLineToRelative(2f)
+            close()
+        }
+    }.build()
 }
+

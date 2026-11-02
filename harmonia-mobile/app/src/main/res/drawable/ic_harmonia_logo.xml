@@ -1,0 +1,39 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <!-- Outer Resonance Nodes -->
+    <path
+        android:fillColor="#3BA5FF"
+        android:pathData="M17,46 C18.66,46 20,47.34 20,49 L20,51 C20,52.66 18.66,54 17,54 C15.34,54 14,52.66 14,51 L14,49 C14,47.34 15.34,46 17,46 Z" />
+    <path
+        android:fillColor="#3BA5FF"
+        android:pathData="M83,46 C84.66,46 86,47.34 86,49 L86,51 C86,52.66 84.66,54 83,54 C81.34,54 80,52.66 80,51 L80,49 C80,47.34 81.34,46 83,46 Z" />
+
+    <!-- Inner Resonance Bars -->
+    <path
+        android:fillColor="#82B1FF"
+        android:pathData="M28.25,37 C30.04,37 31.5,38.46 31.5,40.25 L31.5,59.75 C31.5,61.54 30.04,63 28.25,63 C26.46,63 25,61.54 25,59.75 L25,40.25 C25,38.46 26.46,37 28.25,37 Z" />
+    <path
+        android:fillColor="#82B1FF"
+        android:pathData="M71.75,37 C73.54,37 75,38.46 75,40.25 L75,59.75 C75,61.54 73.54,63 71.75,63 C69.96,63 68.5,61.54 68.5,59.75 L68.5,40.25 C68.5,38.46 69.96,37 71.75,37 Z" />
+
+    <!-- Resonant S-Bridge connecting the pillars -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="7"
+        android:strokeLineCap="round"
+        android:pathData="M40,37 C40,50 60,50 60,63" />
+
+    <!-- Left Pillar -->
+    <path
+        android:fillColor="#3BA5FF"
+        android:pathData="M40,18 C41.93,18 43.5,19.57 43.5,21.5 L43.5,78.5 C43.5,80.43 41.93,82 40,82 C38.07,82 36.5,80.43 36.5,78.5 L36.5,21.5 C36.5,19.57 38.07,18 40,18 Z" />
+
+    <!-- Right Pillar -->
+    <path
+        android:fillColor="#3BA5FF"
+        android:pathData="M60,18 C61.93,18 63.5,19.57 63.5,21.5 L63.5,78.5 C63.5,80.43 61.93,82 60,82 C58.07,82 56.5,80.43 56.5,78.5 L56.5,21.5 C56.5,19.57 58.07,18 60,18 Z" />
+</vector>

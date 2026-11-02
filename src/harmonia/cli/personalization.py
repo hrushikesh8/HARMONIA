@@ -327,7 +327,7 @@ def playlist_update_cmd(
         raise typer.Exit(code=1)
 
     if clear_description:
-        update_dto = PlaylistUpdate.model_construct(name=name, description="")
+        update_dto = PlaylistUpdate(name=name, clear_description=True)
     elif description is not None:
         update_dto = PlaylistUpdate(name=name, description=description)
     else:

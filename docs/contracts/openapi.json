@@ -2804,6 +2804,373 @@
           }
         }
       }
+    },
+    "/api/v1/favorites": {
+      "get": {
+        "tags": [
+          "Personalization"
+        ],
+        "summary": "List Favorites",
+        "description": "Retrieve paginated list of favorited tracks for current user.",
+        "operationId": "list_favorites_api_v1_favorites_get",
+        "x-implementation-status": "IMPLEMENTED",
+        "responses": {
+          "200": {
+            "description": "List of favorites"
+          }
+        }
+      }
+    },
+    "/api/v1/favorites/{track_id}": {
+      "post": {
+        "tags": [
+          "Personalization"
+        ],
+        "summary": "Add Favorite",
+        "description": "Add a track to user favorites.",
+        "operationId": "add_favorite_api_v1_favorites__track_id__post",
+        "x-implementation-status": "IMPLEMENTED",
+        "parameters": [
+          {
+            "name": "track_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Favorite added"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Personalization"
+        ],
+        "summary": "Remove Favorite",
+        "description": "Remove a track from user favorites.",
+        "operationId": "remove_favorite_api_v1_favorites__track_id__delete",
+        "x-implementation-status": "IMPLEMENTED",
+        "parameters": [
+          {
+            "name": "track_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Favorite removed"
+          }
+        }
+      }
+    },
+    "/api/v1/ratings": {
+      "get": {
+        "tags": [
+          "Personalization"
+        ],
+        "summary": "List Ratings",
+        "description": "Retrieve paginated list of user track ratings.",
+        "operationId": "list_ratings_api_v1_ratings_get",
+        "x-implementation-status": "IMPLEMENTED",
+        "responses": {
+          "200": {
+            "description": "List of user ratings"
+          }
+        }
+      }
+    },
+    "/api/v1/ratings/{track_id}": {
+      "get": {
+        "tags": [
+          "Personalization"
+        ],
+        "summary": "Get Track Rating",
+        "description": "Retrieve rating for a specific track.",
+        "operationId": "get_rating_api_v1_ratings__track_id__get",
+        "x-implementation-status": "IMPLEMENTED",
+        "parameters": [
+          {
+            "name": "track_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Track rating details"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Personalization"
+        ],
+        "summary": "Set Track Rating",
+        "description": "Set or update rating for a specific track.",
+        "operationId": "set_rating_api_v1_ratings__track_id__put",
+        "x-implementation-status": "IMPLEMENTED",
+        "parameters": [
+          {
+            "name": "track_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Rating updated"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Personalization"
+        ],
+        "summary": "Delete Track Rating",
+        "description": "Remove rating for a specific track.",
+        "operationId": "delete_rating_api_v1_ratings__track_id__delete",
+        "x-implementation-status": "IMPLEMENTED",
+        "parameters": [
+          {
+            "name": "track_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Rating removed"
+          }
+        }
+      }
+    },
+    "/api/v1/playlists": {
+      "get": {
+        "tags": [
+          "Personalization"
+        ],
+        "summary": "List Playlists",
+        "description": "Retrieve list of all playlists.",
+        "operationId": "list_playlists_api_v1_playlists_get",
+        "x-implementation-status": "IMPLEMENTED",
+        "responses": {
+          "200": {
+            "description": "List of playlists"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Personalization"
+        ],
+        "summary": "Create Playlist",
+        "description": "Create a new playlist.",
+        "operationId": "create_playlist_api_v1_playlists_post",
+        "x-implementation-status": "IMPLEMENTED",
+        "responses": {
+          "201": {
+            "description": "Playlist created"
+          }
+        }
+      }
+    },
+    "/api/v1/playlists/{playlist_id}": {
+      "get": {
+        "tags": [
+          "Personalization"
+        ],
+        "summary": "Get Playlist",
+        "description": "Retrieve detailed playlist metadata.",
+        "operationId": "get_playlist_api_v1_playlists__playlist_id__get",
+        "x-implementation-status": "IMPLEMENTED",
+        "parameters": [
+          {
+            "name": "playlist_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Playlist metadata"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Personalization"
+        ],
+        "summary": "Update Playlist",
+        "description": "Update playlist name or description.",
+        "operationId": "update_playlist_api_v1_playlists__playlist_id__put",
+        "x-implementation-status": "IMPLEMENTED",
+        "parameters": [
+          {
+            "name": "playlist_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Playlist updated"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Personalization"
+        ],
+        "summary": "Delete Playlist",
+        "description": "Delete a playlist.",
+        "operationId": "delete_playlist_api_v1_playlists__playlist_id__delete",
+        "x-implementation-status": "IMPLEMENTED",
+        "parameters": [
+          {
+            "name": "playlist_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Playlist deleted"
+          }
+        }
+      }
+    },
+    "/api/v1/playlists/{playlist_id}/items": {
+      "post": {
+        "tags": [
+          "Personalization"
+        ],
+        "summary": "Add Playlist Item",
+        "description": "Add a track item to a playlist.",
+        "operationId": "add_playlist_item_api_v1_playlists__playlist_id__items_post",
+        "x-implementation-status": "IMPLEMENTED",
+        "parameters": [
+          {
+            "name": "playlist_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Item added"
+          }
+        }
+      }
+    },
+    "/api/v1/playlists/{playlist_id}/items/{item_id}": {
+      "delete": {
+        "tags": [
+          "Personalization"
+        ],
+        "summary": "Remove Playlist Item",
+        "description": "Remove a track item from a playlist.",
+        "operationId": "remove_playlist_item_api_v1_playlists__playlist_id__items__item_id__delete",
+        "x-implementation-status": "IMPLEMENTED",
+        "parameters": [
+          {
+            "name": "playlist_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Item removed"
+          }
+        }
+      }
+    },
+    "/api/v1/playlists/{playlist_id}/items/{item_id}/move": {
+      "post": {
+        "tags": [
+          "Personalization"
+        ],
+        "summary": "Move Playlist Item",
+        "description": "Reorder an item within a playlist.",
+        "operationId": "move_playlist_item_api_v1_playlists__playlist_id__items__item_id__move_post",
+        "x-implementation-status": "IMPLEMENTED",
+        "parameters": [
+          {
+            "name": "playlist_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Item moved"
+          }
+        }
+      }
     }
   },
   "components": {

@@ -192,6 +192,27 @@ abstract class HarmoniaDatabase : RoomDatabase() {
             )
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
                 .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addCallback(object : RoomDatabase.Callback() {
+                    override fun onCreate(db: SupportSQLiteDatabase) {
+                        super.onCreate(db)
+                        seedDefaultStorageSources(db)
+                    }
+
+                    override fun onOpen(db: SupportSQLiteDatabase) {
+                        super.onOpen(db)
+                        seedDefaultStorageSources(db)
+                    }
+
+                    private fun seedDefaultStorageSources(db: SupportSQLiteDatabase) {
+                        try {
+                            db.execSQL("""
+                                INSERT OR IGNORE INTO `mobile_storage_sources` 
+                                (`id`, `type`, `uri`, `display_name`, `is_removable`, `is_enabled`, `last_scanned_at`)
+                                VALUES ('mediastore_primary', 'MEDIA_STORE_PRIMARY', 'content://media/external/audio/media', 'Internal Audio Storage', 0, 1, 0)
+                            """.trimIndent())
+                        } catch (_: Exception) {}
+                    }
+                })
                 .fallbackToDestructiveMigration(false)
                 .build()
         }

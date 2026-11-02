@@ -8,8 +8,8 @@ Create Date: 2026-10-08 11:45:00.000000
 
 from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision: str = "004_phase4_playback_and_telemetry"
 down_revision: str | None = "003_phase3_audio_analysis"

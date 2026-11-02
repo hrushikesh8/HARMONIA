@@ -688,6 +688,37 @@ class HarmoniaPlaybackInterruptionTest {
         assertTrue(controller.playbackState.value.errorMessage!!.contains("ERROR_CODE_IO_FILE_NOT_FOUND"))
         assertFalse(controller.playbackState.value.errorMessage == HarmoniaPlayerController.STORAGE_DISCONNECTED_MESSAGE)
     }
+
+    @Test
+    fun `default shuffle and repeat preferences are applied on queue initialization`() = runTest(testDispatcher) {
+        val inMemoryPrefs = org.harmonia.player.data.local.preferences.InMemoryUserPreferencesRepository()
+        inMemoryPrefs.setDefaultShuffleEnabled(true)
+        inMemoryPrefs.setDefaultRepeatMode(RepeatMode.ALL)
+
+        val customHandler = FakePlayerInvocationHandler()
+        val customPlayer = customHandler.createProxy()
+
+        val customController = HarmoniaPlayerController(
+            context = null,
+            playbackStateRepository = fakeStateRepo,
+            listeningEventRepository = fakeEventRepo,
+            trackRepository = fakeTrackRepo,
+            localFileRepository = fakeFileRepo,
+            storageVolumeLifecycleCoordinator = fakeCoordinator,
+            userPreferencesRepository = inMemoryPrefs,
+            scope = testScope,
+            playerOverride = customPlayer,
+            enablePositionPolling = false
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        customController.setQueue(listOf(track1, track2), 0)
+        testDispatcher.scheduler.runCurrent()
+
+        assertTrue(customHandler.shuffleModeEnabled)
+        assertEquals(Player.REPEAT_MODE_ALL, customHandler.repeatMode)
+        customController.release()
+    }
 }
 
 // ---- Test Doubles ----

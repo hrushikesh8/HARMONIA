@@ -561,4 +561,27 @@ class StorageVolumeLifecycleCoordinatorTest {
             assertTrue(e is kotlinx.coroutines.CancellationException)
         }
     }
+
+    @Test
+    fun mediastore_primary_is_seeded_if_missing_on_revalidation() = testScope.runTest {
+        // Ensure fakeSources is empty initially to simulate fresh database with no sources
+        fakeSources.clear()
+
+        coordinator.startMonitoring()
+        advanceUntilIdle()
+
+        // Verify that revalidateAllSources automatically inserted mediastore_primary
+        val primary = fakeDao.getSourceById(StorageSource.MediaStorePrimary.ID)
+        assertNotNull(primary)
+        assertEquals("MEDIA_STORE_PRIMARY", primary?.type)
+        assertEquals(true, primary?.isEnabled)
+        assertEquals(false, primary?.isRemovable)
+    }
+
+    @Test
+    fun mediastore_primary_is_available_during_inflight_initial_readiness() = testScope.runTest {
+        // Before startMonitoring or advanceUntilIdle finishes, mediastore_primary is available
+        val isAvailable = coordinator.isSourceAvailable(StorageSource.MediaStorePrimary.ID)
+        assertTrue(isAvailable)
+    }
 }

@@ -17,6 +17,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,9 +56,11 @@ fun MiniPlayer(
     val colors = HarmoniaThemeTokens.colors
     val spacing = HarmoniaThemeTokens.spacing
 
-    val title = currentTrack?.title ?: "Unknown Track"
+    val title = remember(currentTrack) {
+        currentTrack?.let { org.harmonia.player.presentation.util.TrackDisplayUtils.formatDisplayTitle(it) } ?: "Unknown Track"
+    }
     val subtitle = listOfNotNull(currentTrack?.artistName, currentTrack?.albumTitle)
-        .joinToString(" • ").ifEmpty { "Harmonia Offline Player" }
+        .joinToString(" • ").ifEmpty { "Harmonia Local Audio" }
 
     val progress = if (playbackState.durationMs > 0) {
         (playbackState.currentPositionMs.toFloat() / playbackState.durationMs.toFloat()).coerceIn(0f, 1f)
@@ -130,16 +133,25 @@ fun MiniPlayer(
                 )
             }
 
+            // Play/Pause button with Spotify Green accent
             IconButton(
                 onClick = onPlayPause,
                 modifier = Modifier.touchTarget48()
             ) {
-                Icon(
-                    imageVector = if (playbackState.isPlaying) HarmoniaIcons.Pause else HarmoniaIcons.Play,
-                    contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
-                    tint = colors.textPrimary,
-                    modifier = Modifier.size(24.dp)
-                )
+                androidx.compose.foundation.layout.Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(colors.primarySignal),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (playbackState.isPlaying) HarmoniaIcons.Pause else HarmoniaIcons.Play,
+                        contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
+                        tint = colors.backgroundRoot,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
 
             IconButton(

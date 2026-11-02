@@ -34,6 +34,7 @@ enum class LibraryTab {
     TRACKS,
     ALBUMS,
     ARTISTS,
+    FOLDERS,
     FAVORITES
 }
 

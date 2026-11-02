@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+import urllib.parse
 from collections.abc import Callable, Generator
 from typing import TYPE_CHECKING
 
@@ -9,6 +11,7 @@ from fastapi import Depends, Header, HTTPException, Request
 
 from harmonia.application.audio_analysis_service import AudioAnalysisService
 from harmonia.application.library_service import LibraryService
+from harmonia.application.personalization_service import PersonalizationService
 from harmonia.application.playback_service import PlaybackService
 from harmonia.application.search_service import SearchService
 from harmonia.application.streaming_service import StreamingService
@@ -19,6 +22,76 @@ from harmonia.infrastructure.persistence.listening_event_repo import (
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
+
+LOOPBACK_ORIGIN_REGEX = re.compile(
+    r"^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$",
+    re.IGNORECASE,
+)
+
+
+def is_trusted_loopback_origin(origin: str) -> bool:
+    """Check if the provided origin matches trusted loopback hosts."""
+    if not origin:
+        return False
+    return bool(LOOPBACK_ORIGIN_REGEX.match(origin.strip()))
+
+
+def validate_cross_origin_mutation(request: Request) -> None:
+    """Validate Origin and Referer headers for state-changing HTTP methods.
+
+    Protects state-changing methods (POST, PUT, DELETE, PATCH) against CSRF
+    and unauthorized cross-origin requests originating from browser contexts.
+
+    Rules:
+    1. If Origin header is present:
+       Browsers attach Origin on all cross-origin POST/PUT/DELETE requests (including
+       simple form-style POSTs, text/plain POSTs, and fetch/sendBeacon calls).
+       Opaque origins ('null') and untrusted origins are strictly rejected with 403 Forbidden.
+    2. If Origin header is absent:
+       Check the Referer header. If Referer is present, its scheme and host must match
+       trusted loopback; otherwise rejected with 403 Forbidden.
+    3. If both Origin and Referer headers are absent:
+       Allowed. Legitimate local non-browser clients (Harmonia CLI commands, native desktop
+       wrappers, background workers, curl, and python integration tests) do not send Origin
+       or Referer headers. Web browsers running on the host cannot suppress or omit Origin
+       on cross-origin mutation requests per W3C Fetch specification.
+    """
+    if request.method not in ("POST", "PUT", "DELETE", "PATCH"):
+        return
+
+    origin = request.headers.get("origin")
+    referer = request.headers.get("referer")
+
+    if origin is not None:
+        if origin == "null" or not is_trusted_loopback_origin(origin):
+            raise HTTPException(
+                status_code=403,
+                detail="Forbidden: Untrusted cross-origin request rejected.",
+            )
+        return
+
+    if referer is not None:
+        try:
+            parsed = urllib.parse.urlsplit(referer)
+            if parsed.scheme and parsed.netloc:
+                referer_origin = f"{parsed.scheme}://{parsed.netloc}"
+            else:
+                referer_origin = referer
+        except Exception:
+            raise HTTPException(
+                status_code=403,
+                detail="Forbidden: Malformed cross-origin referer header.",
+            ) from None
+
+        if not is_trusted_loopback_origin(referer_origin):
+            raise HTTPException(
+                status_code=403,
+                detail="Forbidden: Untrusted cross-origin referer rejected.",
+            )
+        return
+
+    # Neither Origin nor Referer present: safe non-browser desktop client.
+    return
 
 
 def get_config(request: Request) -> HarmoniaConfig:
@@ -40,20 +113,22 @@ def verify_api_token(
     x_harmonia_token: str | None = Header(default=None, alias="X-Harmonia-Token"),
     authorization: str | None = Header(default=None),
 ) -> None:
-    """Verify local API token if one is configured."""
+    """Verify local API token if one is configured, and protect state-changing requests."""
+    # 1. API Token enforcement (when configured)
     expected_token = config.api.token
-    if not expected_token:
-        # No token configured; local-first loopback access trusted
-        return
+    if expected_token:
+        provided = x_harmonia_token
+        if not provided and authorization:
+            parts = authorization.split(" ", 1)
+            if len(parts) == 2 and parts[0].lower() == "bearer":
+                provided = parts[1]
 
-    provided = x_harmonia_token
-    if not provided and authorization:
-        parts = authorization.split(" ", 1)
-        if len(parts) == 2 and parts[0].lower() == "bearer":
-            provided = parts[1]
+        if not provided or provided != expected_token:
+            raise HTTPException(status_code=401, detail="Unauthorized: Invalid or missing API token.")
 
-    if not provided or provided != expected_token:
-        raise HTTPException(status_code=401, detail="Unauthorized: Invalid or missing API token.")
+    # 2. State-changing cross-origin protection
+    validate_cross_origin_mutation(request)
+
 
 
 def get_library_service(
@@ -104,4 +179,12 @@ def get_listening_event_repo(
     """Provide SqliteListeningEventRepository with scoped session."""
     with session_factory() as session:
         yield SqliteListeningEventRepository(session)
+
+
+def get_personalization_service(
+    session_factory: Callable[[], Session] = Depends(get_session_factory),
+) -> Generator[PersonalizationService, None, None]:
+    """Provide PersonalizationService instance with scoped session."""
+    with session_factory() as session:
+        yield PersonalizationService(session, autocommit=True)
 

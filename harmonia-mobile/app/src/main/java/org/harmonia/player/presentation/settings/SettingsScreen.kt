@@ -22,20 +22,27 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,15 +52,19 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import org.harmonia.player.design.theme.HarmoniaIcons
 import org.harmonia.player.design.theme.HarmoniaThemeTokens
 import org.harmonia.player.design.theme.hairlineBorder
 import org.harmonia.player.design.theme.touchTarget48
+import org.harmonia.player.domain.model.RepeatMode
+import org.harmonia.player.domain.model.audio.SleepTimerMode
+import org.harmonia.player.domain.model.audio.SleepTimerPreset
 import org.harmonia.player.domain.model.equalizer.EqualizerBand
-import org.harmonia.player.domain.model.equalizer.EqualizerPreset
 import java.util.Locale
 
 @Composable
@@ -61,11 +72,15 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = viewModel(),
     onAddFolder: (() -> Unit)? = null,
-    onScanLibrary: (() -> Unit)? = null
+    onScanLibrary: (() -> Unit)? = null,
+    onBack: (() -> Unit)? = null,
+    onOpenCarMode: (() -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val colors = HarmoniaThemeTokens.colors
     val spacing = HarmoniaThemeTokens.spacing
+
+    var showResetCheckpointDialog by remember { mutableStateOf(false) }
 
     val openDocumentTreeLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -92,27 +107,185 @@ fun SettingsScreen(
             .padding(horizontal = spacing.standard)
             .verticalScroll(rememberScrollState())
     ) {
-        Spacer(modifier = Modifier.height(spacing.large))
+        Spacer(modifier = Modifier.height(spacing.standard))
 
-        Text(
-            text = "SETTINGS",
-            style = MaterialTheme.typography.displayLarge.copy(
-                fontWeight = FontWeight.Black,
-                letterSpacing = 1.5.sp,
-                fontSize = 28.sp
-            ),
-            color = colors.textPrimary
-        )
-        Text(
-            text = "SYSTEM ARCHITECTURE & PERSISTENCE",
-            style = MaterialTheme.typography.labelSmall,
-            color = colors.primarySignal
-        )
+        // Top Navigation Bar
+        if (onBack != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = spacing.small)
+            ) {
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier
+                        .touchTarget48()
+                        .semantics { contentDescription = "Back to previous screen" }
+                ) {
+                    Icon(
+                        imageVector = HarmoniaIcons.ArrowBack,
+                        contentDescription = "Back",
+                        tint = colors.textPrimary
+                    )
+                }
+                Spacer(modifier = Modifier.width(spacing.small))
+                Column {
+                    Text(
+                        text = "SETTINGS",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        color = colors.textPrimary
+                    )
+                    Text(
+                        text = "PREFERENCES & SYSTEM ARCHITECTURE",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.primarySignal
+                    )
+                }
+            }
+        } else {
+            Text(
+                text = "SETTINGS",
+                style = MaterialTheme.typography.displayLarge.copy(
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.5.sp,
+                    fontSize = 26.sp
+                ),
+                color = colors.textPrimary
+            )
+            Text(
+                text = "PREFERENCES & SYSTEM ARCHITECTURE",
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.primarySignal
+            )
+        }
 
         Spacer(modifier = Modifier.height(spacing.standard))
 
-        // Storage Sources Card
-        SettingsCard(title = "STORAGE SOURCES") {
+        // ==========================================
+        // SECTION 1: APPEARANCE & VISUAL IDENTITY
+        // ==========================================
+        SettingsCard(
+            title = "APPEARANCE & VISUAL IDENTITY",
+            subtitle = "Theme styling and active display preferences"
+        ) {
+            // Theme Mode Toggle
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Harmonia Blue Edition",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                        color = colors.textPrimary
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = if (uiState.isDarkTheme) {
+                            "Dark Mode: Near-black and deep navy (#070A0F) with electric-blue signals"
+                        } else {
+                            "Daylight Mode: Slate day (#F3F6FA) with deep-blue signals"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.textSecondary
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(spacing.medium))
+
+                Switch(
+                    checked = uiState.isDarkTheme,
+                    onCheckedChange = { viewModel.setIsDarkTheme(it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = colors.backgroundRoot,
+                        checkedTrackColor = colors.primarySignal,
+                        uncheckedThumbColor = colors.textSecondary,
+                        uncheckedTrackColor = colors.surfaceContainer,
+                        uncheckedBorderColor = colors.borderStructural
+                    ),
+                    modifier = Modifier
+                        .touchTarget48()
+                        .semantics { contentDescription = "Toggle Dark Mode" }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(spacing.medium))
+
+            // Keep Screen On Toggle
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Keep Screen On",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                        color = colors.textPrimary
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Prevents display from sleeping during active listening sessions",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.textSecondary
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(spacing.medium))
+
+                Switch(
+                    checked = uiState.keepScreenOn,
+                    onCheckedChange = { viewModel.setKeepScreenOn(it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = colors.backgroundRoot,
+                        checkedTrackColor = colors.primarySignal,
+                        uncheckedThumbColor = colors.textSecondary,
+                        uncheckedTrackColor = colors.surfaceContainer,
+                        uncheckedBorderColor = colors.borderStructural
+                    ),
+                    modifier = Modifier
+                        .touchTarget48()
+                        .semantics { contentDescription = "Toggle Keep Screen Awake" }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(spacing.medium))
+
+            SettingsRow(
+                label = "Design Standard",
+                value = "Harmonia Resonant Tokens (WCAG AAA >= 7.0:1)",
+                isHighlight = true
+            )
+        }
+
+        Spacer(modifier = Modifier.height(spacing.standard))
+
+        // ==========================================
+        // SECTION 2: STORAGE & MEDIA SCANNER
+        // ==========================================
+        SettingsCard(
+            title = "STORAGE SOURCES & MEDIA SCANNER",
+            subtitle = "Indexed storage directories and local reconciliation"
+        ) {
+            // Storage Statistics Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(spacing.small)
+            ) {
+                MetricChip(label = "CATALOGED", value = "${uiState.totalTracks}", modifier = Modifier.weight(1f))
+                MetricChip(label = "OFFLINE", value = "${uiState.offlineTracks}", modifier = Modifier.weight(1f))
+                MetricChip(
+                    label = "STORAGE",
+                    value = String.format(Locale.US, "%.1f MB", uiState.storageUsageEstimateMb),
+                    modifier = Modifier.weight(1.2f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(spacing.medium))
+
+            // Action Buttons Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(spacing.small)
@@ -126,8 +299,9 @@ fun SettingsScreen(
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier
                         .weight(1f)
+                        .height(44.dp)
                         .touchTarget48()
-                        .semantics { contentDescription = "Add storage folder" }
+                        .semantics { contentDescription = "Add storage folder via Storage Access Framework" }
                 ) {
                     Text("Add Folder", fontWeight = FontWeight.Bold)
                 }
@@ -144,13 +318,15 @@ fun SettingsScreen(
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier
                         .weight(1f)
+                        .height(44.dp)
                         .touchTarget48()
-                        .semantics { contentDescription = "Scan music library" }
+                        .semantics { contentDescription = "Trigger incremental library scan" }
                 ) {
                     Text("Scan Library", fontWeight = FontWeight.Bold)
                 }
             }
 
+            // Scanner Status / Progress
             if (uiState.isScanning) {
                 Spacer(modifier = Modifier.height(spacing.medium))
                 Row(
@@ -192,9 +368,10 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(spacing.medium))
 
+            // Storage Source Rows
             if (uiState.storageSources.isEmpty()) {
                 Text(
-                    text = "No storage sources registered. Add a folder to index audio.",
+                    text = "No storage sources registered. Tap 'Add Folder' to select an audio directory.",
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.textSecondary
                 )
@@ -210,56 +387,441 @@ fun SettingsScreen(
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(spacing.medium))
+
+            // Plain-language Storage and Permissions Explainer
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(colors.surfaceContainer.copy(alpha = 0.5f))
+                    .padding(spacing.medium)
+            ) {
+                Text(
+                    text = "Harmonia reads audio files directly from the Android MediaStore and user-authorized folders via the Storage Access Framework (SAF). Files remain in their original directories on your device and are never uploaded or synced to external servers.",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                    color = colors.textSecondary
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(spacing.standard))
 
-        // Audio Equalizer Card
-        SettingsCard(title = "AUDIO EQUALIZER") {
+        // ==========================================
+        // SECTION 3: PLAYBACK PREFERENCES & EQUALIZER
+        // ==========================================
+        SettingsCard(
+            title = "PLAYBACK & EQUALIZER DSP",
+            subtitle = "Audio processing and playback configuration"
+        ) {
+            // Equalizer Master & Bands
             EqualizerSection(
                 equalizer = uiState.equalizer,
                 onToggle = { viewModel.setEqualizerEnabled(it) },
                 onBandChange = { band, levelMb -> viewModel.setEqualizerBandLevel(band, levelMb) },
                 onPresetChange = { presetIndex -> viewModel.useEqualizerPreset(presetIndex) }
             )
+
+            Spacer(modifier = Modifier.height(spacing.large))
+
+            // Playback Defaults: Shuffle Mode
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Default Shuffle",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                        color = colors.textPrimary
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Automatically shuffle new playback queues on start",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.textSecondary
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(spacing.medium))
+
+                Switch(
+                    checked = uiState.defaultShuffle,
+                    onCheckedChange = { viewModel.setDefaultShuffle(it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = colors.backgroundRoot,
+                        checkedTrackColor = colors.primarySignal,
+                        uncheckedThumbColor = colors.textSecondary,
+                        uncheckedTrackColor = colors.surfaceContainer,
+                        uncheckedBorderColor = colors.borderStructural
+                    ),
+                    modifier = Modifier
+                        .touchTarget48()
+                        .semantics { contentDescription = "Toggle default shuffle" }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(spacing.medium))
+
+            // Playback Defaults: Repeat Mode Selector
+            Column {
+                Text(
+                    text = "Default Repeat Mode",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                    color = colors.textPrimary
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(spacing.small)
+                ) {
+                    RepeatMode.entries.forEach { mode ->
+                        val isSelected = uiState.defaultRepeatMode == mode
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    if (isSelected) colors.primarySignal.copy(alpha = 0.25f)
+                                    else colors.surfaceContainer
+                                )
+                                .border(
+                                    width = 1.dp,
+                                    color = if (isSelected) colors.primarySignal else colors.borderStructural,
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                .clickable { viewModel.setDefaultRepeatMode(mode) }
+                                .padding(vertical = 10.dp)
+                                .touchTarget48()
+                                .semantics {
+                                    role = Role.Button
+                                    contentDescription = "Set default repeat mode to ${mode.name}"
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = mode.name,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                ),
+                                color = if (isSelected) colors.primarySignal else colors.textPrimary
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(spacing.large))
+
+            // Sleep Timer Status / Control Row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics(mergeDescendants = true) {
+                        contentDescription = if (uiState.isSleepTimerActive) {
+                            "Sleep timer active, ${(uiState.sleepTimerRemainingMs / 60000)} minutes remaining"
+                        } else {
+                            "Sleep timer inactive"
+                        }
+                    },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Sleep Timer",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                        color = colors.textPrimary
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = if (uiState.isSleepTimerActive) {
+                            val mins = (uiState.sleepTimerRemainingMs / 60000).toInt()
+                            val secs = ((uiState.sleepTimerRemainingMs % 60000) / 1000).toInt()
+                            String.format(Locale.US, "Active • %02d:%02d remaining (fades smoothly)", mins, secs)
+                        } else {
+                            "Inactive • Select preset below"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (uiState.isSleepTimerActive) colors.primarySignal else colors.textSecondary
+                    )
+                }
+
+                if (uiState.isSleepTimerActive) {
+                    Spacer(modifier = Modifier.width(spacing.small))
+                    TextButton(
+                        onClick = { viewModel.cancelSleepTimer() },
+                        modifier = Modifier.touchTarget48()
+                    ) {
+                        Text("Cancel", color = colors.statusError, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(spacing.small))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(spacing.small)
+            ) {
+                SleepTimerPreset.entries.forEach { preset ->
+                    val isSelected = uiState.isSleepTimerActive && (
+                        (preset == SleepTimerPreset.END_OF_TRACK && uiState.sleepTimerMode == SleepTimerMode.END_OF_TRACK) ||
+                        (preset != SleepTimerPreset.END_OF_TRACK && uiState.sleepTimerMode == SleepTimerMode.DURATION && uiState.sleepTimerTargetDurationMs == preset.durationMs)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isSelected) colors.surfaceContainer else colors.surfaceElevated)
+                            .border(1.dp, if (isSelected) colors.primarySignal else colors.borderStructural, RoundedCornerShape(8.dp))
+                            .clickable {
+                                if (isSelected) {
+                                    viewModel.cancelSleepTimer()
+                                } else {
+                                    viewModel.startSleepTimer(preset)
+                                }
+                            }
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .touchTarget48()
+                            .semantics {
+                                role = Role.Button
+                                contentDescription = "Sleep timer ${preset.label}"
+                                stateDescription = if (isSelected) "Active" else "Inactive"
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = preset.label,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                            ),
+                            color = if (isSelected) colors.primarySignal else colors.textPrimary
+                        )
+                    }
+                }
+            }
+
+            if (onOpenCarMode != null) {
+                Spacer(modifier = Modifier.height(spacing.medium))
+                Button(
+                    onClick = onOpenCarMode,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = colors.surfaceContainer,
+                        contentColor = colors.primarySignal
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                        .hairlineBorder(colors.borderStructural, RoundedCornerShape(10.dp))
+                        .touchTarget48()
+                        .semantics { contentDescription = "Launch Car Mode" }
+                ) {
+                    Icon(
+                        imageVector = HarmoniaIcons.DirectionsCar,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(spacing.small))
+                    Text("Launch Car Mode", fontWeight = FontWeight.SemiBold)
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(spacing.standard))
 
-        // Persistence Information Card
-        SettingsCard(title = "PERSISTENCE SUBSYSTEM") {
-            SettingsRow(label = "Database Engine", value = "Android Room (SQLite 3)")
-            SettingsRow(label = "Journaling Mode", value = if (uiState.walModeEnabled) "WAL (Write-Ahead Logging)" else "Standard")
-            SettingsRow(label = "Identity Model", value = "ADR-025 Two-Tier Decoupled")
-            SettingsRow(label = "Total Tracks in Catalog", value = "${uiState.totalTracks}")
-            SettingsRow(label = "Verified Offline Files", value = "${uiState.offlineTracks}")
+        // ==========================================
+        // SECTION 4: METADATA & OPEN CATALOG ENRICHMENT
+        // ==========================================
+        SettingsCard(
+            title = "METADATA & OPEN CATALOG ENRICHMENT",
+            subtitle = "Optional MusicBrainz integration (ADR-023)"
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Enable MusicBrainz Enrichment",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                        color = colors.textPrimary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Fills in missing release years, genre tags, and soundtrack metadata from the MusicBrainz open catalog. Operates strictly offline-first; local file tags always take precedence and are never overwritten.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.textSecondary
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(spacing.medium))
+
+                Switch(
+                    checked = uiState.isOnlineEnrichmentEnabled,
+                    onCheckedChange = { viewModel.setOnlineEnrichmentEnabled(it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = colors.backgroundRoot,
+                        checkedTrackColor = colors.primarySignal,
+                        uncheckedThumbColor = colors.textSecondary,
+                        uncheckedTrackColor = colors.surfaceContainer,
+                        uncheckedBorderColor = colors.borderStructural
+                    ),
+                    modifier = Modifier
+                        .touchTarget48()
+                        .semantics { contentDescription = "Toggle online metadata enrichment" }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(spacing.medium))
+
             SettingsRow(
-                label = "Local Storage Usage",
-                value = String.format(Locale.US, "%.1f MB", uiState.storageUsageEstimateMb)
+                label = "Network Etiquette",
+                value = "1 req/sec rate-limited, local in-memory cache"
+            )
+            SettingsRow(
+                label = "Offline Fallback",
+                value = "Instant silent fallback, zero playback block",
+                isHighlight = true
             )
         }
 
         Spacer(modifier = Modifier.height(spacing.standard))
 
-        // Audio Engine Specification Card
-        SettingsCard(title = "AUDIO ENGINE SPECIFICATION") {
-            SettingsRow(label = "Playback Service", value = "AndroidX Media3 MediaLibraryService")
-            SettingsRow(label = "Audio Output Path", value = "AudioTrack direct (Hi-Res ready)")
-            SettingsRow(label = "Tag Extraction Parser", value = "Platform MediaMetadataRetriever (ADR-023)")
-            SettingsRow(label = "Network Streaming", value = "Zero network in playback path (Auxio pattern)")
-        }
+        // ==========================================
+        // SECTION 5: DATA PRIVACY, DIAGNOSTICS & ABOUT
+        // ==========================================
+        SettingsCard(
+            title = "DATA PRIVACY, DIAGNOSTICS & ABOUT",
+            subtitle = "Sovereign local-first guarantees and system specifications"
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(colors.primarySignal.copy(alpha = 0.1f))
+                    .padding(spacing.medium)
+            ) {
+                Column {
+                    Text(
+                        text = "LOCAL-FIRST SOVEREIGN ARCHITECTURE",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = colors.primarySignal
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Harmonia is an independent audio player. Your playback events, playlists, star ratings, and audio files never leave this device. No remote accounts, analytics tracking, or advertising.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.textPrimary
+                    )
+                }
+            }
 
-        Spacer(modifier = Modifier.height(spacing.standard))
+            Spacer(modifier = Modifier.height(spacing.medium))
 
-        // Build & Foundation Card
-        SettingsCard(title = "BUILD & FOUNDATION") {
-            SettingsRow(label = "Application Version", value = uiState.appVersion)
-            SettingsRow(label = "Target SDK", value = "Android 36 (Vanilla)")
-            SettingsRow(label = "Minimum SDK", value = "Android 26 (Oreo)")
-            SettingsRow(label = "Milestone", value = "Milestone M4-F — Storage & UI Hardening")
+            SettingsRow(label = "Application Version", value = uiState.appVersion, isHighlight = true)
+            SettingsRow(label = "Database Engine", value = "Android Room SQLite 3 (WAL Mode)")
+            SettingsRow(label = "Playback Service", value = "MediaLibraryService (AndroidX Media3)")
+            SettingsRow(label = "Audio Output Route", value = "AudioTrack Direct (Hi-Res AudioFX)")
+            SettingsRow(label = "Target Android SDK", value = "API 36 (Android 16)")
+            SettingsRow(label = "Minimum Android SDK", value = "API 26 (Android 8.0)")
+
+            Spacer(modifier = Modifier.height(spacing.medium))
+
+            // Destructive / Maintenance Action: Reset Checkpoints
+            Button(
+                onClick = { showResetCheckpointDialog = true },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = colors.surfaceContainer,
+                    contentColor = colors.textPrimary
+                ),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp)
+                    .hairlineBorder(colors.borderStructural, RoundedCornerShape(10.dp))
+                    .touchTarget48()
+                    .semantics { contentDescription = "Reset reconciliation scan checkpoints" }
+            ) {
+                Text("Reset Scan Checkpoints", fontWeight = FontWeight.SemiBold)
+            }
         }
 
         Spacer(modifier = Modifier.height(spacing.bottomScaffold))
+    }
+
+    // Confirmation Dialog for Resetting Checkpoints
+    if (showResetCheckpointDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetCheckpointDialog = false },
+            title = {
+                Text(
+                    text = "Reset Scan Checkpoints?",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = colors.textPrimary
+                )
+            },
+            text = {
+                Text(
+                    text = "This will clear stored reconciliation timestamps. The next manual scan will fully re-examine every audio file across all enabled sources.\n\nYour library tracks, playlists, and ratings will not be deleted.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.textSecondary
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showResetCheckpointDialog = false
+                        viewModel.resetScanCheckpoints()
+                    }
+                ) {
+                    Text("Reset", color = colors.statusError, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetCheckpointDialog = false }) {
+                    Text("Cancel", color = colors.textSecondary)
+                }
+            },
+            containerColor = colors.surfaceElevated,
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
+}
+
+@Composable
+private fun MetricChip(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    val colors = HarmoniaThemeTokens.colors
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(colors.surfaceContainer)
+            .hairlineBorder(colors.borderStructural, RoundedCornerShape(8.dp))
+            .padding(vertical = 6.dp, horizontal = 4.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                color = colors.primarySignal,
+                maxLines = 1
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                color = colors.textSecondary,
+                maxLines = 1
+            )
+        }
     }
 }
 
@@ -299,10 +861,10 @@ internal fun StorageSourceRow(
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                     color = colors.textPrimary,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
                 Spacer(modifier = Modifier.width(spacing.small))
-                // Runtime status badge
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(4.dp))
@@ -311,19 +873,17 @@ internal fun StorageSourceRow(
                 ) {
                     Text(
                         text = source.runtimeStatusDescription,
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                         color = badgeTextColor
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(2.dp))
-            val trackCountText = when (source.indexedTrackCount) {
-                1 -> "1 track"
-                else -> "${source.indexedTrackCount} tracks"
-            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+
             Text(
-                text = "${source.typeDescription} • $trackCountText",
-                style = MaterialTheme.typography.labelSmall,
+                text = "${source.indexedTrackCount} tracks • ${source.typeDescription}",
+                style = MaterialTheme.typography.bodySmall,
                 color = colors.textSecondary
             )
         }
@@ -343,7 +903,7 @@ internal fun StorageSourceRow(
             modifier = Modifier
                 .touchTarget48()
                 .semantics {
-                    contentDescription = "Toggle ${source.displayName}"
+                    contentDescription = "Toggle ${source.displayName} storage source"
                 }
         )
     }
@@ -352,6 +912,7 @@ internal fun StorageSourceRow(
 @Composable
 private fun SettingsCard(
     title: String,
+    subtitle: String? = null,
     content: @Composable () -> Unit
 ) {
     val colors = HarmoniaThemeTokens.colors
@@ -360,16 +921,26 @@ private fun SettingsCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .hairlineBorder(colors.borderStructural, RoundedCornerShape(16.dp)),
-        shape = RoundedCornerShape(16.dp),
+            .hairlineBorder(colors.borderStructural, RoundedCornerShape(14.dp)),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = colors.surfaceElevated)
     ) {
         Column(modifier = Modifier.padding(spacing.standard)) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                ),
                 color = colors.primarySignal
             )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                    color = colors.textSecondary
+                )
+            }
             Spacer(modifier = Modifier.height(spacing.medium))
             content()
         }
@@ -377,26 +948,32 @@ private fun SettingsCard(
 }
 
 @Composable
-private fun SettingsRow(label: String, value: String) {
+private fun SettingsRow(label: String, value: String, isHighlight: Boolean = false) {
     val colors = HarmoniaThemeTokens.colors
     val spacing = HarmoniaThemeTokens.spacing
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = spacing.xSmall),
+            .padding(vertical = 5.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
-            color = colors.textSecondary
+            color = colors.textSecondary,
+            modifier = Modifier.weight(1.1f, fill = false)
         )
+        Spacer(modifier = Modifier.width(spacing.small))
         Text(
             text = value,
-            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-            color = colors.textPrimary
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+            color = if (isHighlight) colors.primarySignal else colors.textPrimary,
+            textAlign = TextAlign.End,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1.3f, fill = false)
         )
     }
 }

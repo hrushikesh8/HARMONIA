@@ -40,6 +40,7 @@ import org.harmonia.player.domain.repository.LocalFileRepository
 import org.harmonia.player.domain.repository.PlaybackStateRepository
 import org.harmonia.player.domain.repository.TrackRepository
 import org.harmonia.player.service.HarmoniaPlaybackService
+import org.harmonia.player.domain.repository.UserPreferencesRepository
 
 /**
  * Implementation of [PlaybackPort] bridging the domain layer to Media3 [MediaController].
@@ -53,6 +54,7 @@ class HarmoniaPlayerController(
     private val trackRepository: TrackRepository,
     private val localFileRepository: LocalFileRepository,
     private val storageVolumeLifecycleCoordinator: StorageVolumeLifecycleCoordinator? = null,
+    private val userPreferencesRepository: UserPreferencesRepository? = null,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob()),
     private val playerOverride: Player? = null,
     private val enablePositionPolling: Boolean = true,
@@ -130,6 +132,7 @@ class HarmoniaPlayerController(
         if (playerOverride != null) {
             mediaController = playerOverride
             setupPlayerListener(playerOverride)
+            applyUserPreferences(playerOverride)
             syncControllerWithQueue(playerOverride)
         } else {
             initializeSessionConnection()
@@ -205,6 +208,7 @@ class HarmoniaPlayerController(
                     val controller = controllerFuture?.get() ?: return@addListener
                     mediaController = controller
                     setupPlayerListener(controller)
+                    applyUserPreferences(controller)
                     syncControllerWithQueue(controller)
                 } catch (e: Exception) {
                     _playbackState.value = _playbackState.value.copy(
@@ -351,6 +355,24 @@ class HarmoniaPlayerController(
 
     internal fun getPlayerListenerForTesting(): Player.Listener? = activePlayerListener
 
+    private fun applyUserPreferences(controller: Player) {
+        val prefs = userPreferencesRepository ?: return
+        val defaultShuffle = prefs.isDefaultShuffleEnabled()
+        val defaultRepeat = prefs.getDefaultRepeatMode()
+
+        controller.shuffleModeEnabled = defaultShuffle
+        controller.repeatMode = when (defaultRepeat) {
+            RepeatMode.OFF -> Player.REPEAT_MODE_OFF
+            RepeatMode.ALL -> Player.REPEAT_MODE_ALL
+            RepeatMode.ONE -> Player.REPEAT_MODE_ONE
+        }
+
+        _playbackState.value = _playbackState.value.copy(
+            shuffleMode = defaultShuffle,
+            repeatMode = defaultRepeat
+        )
+    }
+
     private fun updateStateFromController(controller: Player) {
         val status = when {
             controller.playerError != null -> PlaybackStatus.ERROR
@@ -404,7 +426,8 @@ class HarmoniaPlayerController(
                     isPlaying = false,
                     status = PlaybackStatus.IDLE,
                     playWhenReady = false,
-                    playbackSuppressionReason = 0
+                    playbackSuppressionReason = 0,
+                    errorMessage = if (savedState.errorMessage == STORAGE_DISCONNECTED_MESSAGE) null else savedState.errorMessage
                 )
                 val fileId = savedState.currentLocalFileId
                 if (fileId != null) {
@@ -555,6 +578,7 @@ class HarmoniaPlayerController(
             }
 
             mediaController?.let { controller ->
+                applyUserPreferences(controller)
                 controller.setMediaItems(mediaItems, startIndex, 0L)
                 controller.prepare()
                 controller.play()

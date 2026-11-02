@@ -10,8 +10,7 @@ import unicodedata
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # ── Playlist DTOs ─────────────────────────────────────────────────────────────
 
@@ -50,6 +49,7 @@ class PlaylistUpdate(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = None
+    clear_description: bool = Field(default=False, description="Explicitly clear the existing description.")
 
     @field_validator("name")
     @classmethod
@@ -70,6 +70,12 @@ class PlaylistUpdate(BaseModel):
             return None
         normalized = unicodedata.normalize("NFC", v).strip()
         return normalized if normalized else None
+
+    @model_validator(mode="after")
+    def validate_description_clearing(self) -> PlaylistUpdate:
+        if self.description is not None and self.clear_description:
+            raise ValueError("Cannot provide both description and clear_description=True.")
+        return self
 
 
 class PlaylistItemCreate(BaseModel):

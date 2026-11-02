@@ -26,11 +26,11 @@ from harmonia.core.clock import Clock, SystemClock
 from harmonia.core.events import (
     Event,
     EventBus,
+    PlaylistCreated,
+    PlaylistDeleted,
     PlaylistItemAdded,
     PlaylistItemMoved,
     PlaylistItemRemoved,
-    PlaylistCreated,
-    PlaylistDeleted,
     PlaylistUpdated,
     TrackFavorited,
     TrackRated,
@@ -171,7 +171,9 @@ class PersonalizationService:
                 raise ValidationError("name", "Playlist name must not exceed 200 characters.")
             pl.name = clean_name
 
-        if data.description is not None:
+        if data.clear_description:
+            pl.description = None
+        elif data.description is not None:
             clean_desc = unicodedata.normalize("NFC", data.description).strip()
             pl.description = clean_desc if clean_desc else None
 

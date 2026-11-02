@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.harmonia.player.core.di.ServiceLocator
@@ -30,6 +31,9 @@ import org.harmonia.player.domain.model.equalizer.EqualizerFailureReason
 import org.harmonia.player.domain.model.equalizer.EqualizerPreset
 import org.harmonia.player.domain.model.equalizer.EqualizerState
 import org.harmonia.player.domain.model.equalizer.EqualizerUserIntentSource
+import org.harmonia.player.domain.model.audio.SleepTimerMode
+import org.harmonia.player.domain.model.audio.SleepTimerPreset
+import org.harmonia.player.domain.model.audio.SleepTimerState
 import org.harmonia.player.domain.scanner.MediaReconciliationEngine
 
 enum class EqualizerUiStatus {
@@ -72,7 +76,16 @@ data class SettingsUiState(
     val isScanning: Boolean = false,
     val scanStatusMessage: String? = null,
     val scanErrorMessage: String? = null,
-    val equalizer: EqualizerUiState = EqualizerUiState()
+    val equalizer: EqualizerUiState = EqualizerUiState(),
+    val isOnlineEnrichmentEnabled: Boolean = false,
+    val isDarkTheme: Boolean = true,
+    val defaultShuffle: Boolean = false,
+    val defaultRepeatMode: org.harmonia.player.domain.model.RepeatMode = org.harmonia.player.domain.model.RepeatMode.OFF,
+    val keepScreenOn: Boolean = false,
+    val isSleepTimerActive: Boolean = false,
+    val sleepTimerRemainingMs: Long = 0L,
+    val sleepTimerTargetDurationMs: Long = 0L,
+    val sleepTimerMode: SleepTimerMode? = null
 )
 
 private data class CatalogStats(
@@ -91,8 +104,24 @@ class SettingsViewModel(
     private val safPermissionDelegate: SafPermissionDelegate? = null,
     private val equalizerUserIntentSource: EqualizerUserIntentSource? = null,
     private val audioEqualizerCoordinator: AudioEqualizerCoordinator? = null,
+    private val onlineEnrichmentService: org.harmonia.player.data.remote.MusicBrainzEnrichmentService? = null,
+    private val userPreferencesRepository: org.harmonia.player.domain.repository.UserPreferencesRepository? = null,
+    private val playbackPort: org.harmonia.player.domain.playback.PlaybackPort? = null,
+    private val scanCheckpointRepository: org.harmonia.player.domain.repository.ScanCheckpointRepository? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
+
+    private val userPrefs: org.harmonia.player.domain.repository.UserPreferencesRepository
+        get() = userPreferencesRepository ?: ServiceLocator.getUserPreferencesRepository()
+
+    private val activePlaybackPort: org.harmonia.player.domain.playback.PlaybackPort?
+        get() = playbackPort ?: runCatching { ServiceLocator.getPlaybackPort() }.getOrNull()
+
+    private val checkpointRepo: org.harmonia.player.domain.repository.ScanCheckpointRepository?
+        get() = scanCheckpointRepository ?: runCatching { ServiceLocator.getScanCheckpointRepository() }.getOrNull()
+
+    private val enrichmentService: org.harmonia.player.data.remote.MusicBrainzEnrichmentService?
+        get() = onlineEnrichmentService ?: runCatching { ServiceLocator.getEnrichmentService() }.getOrNull()
 
     private val coordinator: StorageVolumeLifecycleCoordinator?
         get() = storageVolumeLifecycleCoordinator ?: runCatching { ServiceLocator.getStorageVolumeLifecycleCoordinator() }.getOrNull()
@@ -212,6 +241,9 @@ class SettingsViewModel(
     private val runtimeStatesFlow: StateFlow<Map<String, SourceRuntimeState>> =
         coordinator?.runtimeStates ?: MutableStateFlow(emptyMap())
 
+    private val enrichmentEnabledFlow: Flow<Boolean> =
+        enrichmentService?.isEnrichmentEnabled ?: MutableStateFlow(false)
+
     private val scanStateFlow = combine(
         _isScanning,
         _scanStatusMessage,
@@ -220,13 +252,61 @@ class SettingsViewModel(
         Triple(isScanning, statusMsg, errorMsg)
     }
 
+    private data class UserPreferencesTuple(
+        val isDark: Boolean,
+        val shuffle: Boolean,
+        val repeat: org.harmonia.player.domain.model.RepeatMode,
+        val keepScreenOn: Boolean
+    )
+
+    private data class AuxSettingsState(
+        val equalizer: EqualizerUiState,
+        val isEnrichmentEnabled: Boolean,
+        val prefs: UserPreferencesTuple,
+        val isSleepTimerActive: Boolean,
+        val sleepTimerRemainingMs: Long,
+        val sleepTimerTargetDurationMs: Long,
+        val sleepTimerMode: SleepTimerMode?
+    )
+
+    private val prefsFlow = combine(
+        userPrefs.observeIsDarkTheme(),
+        userPrefs.observeDefaultShuffleEnabled(),
+        userPrefs.observeDefaultRepeatMode(),
+        userPrefs.observeKeepScreenOn()
+    ) { isDark, shuffle, repeat, keepOn ->
+        UserPreferencesTuple(isDark, shuffle, repeat, keepOn)
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private val playbackTimerFlow: Flow<SleepTimerState> =
+        activePlaybackPort?.sleepTimerState
+            ?: MutableStateFlow(SleepTimerState())
+
+    private val auxStateFlow = combine(
+        equalizerUiStateFlow,
+        enrichmentEnabledFlow,
+        prefsFlow,
+        playbackTimerFlow
+    ) { eq, enrichmentEnabled, prefs, timerState ->
+        AuxSettingsState(
+            eq,
+            enrichmentEnabled,
+            prefs,
+            timerState.isActive,
+            timerState.remainingDurationMs,
+            timerState.targetDurationMs,
+            timerState.mode
+        )
+    }
+
     val uiState: StateFlow<SettingsUiState> = combine(
         catalogStatsFlow,
         storageSourceRepository.observeAllSources(),
         runtimeStatesFlow,
         scanStateFlow,
-        equalizerUiStateFlow
-    ) { catalogStats, sources, runtimeStates, (isScanning, statusMsg, errorMsg), eqUiState ->
+        auxStateFlow
+    ) { catalogStats, sources, runtimeStates, (isScanning, statusMsg, errorMsg), aux ->
         val sourceItems = sources.map { source ->
             val runtime = runtimeStates[source.id]
             val trackCount = catalogStats.trackCountsBySourceId[source.id] ?: 0
@@ -239,19 +319,21 @@ class SettingsViewModel(
 
             val (runtimeDesc, isAvailable) = when (source) {
                 is StorageSource.MediaStorePrimary -> {
-                    val hasPerm = runtime?.hasPermission ?: true
+                    val hasPerm = runtime?.hasPermission ?: (permissionChecker?.canScanAudioMedia() ?: true)
                     if (!hasPerm) "Permission required" to false else "Ready" to true
                 }
                 is StorageSource.MediaStoreVolume -> {
                     when {
-                        runtime?.isMounted == false -> "Disconnected" to false
-                        runtime?.hasPermission == false -> "Permission required" to false
+                        runtime == null -> "Checking..." to false
+                        !runtime.isMounted -> "Disconnected" to false
+                        !runtime.hasPermission -> "Permission required" to false
                         else -> "Connected" to true
                     }
                 }
                 is StorageSource.SafDocumentTree -> {
                     when {
-                        runtime?.hasPermission == false -> "Access revoked" to false
+                        runtime == null -> "Checking..." to false
+                        !runtime.hasPermission -> "Access revoked" to false
                         else -> "Accessible" to true
                     }
                 }
@@ -280,7 +362,16 @@ class SettingsViewModel(
             isScanning = isScanning,
             scanStatusMessage = statusMsg,
             scanErrorMessage = errorMsg,
-            equalizer = eqUiState
+            equalizer = aux.equalizer,
+            isOnlineEnrichmentEnabled = aux.isEnrichmentEnabled,
+            isDarkTheme = aux.prefs.isDark,
+            defaultShuffle = aux.prefs.shuffle,
+            defaultRepeatMode = aux.prefs.repeat,
+            keepScreenOn = aux.prefs.keepScreenOn,
+            isSleepTimerActive = aux.isSleepTimerActive,
+            sleepTimerRemainingMs = aux.sleepTimerRemainingMs,
+            sleepTimerTargetDurationMs = aux.sleepTimerTargetDurationMs,
+            sleepTimerMode = aux.sleepTimerMode
         )
     }.stateIn(
         scope = viewModelScope,
@@ -288,9 +379,63 @@ class SettingsViewModel(
         initialValue = SettingsUiState(
             equalizer = EqualizerUiState(
                 isUserEnabled = intentSource.isEqualizerEnabled()
-            )
+            ),
+            isDarkTheme = userPrefs.isDarkTheme(),
+            defaultShuffle = userPrefs.isDefaultShuffleEnabled(),
+            defaultRepeatMode = userPrefs.getDefaultRepeatMode(),
+            keepScreenOn = userPrefs.isKeepScreenOn()
         )
     )
+
+    fun setIsDarkTheme(isDark: Boolean) {
+        userPrefs.setIsDarkTheme(isDark)
+    }
+
+    fun setDefaultShuffle(enabled: Boolean) {
+        userPrefs.setDefaultShuffleEnabled(enabled)
+        activePlaybackPort?.setShuffleMode(enabled)
+    }
+
+    fun setDefaultRepeatMode(mode: org.harmonia.player.domain.model.RepeatMode) {
+        userPrefs.setDefaultRepeatMode(mode)
+        activePlaybackPort?.setRepeatMode(mode)
+    }
+
+    fun setKeepScreenOn(enabled: Boolean) {
+        userPrefs.setKeepScreenOn(enabled)
+    }
+
+    fun startSleepTimer(preset: SleepTimerPreset) {
+        val durationMs = preset.durationMs
+        if (durationMs != null) {
+            activePlaybackPort?.startSleepTimer(durationMs)
+        } else {
+            activePlaybackPort?.startSleepTimerEndOfTrack()
+        }
+    }
+
+    fun cancelSleepTimer() {
+        activePlaybackPort?.cancelSleepTimer()
+    }
+
+    fun resetScanCheckpoints() {
+        viewModelScope.launch(ioDispatcher) {
+            try {
+                val sources = storageSourceRepository.observeAllSources().firstOrNull() ?: emptyList()
+                sources.forEach { source ->
+                    checkpointRepo?.resetCheckpoint(source.id)
+                }
+                _scanStatusMessage.value = "Checkpoints reset. Next scan will inspect all files."
+                _scanErrorMessage.value = null
+            } catch (t: Throwable) {
+                _scanErrorMessage.value = "Failed to reset checkpoints: ${t.message}"
+            }
+        }
+    }
+
+    fun setOnlineEnrichmentEnabled(enabled: Boolean) {
+        enrichmentService?.setEnrichmentEnabled(enabled)
+    }
 
     fun setEqualizerEnabled(enabled: Boolean) {
         intentSource.setEqualizerEnabled(enabled)

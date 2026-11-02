@@ -50,3 +50,31 @@ desktop.ini
 # Scratch / temp
 scratch/
 
+# Third-party vendor reference trees
+/RESOURCES/
+
+# Android & Gradle build outputs, caches & machine configuration
+.gradle/
+**/build/
+captures/
+.externalNativeBuild/
+.cxx/
+local.properties
+*.iml
+
+# Android package binaries
+*.apk
+*.aab
+*.idsig
+
+# Keystores & Signing credentials (M-REL.1)
+*.jks
+*.keystore
+keystore.properties
+
+# Logs and transient dependencies
+node_modules/
+*.log
+
+# Review captures
+harmonia-mobile/phase2-review/

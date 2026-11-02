@@ -1,0 +1,51 @@
+Harmonia Mobile — Release Candidate 1 Manifest (M-REL.7)
+===========================================================
+
+Application ID:     org.harmonia.player
+Version Name:       0.1.0-rc1
+Version Code:       1
+Compile SDK:        36
+Target SDK:         36
+Min SDK:            26
+Build Variant:      release (minified via R8)
+Build Date (UTC):   2026-10-23T06:38:11Z
+Git HEAD:           f55b4f44444d6d6572c41b6e5bd9695da2c0e36a
+Git Branch:         master
+
+Artifacts & Checksums:
+----------------------
+1. Minified Release APK:
+   Path:    app/build/outputs/apk/release/app-release-unsigned.apk
+   Size:    2,948,156 bytes (~2.81 MB)
+   SHA-256: 937593447d40ed05dab1d66b025cf0af68b9d3930d2d9af6d3778432e654d653
+   Signing: UNSIGNED (Strict release signing gate active; release keystore environment variables not provided)
+
+2. Minified Release App Bundle:
+   Path:    app/build/outputs/bundle/release/app-release.aab
+   Size:    6,429,280 bytes (~6.13 MB)
+   SHA-256: f246a590af402320ec6fc77ceced4e7719ef14e062e346f16426ebb17088a9b0
+   Signing: UNSIGNED / Default bundle structure
+
+3. ProGuard / R8 Mapping File:
+   Path:    app/build/outputs/mapping/release/mapping.txt
+   Size:    53,387,893 bytes (~50.91 MB)
+   SHA-256: bb64bb8b94da8a009dd90e545faa743585643703aa8cc27d6891faf551a163cc
+
+Automated Verification Evidence:
+--------------------------------
+- Unit Test Suite (:app:testDebugUnitTest --rerun-tasks):
+  Test Files: 40 test suites
+  Total Tests: 386 passed, 0 failures, 0 errors, 0 skipped
+  Execution Time: 2m 10s (fresh non-cached execution on 2026-10-23)
+- Accessibility Semantics (AccessibilitySemanticsFormattingTest):
+  13/13 passed (Shuffle, Repeat, Equalizer slider dB stateDescription, 48dp touch targets)
+- Room Database Migrations:
+  V1 through V5 migration tests present and passing
+
+Outstanding Qualification Limitations:
+---------------------------------------
+- TalkBack Runtime Audio: Blocked in M-REL.7 due to zero connected devices; Compose semantics 100% verified via unit tests.
+- Real Doze Deep-Sleep: Blocked; virtual monotonic clock countdown and 30s attenuation verified in unit tests.
+- Desktop Head Unit (DHU): Blocked; MediaItemTree and service interfaces pass, DHU executable uninstalled.
+- Physical Audio DSP: Blocked; platform Equalizer bridge passes, physical DAC/HAL behavior requires hardware.
+- Production Signing: Pending M-REL.8 operator injection of production signing keys.

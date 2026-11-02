@@ -74,9 +74,23 @@ object ServiceLocator {
     @Volatile
     private var equalizerUserIntentSourceInstance: org.harmonia.player.domain.model.equalizer.EqualizerUserIntentSource? = null
 
+    @Volatile
+    private var enrichmentServiceInstance: org.harmonia.player.data.remote.MusicBrainzEnrichmentService? = null
+
+    @Volatile
+    private var userPreferencesRepositoryInstance: org.harmonia.player.domain.repository.UserPreferencesRepository? = null
+
     private val audioEqualizerCoordinatorFlow = kotlinx.coroutines.flow.MutableStateFlow<org.harmonia.player.domain.model.equalizer.AudioEqualizerCoordinator?>(null)
 
     fun initialize(context: Context) {
+        if (userPreferencesRepositoryInstance == null) {
+            val prefs = context.applicationContext.getSharedPreferences(
+                org.harmonia.player.data.local.preferences.SharedPreferencesUserPreferencesRepository.PREFERENCES_NAME,
+                Context.MODE_PRIVATE
+            )
+            userPreferencesRepositoryInstance = org.harmonia.player.data.local.preferences.SharedPreferencesUserPreferencesRepository(prefs)
+        }
+
         if (equalizerUserIntentSourceInstance == null) {
             val prefs = context.applicationContext.getSharedPreferences(
                 org.harmonia.player.data.local.preferences.SharedPreferencesEqualizerUserIntentSource.PREFERENCES_NAME,
@@ -91,6 +105,9 @@ object ServiceLocator {
         }
         if (storagePermissionCheckerInstance == null) {
             storagePermissionCheckerInstance = org.harmonia.player.data.local.permission.AndroidStoragePermissionChecker(context.applicationContext)
+        }
+        if (enrichmentServiceInstance == null) {
+            enrichmentServiceInstance = org.harmonia.player.data.remote.MusicBrainzEnrichmentService.getInstance(context)
         }
         if (audioMetadataReaderInstance == null) {
             audioMetadataReaderInstance = org.harmonia.player.data.local.metadata.AndroidAudioMetadataReader(context.applicationContext)
@@ -326,6 +343,26 @@ object ServiceLocator {
         return audioEqualizerCoordinatorFlow.compareAndSet(coordinator, null)
     }
 
+    fun getEnrichmentService(): org.harmonia.player.data.remote.MusicBrainzEnrichmentService? {
+        return enrichmentServiceInstance
+    }
+
+    fun setEnrichmentService(service: org.harmonia.player.data.remote.MusicBrainzEnrichmentService?) {
+        enrichmentServiceInstance = service
+    }
+
+    fun getUserPreferencesRepository(): org.harmonia.player.domain.repository.UserPreferencesRepository {
+        return userPreferencesRepositoryInstance ?: synchronized(this) {
+            userPreferencesRepositoryInstance ?: org.harmonia.player.data.local.preferences.InMemoryUserPreferencesRepository().also {
+                userPreferencesRepositoryInstance = it
+            }
+        }
+    }
+
+    fun setUserPreferencesRepositoryForTesting(repository: org.harmonia.player.domain.repository.UserPreferencesRepository?) {
+        userPreferencesRepositoryInstance = repository
+    }
+
     fun reset() {
         database?.close()
         database = null
@@ -347,6 +384,8 @@ object ServiceLocator {
         playbackPortInstance = null
         safPermissionDelegateInstance = null
         equalizerUserIntentSourceInstance = null
+        enrichmentServiceInstance = null
+        userPreferencesRepositoryInstance = null
         audioEqualizerCoordinatorFlow.value = null
     }
 }

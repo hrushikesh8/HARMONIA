@@ -108,6 +108,11 @@
   - Telemetry API: `GET /api/v1/history/listening-events` (paginated factual listening history).
   - Standard REST envelopes with pagination (`page`, `page_size`, `total`, `total_pages`).
   - Audio streaming via `GET /api/v1/stream/{file_id}` supporting byte ranges (RFC 7233).
+  - **Personalization Endpoints (Subphase D-P2-D.1)**:
+    - `/api/v1/favorites`: `GET` (list favorited tracks), `POST /api/v1/favorites/{track_id}` (toggle/add favorite), `DELETE /api/v1/favorites/{track_id}` (remove favorite).
+    - `/api/v1/ratings`: `GET` (list rated tracks), `PUT /api/v1/ratings/{track_id}` (submit star rating), `GET /api/v1/ratings/{track_id}` (retrieve track rating), `DELETE /api/v1/ratings/{track_id}` (clear rating).
+    - `/api/v1/playlists`: `GET` (list playlists), `POST` (create playlist), `GET /api/v1/playlists/{playlist_id}` (inspect playlist details), `PUT /api/v1/playlists/{playlist_id}` (update playlist metadata), `DELETE /api/v1/playlists/{playlist_id}` (delete playlist).
+    - `/api/v1/playlists/{playlist_id}/items`: `POST` (append track), `DELETE /api/v1/playlists/{playlist_id}/items/{item_id}` (remove track), `POST /api/v1/playlists/{playlist_id}/items/{item_id}/move` (reorder track position).
   - **Embedded Desktop Web UI**: Served directly from FastAPI at `/` and `/ui`, providing a responsive dark audiophile interface for library management, real-time track inspection, Audio Intelligence orchestration, transport dock playback controls, seek slider, and volume regulation.
 
 ---

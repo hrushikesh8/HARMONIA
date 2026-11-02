@@ -114,3 +114,78 @@ A fundamental design decision (**ADR-002**) is decoupling the logical track reco
   - `USER`: User-applied tags.
   - `PROVIDER`: Tags fetched from external providers (MusicBrainz, Discogs).
 
+---
+
+## 5. Playback Telemetry & Large-Library Tuning (Migrations 004 & 005)
+
+### `ListeningEvent` & `PlaybackQueueSnapshot` (Migration 004)
+Introduced in Phase 4 (**D4.4**, commit `1972ddfc`) to track factual playback telemetry without retaining subjective state:
+- **`listening_events`**: Append-only log recording timestamped playback sessions. Captures `track_id`, `track_file_id`, `duration_listened_sec`, `completed` (boolean indicating $\ge 80\%$ completion threshold), and optional playback `context`. Indexed on `track_id` and `timestamp`.
+- **`playback_queue_snapshots`**: Persistent snapshots of the headless playback queue state machine, recording serialised JSON items, active index, and timestamp.
+
+### SQLite Performance Tuning (Migration 005)
+Introduced in Phase 5D (**D5-D**, commit `b510b60d`) for large-library query optimisation ($\ge 100{,}000$ tracks):
+- Migration `005_phase5d_sqlite_tuning.py` is intentionally an **index-only migration** introducing 0 new tables and 9 composite/partial covering indexes:
+  - `ix_artists_name_lower`
+  - `ix_albums_artist_title_lower`
+  - `ix_albums_artist_year`
+  - `ix_tracks_album_disc_track`
+  - `ix_tracks_title_lower`
+  - `ix_tracks_artist_title_lower`
+  - `ix_track_files_track_quality`
+  - `ix_track_files_format_lossless`
+  - `ix_tags_track_source`
+
+---
+
+## 6. Personalization Domain Schema (Migration 006)
+
+Introduced during Desktop Personalization Phase 2 (**D-MIG006**, commit `a96ba7e7`) to achieve parity with the Harmonia Mobile v5 Room schema:
+
+### 1. `favorites`
+- Stores user-favorited entities polymorphically:
+  - `id`: UUID primary key.
+  - `entity_type`: String (`TRACK`, `ALBUM`, `ARTIST`).
+  - `entity_id`: UUID referencing the target entity.
+  - `source`: String (`MANUAL_DESKTOP`, `LOCALSYNC`).
+  - `created_at`: Timezone-aware UTC timestamp.
+- Unique constraint: `uq_favorites_entity (entity_type, entity_id)`.
+
+### 2. `ratings` (User Ratings)
+- Stores explicit user ratings (1 to 5 stars or fractional points):
+  - `id`: UUID primary key.
+  - `entity_type`: String (`TRACK`, `ALBUM`, `ARTIST`).
+  - `entity_id`: UUID referencing the target entity.
+  - `rating_value`: Float / SmallInteger representing rating score.
+  - `created_at`, `updated_at`: Timezone-aware UTC timestamps.
+- Unique constraint: `uq_ratings_entity (entity_type, entity_id)`.
+
+### 3. `playlists` & `playlist_items`
+- Relational playlist storage:
+  - **`playlists`**: `id`, `name`, `description`, `is_smart` (boolean), `rules_json` (for dynamic smart query criteria), `created_at`, `updated_at`.
+  - **`playlist_items`**: `id`, `playlist_id` (FK to `playlists.id` ondelete `CASCADE`), `track_id` (FK to `tracks.id` ondelete `CASCADE`), `position` (integer ordering coordinate), `added_at`.
+  - Unique constraint: `uq_playlist_item_position (playlist_id, position)`.
+
+> [!NOTE]
+> **Implementation Status Disclosure:**
+> - Migration `006_personalization_schema.py`, domain models, and repositories are **committed** to `master` (commit `c46be003`).
+> - Personalization REST API routes (`/api/v1/favorites/*`, `/api/v1/ratings/*`, `/api/v1/playlists/*`) and integration tests reside in the **local uncommitted working tree** (subphase `D-P2-D.1`).
+
+---
+
+## 7. Alembic Migration History & Declarative Chain
+
+The repository maintains an authoritative, strictly linear migration chain in `migrations/versions/`:
+
+| Revision ID | Down Revision | Subphase / Milestone | Commit Hash | Tables Created | Indexes Created | Status |
+|---|---|---|---|:---:|:---:|---|
+| `001_initial_schema` | `None` | `D1.1` | `7ee88e10` | 5 | 14 | Committed |
+| `002_phase2_metadata_provenance_search` | `001_initial_schema` | `D2.1` | `d69046f8` | 2 | 6 | Committed |
+| `003_phase3_audio_analysis` | `002_phase2_metadata_provenance_search` | `D3.1` | `5c709404` | 1 | 4 | Committed |
+| `004_phase4_playback_and_telemetry` | `003_phase3_audio_analysis` | `D4.4` | `1972ddfc` | 2 | 3 | Committed |
+| `005_phase5d_sqlite_tuning` | `004_phase4_playback_and_telemetry` | `D5-D` | `b510b60d` | 0 | 9 | Committed |
+| `006_personalization_schema` | `005_phase5d_sqlite_tuning` | `D-MIG006` | `a96ba7e7` | 4 | 8 | Committed |
+
+> [!IMPORTANT]
+> **Verification Boundary:** The Alembic migration chain was verified declaratively via AST source parsing. In accordance with read-only audit rules, no live database upgrade (`alembic upgrade head`) was executed on a physical database during documentation closeout.
+

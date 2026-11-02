@@ -1,7 +1,6 @@
 package org.harmonia.player.presentation.playlists
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,9 +23,9 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -41,20 +40,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import org.harmonia.player.design.theme.AcousticCharcoal
-import org.harmonia.player.design.theme.AcousticTeal
-import org.harmonia.player.design.theme.BorderSlate
 import org.harmonia.player.design.theme.HarmoniaIcons
-import org.harmonia.player.design.theme.MutedSlate
-import org.harmonia.player.design.theme.ObsidianSpace
+import org.harmonia.player.design.theme.HarmoniaThemeTokens
+import org.harmonia.player.design.theme.hairlineBorder
 import org.harmonia.player.design.theme.touchTarget48
-import org.harmonia.player.design.theme.PureSignalWhite
 import org.harmonia.player.domain.model.Playlist
 import org.harmonia.player.presentation.components.HarmoniaArtwork
 
@@ -65,6 +61,9 @@ fun PlaylistsScreen(
     onPlaylistClick: (Playlist) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val colors = HarmoniaThemeTokens.colors
+    val spacing = HarmoniaThemeTokens.spacing
+
     var showCreateDialog by remember { mutableStateOf(false) }
     var playlistToRename by remember { mutableStateOf<Playlist?>(null) }
     var playlistToDelete by remember { mutableStateOf<Playlist?>(null) }
@@ -72,10 +71,10 @@ fun PlaylistsScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(ObsidianSpace)
-            .padding(horizontal = 16.dp)
+            .background(colors.backgroundRoot)
+            .padding(horizontal = spacing.standard)
     ) {
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(spacing.standard))
 
         // Header with "New Playlist" button
         Row(
@@ -91,43 +90,44 @@ fun PlaylistsScreen(
                         letterSpacing = 1.5.sp,
                         fontSize = 26.sp
                     ),
-                    color = PureSignalWhite
+                    color = colors.textPrimary
                 )
                 Text(
                     text = "USER-CURATED COLLECTIONS",
                     style = MaterialTheme.typography.labelSmall,
-                    color = AcousticTeal
+                    color = colors.primarySignal
                 )
             }
 
             Button(
                 onClick = { showCreateDialog = true },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = AcousticTeal,
-                    contentColor = ObsidianSpace
+                    containerColor = colors.primarySignal,
+                    contentColor = colors.backgroundRoot
                 ),
                 shape = RoundedCornerShape(10.dp),
                 modifier = Modifier
                     .height(40.dp)
+                    .touchTarget48()
                     .semantics { contentDescription = "Create new playlist" }
             ) {
                 Text("New", fontWeight = FontWeight.Bold)
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(spacing.standard))
 
         if (uiState.isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = AcousticTeal)
+                CircularProgressIndicator(color = colors.primarySignal)
             }
         } else if (uiState.playlists.isEmpty()) {
             EmptyPlaylistsState(onCreateClick = { showCreateDialog = true })
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(bottom = 96.dp)
+                verticalArrangement = Arrangement.spacedBy(spacing.small),
+                contentPadding = PaddingValues(bottom = spacing.bottomScaffold)
             ) {
                 items(uiState.playlists, key = { it.id }) { playlist ->
                     PlaylistRowCard(
@@ -181,38 +181,41 @@ private fun PlaylistRowCard(
     onRenameClick: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
+    val colors = HarmoniaThemeTokens.colors
+    val spacing = HarmoniaThemeTokens.spacing
+    val cardShape = RoundedCornerShape(10.dp)
     var showMenu by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, BorderSlate, RoundedCornerShape(12.dp))
+            .hairlineBorder(colors.borderStructural, cardShape)
             .clickable(onClick = onClick)
             .semantics { contentDescription = "Playlist ${playlist.name}" },
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = AcousticCharcoal)
+        shape = cardShape,
+        colors = CardDefaults.cardColors(containerColor = colors.surfaceElevated)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             HarmoniaArtwork(
                 artworkHash = playlist.artworkHash,
-                size = 48.dp,
+                size = 44.dp,
                 cornerRadius = 8.dp,
                 placeholderIcon = HarmoniaIcons.Playlists,
                 contentDescription = "${playlist.name} artwork"
             )
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(spacing.medium))
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = playlist.name,
                     style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = PureSignalWhite
+                    color = colors.textPrimary
                 )
                 val subtitle = buildString {
                     append("${playlist.trackCount} ${if (playlist.trackCount == 1) "track" else "tracks"}")
@@ -223,7 +226,7 @@ private fun PlaylistRowCard(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MutedSlate
+                    color = colors.textSecondary
                 )
             }
 
@@ -237,26 +240,28 @@ private fun PlaylistRowCard(
                     Icon(
                         imageVector = HarmoniaIcons.MoreVert,
                         contentDescription = null,
-                        tint = MutedSlate
+                        tint = colors.textSecondary
                     )
                 }
 
                 DropdownMenu(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false },
-                    modifier = Modifier.background(AcousticCharcoal)
+                    modifier = Modifier
+                        .background(colors.surfaceElevated)
+                        .hairlineBorder(colors.borderStructural, RoundedCornerShape(8.dp))
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Rename", color = PureSignalWhite) },
-                        leadingIcon = { Icon(HarmoniaIcons.Edit, contentDescription = null, tint = AcousticTeal) },
+                        text = { Text("Rename", color = colors.textPrimary) },
+                        leadingIcon = { Icon(HarmoniaIcons.Edit, contentDescription = null, tint = colors.primarySignal) },
                         onClick = {
                             showMenu = false
                             onRenameClick()
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("Delete", color = PureSignalWhite) },
-                        leadingIcon = { Icon(HarmoniaIcons.Delete, contentDescription = null, tint = AcousticTeal) },
+                        text = { Text("Delete", color = colors.statusError) },
+                        leadingIcon = { Icon(HarmoniaIcons.Delete, contentDescription = null, tint = colors.statusError) },
                         onClick = {
                             showMenu = false
                             onDeleteClick()
@@ -270,6 +275,7 @@ private fun PlaylistRowCard(
 
 @Composable
 private fun EmptyPlaylistsState(onCreateClick: () -> Unit) {
+    val colors = HarmoniaThemeTokens.colors
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
@@ -278,29 +284,30 @@ private fun EmptyPlaylistsState(onCreateClick: () -> Unit) {
             Icon(
                 imageVector = HarmoniaIcons.Playlists,
                 contentDescription = null,
-                tint = MutedSlate,
-                modifier = Modifier.size(48.dp)
+                tint = colors.primarySignal.copy(alpha = 0.6f),
+                modifier = Modifier.size(56.dp)
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = "No Playlists Yet",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = PureSignalWhite
+                color = colors.textPrimary
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Create your first playlist to organize your local tracks.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MutedSlate
+                color = colors.textSecondary
             )
             Spacer(modifier = Modifier.height(16.dp))
             Button(
                 onClick = onCreateClick,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = AcousticTeal,
-                    contentColor = ObsidianSpace
+                    containerColor = colors.primarySignal,
+                    contentColor = colors.backgroundRoot
                 ),
-                shape = RoundedCornerShape(10.dp)
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.touchTarget48()
             ) {
                 Text("Create Playlist", fontWeight = FontWeight.Bold)
             }
@@ -313,13 +320,14 @@ private fun CreatePlaylistDialog(
     onDismiss: () -> Unit,
     onConfirm: (name: String, description: String?) -> Unit
 ) {
+    val colors = HarmoniaThemeTokens.colors
     var name by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text("Create New Playlist", color = PureSignalWhite, fontWeight = FontWeight.Bold)
+            Text("Create New Playlist", color = colors.textPrimary, fontWeight = FontWeight.Bold)
         },
         text = {
             Column {
@@ -329,10 +337,10 @@ private fun CreatePlaylistDialog(
                     label = { Text("Playlist Name") },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AcousticTeal,
-                        unfocusedBorderColor = BorderSlate,
-                        focusedTextColor = PureSignalWhite,
-                        unfocusedTextColor = PureSignalWhite
+                        focusedBorderColor = colors.primarySignal,
+                        unfocusedBorderColor = colors.borderStructural,
+                        focusedTextColor = colors.textPrimary,
+                        unfocusedTextColor = colors.textPrimary
                     )
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -342,10 +350,10 @@ private fun CreatePlaylistDialog(
                     label = { Text("Description (Optional)") },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AcousticTeal,
-                        unfocusedBorderColor = BorderSlate,
-                        focusedTextColor = PureSignalWhite,
-                        unfocusedTextColor = PureSignalWhite
+                        focusedBorderColor = colors.primarySignal,
+                        unfocusedBorderColor = colors.borderStructural,
+                        focusedTextColor = colors.textPrimary,
+                        unfocusedTextColor = colors.textPrimary
                     )
                 )
             }
@@ -354,16 +362,19 @@ private fun CreatePlaylistDialog(
             Button(
                 onClick = { if (name.isNotBlank()) onConfirm(name, description.ifBlank { null }) },
                 enabled = name.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = AcousticTeal, contentColor = ObsidianSpace)
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = colors.primarySignal,
+                    contentColor = colors.backgroundRoot
+                )
             ) {
-                Text("Create")
+                Text("Create", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = MutedSlate)
+                Text("Cancel", color = colors.textSecondary)
             }
         },
-        containerColor = AcousticCharcoal
+        containerColor = colors.surfaceElevated
     )
 }

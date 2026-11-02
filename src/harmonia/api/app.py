@@ -10,6 +10,45 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.datastructures import Headers, URL
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.responses import PlainTextResponse, RedirectResponse, Response
+from starlette.types import Receive, Scope, Send
+
+class LoopbackTrustedHostMiddleware(TrustedHostMiddleware):
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if self.allow_any or scope["type"] not in ("http", "websocket"):
+            await self.app(scope, receive, send)
+            return
+
+        headers = Headers(scope=scope)
+        raw_host = headers.get("host", "")
+        if raw_host.startswith("["):
+            bracket_idx = raw_host.find("]")
+            host = raw_host[:bracket_idx + 1] if bracket_idx != -1 else raw_host.split(":")[0]
+        else:
+            host = raw_host.split(":")[0]
+
+        is_valid_host = False
+        found_www_redirect = False
+        for pattern in self.allowed_hosts:
+            if host == pattern or (pattern.startswith("*") and host.endswith(pattern[1:])):
+                is_valid_host = True
+                break
+            elif "www." + host == pattern:
+                found_www_redirect = True
+
+        if is_valid_host:
+            await self.app(scope, receive, send)
+        else:
+            if found_www_redirect and self.www_redirect:
+                url = URL(scope=scope)
+                redirect_url = url.replace(netloc="www." + url.netloc)
+                response: Response = RedirectResponse(url=str(redirect_url))
+            else:
+                response = PlainTextResponse("Invalid host header", status_code=400)
+            await response(scope, receive, send)
+
 
 from harmonia import __version__
 from harmonia.api.routers import (
@@ -17,11 +56,14 @@ from harmonia.api.routers import (
     artists_router,
     artwork_router,
     duplicates_router,
+    favorites_router,
     files_router,
     health_router,
     listening_events_router,
     playback_router,
+    playlists_router,
     queue_router,
+    ratings_router,
     search_router,
     stream_router,
     tracks_router,
@@ -30,7 +72,7 @@ from harmonia.application.audio_analysis_service import AudioAnalysisService
 from harmonia.application.playback_service import PlaybackService
 from harmonia.core.config import HarmoniaConfig
 from harmonia.core.database import create_database_engine, create_session_factory, init_database
-from harmonia.core.exceptions import HarmoniaError
+from harmonia.core.exceptions import EntityNotFoundError, HarmoniaError, ValidationError
 from harmonia.infrastructure.audio.backend import DesktopAudioBackend
 from harmonia.infrastructure.persistence.listening_event_repo import (
     SqliteListeningEventRepository,
@@ -119,13 +161,43 @@ def create_app(
     # Local CORS policy strictly allowing loopback clients
     app.add_middleware(
         CORSMiddleware,
-        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
+    # Host-header validation for supported loopback deployment hosts
+    allowed_hosts = [
+        "localhost",
+        "127.0.0.1",
+        "[::1]",
+        "*.localhost",
+        "testserver",
+    ]
+    if app_config.api.host and app_config.api.host not in allowed_hosts:
+        allowed_hosts.append(app_config.api.host)
+
+    app.add_middleware(
+        LoopbackTrustedHostMiddleware,
+        allowed_hosts=allowed_hosts,
+    )
+
     # Custom exception handling for Harmonia domain errors
+    @app.exception_handler(EntityNotFoundError)
+    async def entity_not_found_handler(request: Request, exc: EntityNotFoundError) -> JSONResponse:
+        return JSONResponse(
+            status_code=404,
+            content={"detail": str(exc)},
+        )
+
+    @app.exception_handler(ValidationError)
+    async def validation_error_handler(request: Request, exc: ValidationError) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content={"detail": str(exc)},
+        )
+
     @app.exception_handler(HarmoniaError)
     async def harmonia_error_handler(request: Request, exc: HarmoniaError) -> JSONResponse:
         return JSONResponse(
@@ -146,6 +218,9 @@ def create_app(
     app.include_router(playback_router, prefix="/api/v1")
     app.include_router(queue_router, prefix="/api/v1")
     app.include_router(listening_events_router, prefix="/api/v1")
+    app.include_router(playlists_router, prefix="/api/v1")
+    app.include_router(favorites_router, prefix="/api/v1")
+    app.include_router(ratings_router, prefix="/api/v1")
 
     # Static assets and UI serving
     static_dir = Path(__file__).parent / "static"

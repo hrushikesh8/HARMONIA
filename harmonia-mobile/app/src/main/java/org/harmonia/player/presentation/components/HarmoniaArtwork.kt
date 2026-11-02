@@ -20,16 +20,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.harmonia.player.data.local.ArtworkProvider
-import org.harmonia.player.design.theme.AcousticCharcoal
-import org.harmonia.player.design.theme.AcousticTeal
 import org.harmonia.player.design.theme.HarmoniaIcons
-import org.harmonia.player.design.theme.StudioSlate
+import org.harmonia.player.design.theme.HarmoniaThemeTokens
 
 /**
  * Reusable artwork presentation component.
@@ -67,6 +66,8 @@ fun HarmoniaArtwork(
         }
     }
 
+    val colors = HarmoniaThemeTokens.colors
+
     Box(
         modifier = modifier
             .size(size)
@@ -78,18 +79,19 @@ fun HarmoniaArtwork(
             Image(
                 bitmap = currentBitmap.asImageBitmap(),
                 contentDescription = contentDescription,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
             )
         } else {
-            // Harmonia geometric acoustic gradient fallback
+            // Harmonia geometric acoustic gradient fallback (Obsidian & Warm Analog)
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
                         Brush.linearGradient(
                             listOf(
-                                AcousticCharcoal,
-                                StudioSlate
+                                colors.surfaceElevated,
+                                colors.surfaceContainer
                             )
                         )
                     ),
@@ -98,7 +100,7 @@ fun HarmoniaArtwork(
                 Icon(
                     imageVector = placeholderIcon,
                     contentDescription = contentDescription,
-                    tint = AcousticTeal.copy(alpha = 0.7f),
+                    tint = colors.secondarySignal.copy(alpha = 0.7f),
                     modifier = Modifier.size(size * 0.45f)
                 )
             }
