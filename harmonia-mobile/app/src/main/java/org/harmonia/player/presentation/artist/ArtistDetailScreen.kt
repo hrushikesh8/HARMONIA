@@ -2,6 +2,7 @@ package org.harmonia.player.presentation.artist
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,6 +53,7 @@ import org.harmonia.player.design.theme.hairlineBorder
 import org.harmonia.player.design.theme.touchTarget48
 import org.harmonia.player.domain.model.Track
 import org.harmonia.player.presentation.components.HarmoniaArtwork
+import org.harmonia.player.presentation.components.TrackMenuButton
 import org.harmonia.player.presentation.personalization.FavoriteButton
 import org.harmonia.player.presentation.personalization.PersonalizationViewModel
 import org.harmonia.player.presentation.util.TrackDisplayUtils
@@ -68,7 +70,8 @@ fun ArtistDetailScreen(
     onBack: () -> Unit,
     onAlbumClick: (String) -> Unit = {},
     onPlayTrack: (List<Track>, Int) -> Unit = { _, _ -> },
-    onShuffleAll: (List<Track>) -> Unit = {}
+    onShuffleAll: (List<Track>) -> Unit = {},
+    onTrackMenu: ((Track) -> Unit)? = null
 ) {
     LaunchedEffect(artistId) {
         viewModel.loadArtist(artistId)
@@ -412,7 +415,10 @@ fun ArtistDetailScreen(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(8.dp))
                     .background(if (isThisTrackActive) colors.primarySignal.copy(alpha = 0.08f) else colors.backgroundRoot)
-                    .clickable { onPlayTrack(tracks, index) }
+                    .combinedClickable(
+                        onClick = { onPlayTrack(tracks, index) },
+                        onLongClick = onTrackMenu?.let { menu -> { menu(track) } }
+                    )
                     .padding(vertical = spacing.small, horizontal = spacing.xSmall),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -506,6 +512,10 @@ fun ArtistDetailScreen(
                     isFavorite = isFavorite,
                     onToggleFavorite = { personalizationViewModel.toggleFavorite(track.id) }
                 )
+
+                if (onTrackMenu != null) {
+                    TrackMenuButton(trackTitle = cleanTitle, onClick = { onTrackMenu(track) })
+                }
             }
         }
     }

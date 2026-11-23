@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import org.harmonia.player.core.di.ServiceLocator
 import org.harmonia.player.domain.model.ListeningEvent
@@ -51,21 +52,23 @@ class ProfileViewModel(
         Triple(favs.size, rated.size, avg)
     }
 
+    // The recent-events query is capped for display; the total is counted separately on every change.
     private val activityFlow = listeningEventRepository.observeRecentEvents(50)
+        .map { events -> events to listeningEventRepository.getEventCount() }
 
     val uiState: StateFlow<ProfileUiState> = combine(
         catalogStatsFlow,
         personalizationStatsFlow,
         storageSourceRepository.observeAllSources(),
         activityFlow
-    ) { (totalTracks, offlineTracks, storageMb), (favsCount, ratedCount, avgRating), sources, events ->
+    ) { (totalTracks, offlineTracks, storageMb), (favsCount, ratedCount, avgRating), sources, (events, eventCount) ->
         ProfileUiState(
             totalTracks = totalTracks,
             offlineTracks = offlineTracks,
             favoritesCount = favsCount,
             ratedTracksCount = ratedCount,
             storageSourcesCount = sources.size,
-            totalListeningEvents = events.size,
+            totalListeningEvents = eventCount,
             recentListeningEvents = events,
             averageRating = avgRating,
             storageUsageEstimateMb = storageMb

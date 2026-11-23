@@ -102,6 +102,16 @@ class HarmoniaPlayerController(
                 mediaId
             }
         }
+
+        /**
+         * Where the item at [activeIndex] ends up after moving the item at [fromIndex] to [toIndex].
+         */
+        fun indexAfterMove(activeIndex: Int, fromIndex: Int, toIndex: Int): Int = when {
+            activeIndex == fromIndex -> toIndex
+            fromIndex < activeIndex && toIndex >= activeIndex -> activeIndex - 1
+            fromIndex > activeIndex && toIndex <= activeIndex -> activeIndex + 1
+            else -> activeIndex
+        }
     }
 
     private fun startPositionPolling(controller: Player) {
@@ -602,14 +612,78 @@ class HarmoniaPlayerController(
             _queue.value = currentQueue
             playbackStateRepository.appendToQueue(newItems)
 
-            val mediaItems = tracks.map { track ->
-                val localFiles = localFileRepository.observeLocalFilesForTrack(track.id).firstOrNull() ?: emptyList()
-                val localFile = localFiles.firstOrNull() ?: track.localFile
-                LocalFileSourceAdapter.toMediaItem(track, localFile)
-            }
+            val mediaItems = tracks.map { track -> toMediaItem(track) }
             mediaController?.addMediaItems(mediaItems)
         }
     }
+
+    override fun playNext(tracks: List<Track>) {
+        if (tracks.isEmpty()) return
+        if (_queue.value.isEmpty()) {
+            setQueue(tracks, 0)
+            return
+        }
+        scope.launch {
+            val currentQueue = _queue.value
+            val activeIdx = _playbackState.value.activeQueueIndex
+            val insertAt = (activeIdx + 1).coerceIn(0, currentQueue.size)
+            val newItems = tracks.map { track -> QueueItem(position = 0, trackId = track.id, track = track) }
+            val updated = (currentQueue.take(insertAt) + newItems + currentQueue.drop(insertAt)).renumbered()
+            _queue.value = updated
+            playbackStateRepository.setQueue(updated)
+
+            val mediaItems = tracks.map { track -> toMediaItem(track) }
+            mediaController?.let { controller ->
+                controller.addMediaItems(insertAt.coerceAtMost(controller.mediaItemCount), mediaItems)
+            }
+        }
+    }
+
+    override fun moveQueueItem(fromIndex: Int, toIndex: Int) {
+        val currentQueue = _queue.value
+        if (fromIndex !in currentQueue.indices || toIndex !in currentQueue.indices || fromIndex == toIndex) return
+
+        val updated = currentQueue.toMutableList().apply { add(toIndex, removeAt(fromIndex)) }.renumbered()
+        _queue.value = updated
+        _playbackState.value = _playbackState.value.copy(
+            activeQueueIndex = indexAfterMove(_playbackState.value.activeQueueIndex, fromIndex, toIndex)
+        )
+        mediaController?.let { controller ->
+            if (fromIndex < controller.mediaItemCount && toIndex < controller.mediaItemCount) {
+                controller.moveMediaItem(fromIndex, toIndex)
+            }
+        }
+        scope.launch { playbackStateRepository.setQueue(updated) }
+        persistCurrentState()
+    }
+
+    override fun removeQueueItem(index: Int) {
+        val currentQueue = _queue.value
+        val activeIdx = _playbackState.value.activeQueueIndex
+        if (index !in currentQueue.indices || index == activeIdx) return
+
+        val updated = currentQueue.toMutableList().apply { removeAt(index) }.renumbered()
+        _queue.value = updated
+        if (index < activeIdx) {
+            _playbackState.value = _playbackState.value.copy(activeQueueIndex = activeIdx - 1)
+        }
+        mediaController?.let { controller ->
+            if (index < controller.mediaItemCount) {
+                controller.removeMediaItem(index)
+            }
+        }
+        scope.launch { playbackStateRepository.setQueue(updated) }
+        persistCurrentState()
+    }
+
+    private suspend fun toMediaItem(track: Track): MediaItem {
+        val localFiles = localFileRepository.observeLocalFilesForTrack(track.id).firstOrNull() ?: emptyList()
+        val localFile = localFiles.firstOrNull() ?: track.localFile
+        return LocalFileSourceAdapter.toMediaItem(track, localFile)
+    }
+
+    private fun List<QueueItem>.renumbered(): List<QueueItem> =
+        mapIndexed { idx, item -> item.copy(position = idx) }
 
     override fun jumpToQueueIndex(index: Int) {
         mediaController?.let { controller ->

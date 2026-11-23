@@ -14,6 +14,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,6 +59,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -66,6 +68,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.harmonia.player.data.local.MediaFolderResolver
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -88,6 +93,7 @@ import org.harmonia.player.domain.model.LocalFileAvailability
 import org.harmonia.player.domain.model.Track
 import org.harmonia.player.domain.model.storage.permission.StoragePermissionState
 import org.harmonia.player.presentation.components.HarmoniaArtwork
+import org.harmonia.player.presentation.components.TrackMenuButton
 import org.harmonia.player.presentation.personalization.FavoriteButton
 import org.harmonia.player.presentation.personalization.PersonalizationViewModel
 import org.harmonia.player.presentation.util.TrackDisplayUtils
@@ -127,6 +133,7 @@ fun LibraryScreen(
     viewModel: LibraryViewModel = viewModel(),
     personalizationViewModel: PersonalizationViewModel = viewModel(),
     onTrackClick: (List<Track>, Int) -> Unit = { _, _ -> },
+    onTrackMenu: ((Track) -> Unit)? = null,
     onAlbumClick: (Album) -> Unit = {},
     onArtistClick: (Artist) -> Unit = {},
     onRequestPermission: (() -> Unit)? = null,
@@ -210,23 +217,28 @@ fun LibraryScreen(
         }
     }
 
+    // MediaStore URIs carry no folder, so look folders up only while the Folders tab is open
+    val folderLookupContext = LocalContext.current.applicationContext
+    val isFoldersTab = uiState.selectedTab == LibraryTab.FOLDERS
+    val trackUris = remember(uiState.tracks) { uiState.tracks.mapNotNull { it.localFile?.fileUri } }
+    val resolvedFolders by produceState(initialValue = emptyMap<String, String>(), trackUris, isFoldersTab) {
+        if (isFoldersTab) {
+            value = withContext(Dispatchers.IO) {
+                MediaFolderResolver(folderLookupContext).resolveFolders(trackUris)
+            }
+        }
+    }
+
     // Group tracks by local storage folders
-    val musicFolders = remember(uiState.tracks, searchQuery) {
+    val musicFolders = remember(uiState.tracks, searchQuery, resolvedFolders) {
         val folderMap = mutableMapOf<String, MutableList<Track>>()
         uiState.tracks.forEach { track ->
-            val uri = track.localFile?.fileUri ?: ""
-            val folderPath = if (uri.isNotBlank()) {
-                val decoded = try { java.net.URLDecoder.decode(uri, "UTF-8") } catch (_: Exception) { uri }
-                decoded.substringBeforeLast('/', "Internal Storage")
-            } else {
-                "Internal Storage"
-            }
+            val folderPath = folderPathFor(track.localFile?.fileUri, resolvedFolders)
             folderMap.getOrPut(folderPath) { mutableListOf() }.add(track)
         }
 
         folderMap.map { (path, tracksInFolder) ->
-            val name = path.substringAfterLast('/').ifBlank { "Internal Music" }
-            MusicFolder(fullPath = path, folderName = name, tracks = tracksInFolder)
+            MusicFolder(fullPath = path, folderName = folderDisplayName(path), tracks = tracksInFolder)
         }.filter {
             if (searchQuery.isBlank()) true else {
                 it.folderName.contains(searchQuery.trim(), ignoreCase = true) ||
@@ -679,7 +691,8 @@ fun LibraryScreen(
                     onToggleFavorite = { track -> personalizationViewModel.toggleFavorite(track.id) },
                     unmountedSourceIds = uiState.unmountedSourceIds,
                     disabledSourceIds = uiState.disabledSourceIds,
-                    onTrackClick = onTrackClick
+                    onTrackClick = onTrackClick,
+                    onTrackMenu = onTrackMenu
                 )
                 LibraryTab.FAVORITES -> FavoritesTabContent(
                     tracks = filteredFavoriteTracks,
@@ -687,7 +700,8 @@ fun LibraryScreen(
                     onBrowseTracks = { viewModel.selectTab(LibraryTab.TRACKS) },
                     unmountedSourceIds = uiState.unmountedSourceIds,
                     disabledSourceIds = uiState.disabledSourceIds,
-                    onTrackClick = onTrackClick
+                    onTrackClick = onTrackClick,
+                    onTrackMenu = onTrackMenu
                 )
                 LibraryTab.ALBUMS -> AlbumsTabContent(
                     albums = filteredAlbums,
@@ -699,7 +713,8 @@ fun LibraryScreen(
                 )
                 LibraryTab.FOLDERS -> FoldersTabContent(
                     folders = musicFolders,
-                    onTrackClick = onTrackClick
+                    onTrackClick = onTrackClick,
+                    onTrackMenu = onTrackMenu
                 )
             }
         }
@@ -764,7 +779,8 @@ internal fun TracksTabContent(
     onToggleFavorite: ((Track) -> Unit)? = null,
     unmountedSourceIds: Set<String> = emptySet(),
     disabledSourceIds: Set<String> = emptySet(),
-    onTrackClick: (List<Track>, Int) -> Unit
+    onTrackClick: (List<Track>, Int) -> Unit,
+    onTrackMenu: ((Track) -> Unit)? = null
 ) {
     val spacing = HarmoniaThemeTokens.spacing
 
@@ -803,7 +819,8 @@ internal fun TracksTabContent(
                     badgeText = badgeText,
                     isFavorite = favoriteTrackIds.contains(track.id),
                     onToggleFavorite = onToggleFavorite?.let { action -> { action(track) } },
-                    onClick = { onTrackClick(tracks, index) }
+                    onClick = { onTrackClick(tracks, index) },
+                    onMenuClick = onTrackMenu?.let { menu -> { menu(track) } }
                 )
             }
         }
@@ -817,7 +834,8 @@ internal fun FavoritesTabContent(
     onBrowseTracks: () -> Unit,
     unmountedSourceIds: Set<String> = emptySet(),
     disabledSourceIds: Set<String> = emptySet(),
-    onTrackClick: (List<Track>, Int) -> Unit
+    onTrackClick: (List<Track>, Int) -> Unit,
+    onTrackMenu: ((Track) -> Unit)? = null
 ) {
     val spacing = HarmoniaThemeTokens.spacing
 
@@ -847,7 +865,8 @@ internal fun FavoritesTabContent(
                     badgeText = badgeText,
                     isFavorite = true,
                     onToggleFavorite = { onToggleFavorite(track) },
-                    onClick = { onTrackClick(tracks, index) }
+                    onClick = { onTrackClick(tracks, index) },
+                    onMenuClick = onTrackMenu?.let { menu -> { menu(track) } }
                 )
             }
         }
@@ -903,7 +922,8 @@ private fun ArtistsTabContent(
 @Composable
 private fun FoldersTabContent(
     folders: List<MusicFolder>,
-    onTrackClick: (List<Track>, Int) -> Unit
+    onTrackClick: (List<Track>, Int) -> Unit,
+    onTrackMenu: ((Track) -> Unit)? = null
 ) {
     val colors = HarmoniaThemeTokens.colors
     val spacing = HarmoniaThemeTokens.spacing
@@ -985,7 +1005,10 @@ private fun FoldersTabContent(
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clickable { onTrackClick(folder.tracks, idx) }
+                                            .combinedClickable(
+                                                onClick = { onTrackClick(folder.tracks, idx) },
+                                                onLongClick = onTrackMenu?.let { menu -> { menu(track) } }
+                                            )
                                             .padding(vertical = 8.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
@@ -1033,7 +1056,8 @@ internal fun TrackRowCard(
     badgeText: String? = null,
     isFavorite: Boolean? = null,
     onToggleFavorite: (() -> Unit)? = null,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onMenuClick: (() -> Unit)? = null
 ) {
     val colors = HarmoniaThemeTokens.colors
     val spacing = HarmoniaThemeTokens.spacing
@@ -1047,7 +1071,7 @@ internal fun TrackRowCard(
         modifier = Modifier
             .fillMaxWidth()
             .hairlineBorder(color = colors.borderStructural, shape = cardShape, width = 1.dp)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onMenuClick)
             .semantics {
                 contentDescription = if (badgeText != null) {
                     "Play $displayTitle by ${track.artistName ?: "Unknown"} ($badgeText)"
@@ -1065,7 +1089,7 @@ internal fun TrackRowCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             HarmoniaArtwork(
-                artworkHash = track.localFile?.fileHash,
+                artworkHash = track.artworkHash ?: track.localFile?.fileHash,
                 size = 44.dp,
                 cornerRadius = 8.dp,
                 contentDescription = "$displayTitle artwork",
@@ -1149,6 +1173,10 @@ internal fun TrackRowCard(
                     onToggleFavorite = onToggleFavorite,
                     modifier = Modifier.touchTarget48()
                 )
+            }
+
+            if (onMenuClick != null) {
+                TrackMenuButton(trackTitle = displayTitle, onClick = onMenuClick)
             }
         }
     }

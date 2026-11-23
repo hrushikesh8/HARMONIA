@@ -66,6 +66,22 @@ interface PlaybackPort {
     fun appendToQueue(tracks: List<Track>)
 
     /**
+     * Inserts [tracks] immediately after the currently active queue item.
+     * When the queue is empty this behaves like [setQueue].
+     */
+    fun playNext(tracks: List<Track>)
+
+    /**
+     * Moves the queue item at [fromIndex] to [toIndex], keeping the active item playing.
+     */
+    fun moveQueueItem(fromIndex: Int, toIndex: Int)
+
+    /**
+     * Removes the queue item at [index]. The currently active item cannot be removed.
+     */
+    fun removeQueueItem(index: Int)
+
+    /**
      * Jumps directly to a specific position in the queue.
      */
     fun jumpToQueueIndex(index: Int)

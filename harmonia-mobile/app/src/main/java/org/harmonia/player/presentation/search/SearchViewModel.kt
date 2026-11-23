@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import org.harmonia.player.core.di.ServiceLocator
 import org.harmonia.player.domain.model.Album
@@ -41,7 +42,7 @@ class SearchViewModel(
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
-    val uiState: StateFlow<SearchUiState> = _query
+    private val settledResults = _query
         .debounce(250)
         .distinctUntilChanged()
         .flatMapLatest { text ->
@@ -65,11 +66,21 @@ class SearchViewModel(
                     )
                 }
             }
-        }.stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = SearchUiState()
-        )
+        }
+        // Emit an empty settled state immediately so the first keystroke already reports isSearching
+        .onStart { emit(SearchUiState()) }
+
+    /**
+     * Results for the last settled query, flagged as [SearchUiState.isSearching] while the
+     * live query is still ahead of them (debounce window or repository round-trip).
+     */
+    val uiState: StateFlow<SearchUiState> = combine(_query, settledResults) { current, results ->
+        results.copy(isSearching = current.isNotBlank() && current.trim() != results.query.trim())
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = SearchUiState()
+    )
 
     fun onQueryChanged(newQuery: String) {
         _query.value = newQuery

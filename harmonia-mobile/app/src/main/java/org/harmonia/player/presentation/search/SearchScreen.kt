@@ -3,6 +3,7 @@ package org.harmonia.player.presentation.search
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -54,6 +56,7 @@ import org.harmonia.player.domain.model.Artist
 import org.harmonia.player.domain.model.Playlist
 import org.harmonia.player.domain.model.Track
 import org.harmonia.player.presentation.components.HarmoniaArtwork
+import org.harmonia.player.presentation.components.TrackMenuButton
 import org.harmonia.player.presentation.util.TrackDisplayUtils
 import java.util.Locale
 
@@ -69,7 +72,8 @@ enum class SearchFilter(val label: String) {
 fun SearchScreen(
     modifier: Modifier = Modifier,
     viewModel: SearchViewModel = viewModel(),
-    onTrackClick: (Track) -> Unit = {},
+    onTrackClick: (List<Track>, Int) -> Unit = { _, _ -> },
+    onTrackMenu: ((Track) -> Unit)? = null,
     onAlbumClick: (Album) -> Unit = {},
     onArtistClick: (Artist) -> Unit = {},
     onPlaylistClick: (Playlist) -> Unit = {}
@@ -187,6 +191,13 @@ fun SearchScreen(
         // Body Content State Handling
         if (query.isBlank()) {
             EmptyPromptState()
+        } else if (uiState.isEmpty && uiState.isSearching) {
+            Text(
+                text = "Searching\u2026",
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.textSecondary,
+                modifier = Modifier.padding(top = spacing.standard)
+            )
         } else if (uiState.isEmpty) {
             NoResultsState(query = query)
         } else {
@@ -194,6 +205,7 @@ fun SearchScreen(
                 uiState = uiState,
                 filter = selectedFilter,
                 onTrackClick = onTrackClick,
+                onTrackMenu = onTrackMenu,
                 onAlbumClick = onAlbumClick,
                 onArtistClick = onArtistClick,
                 onPlaylistClick = onPlaylistClick
@@ -276,7 +288,8 @@ private fun NoResultsState(query: String) {
 private fun SearchResultsList(
     uiState: SearchUiState,
     filter: SearchFilter,
-    onTrackClick: (Track) -> Unit,
+    onTrackClick: (List<Track>, Int) -> Unit,
+    onTrackMenu: ((Track) -> Unit)?,
     onAlbumClick: (Album) -> Unit,
     onArtistClick: (Artist) -> Unit,
     onPlaylistClick: (Playlist) -> Unit
@@ -298,8 +311,12 @@ private fun SearchResultsList(
             item(key = "header_tracks") {
                 CategoryHeader(title = "TRACKS", count = uiState.matchingTracks.size)
             }
-            items(uiState.matchingTracks, key = { "trk_${it.id}" }) { track ->
-                TrackResultRow(track = track, onClick = { onTrackClick(track) })
+            itemsIndexed(uiState.matchingTracks, key = { _, track -> "trk_${track.id}" }) { index, track ->
+                TrackResultRow(
+                    track = track,
+                    onClick = { onTrackClick(uiState.matchingTracks, index) },
+                    onMenuClick = onTrackMenu?.let { menu -> { menu(track) } }
+                )
             }
         }
 
@@ -364,7 +381,8 @@ private fun CategoryHeader(title: String, count: Int) {
 @Composable
 private fun TrackResultRow(
     track: Track,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onMenuClick: (() -> Unit)? = null
 ) {
     val colors = HarmoniaThemeTokens.colors
     val spacing = HarmoniaThemeTokens.spacing
@@ -377,7 +395,7 @@ private fun TrackResultRow(
         modifier = Modifier
             .fillMaxWidth()
             .hairlineBorder(colors.borderStructural, cardShape)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onMenuClick)
             .semantics { contentDescription = "Play $displayTitle by ${track.artistName ?: "Unknown"}" },
         shape = cardShape,
         colors = CardDefaults.cardColors(containerColor = colors.surfaceElevated)
@@ -389,7 +407,7 @@ private fun TrackResultRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             HarmoniaArtwork(
-                artworkHash = track.localFile?.fileHash,
+                artworkHash = track.artworkHash ?: track.localFile?.fileHash,
                 size = 42.dp,
                 cornerRadius = 8.dp,
                 contentDescription = "$displayTitle artwork"
@@ -430,6 +448,9 @@ private fun TrackResultRow(
                 color = colors.textSecondary,
                 style = MaterialTheme.typography.labelSmall
             )
+            if (onMenuClick != null) {
+                TrackMenuButton(trackTitle = displayTitle, onClick = onMenuClick)
+            }
         }
     }
 }

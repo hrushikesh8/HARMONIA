@@ -217,6 +217,9 @@ private class FakeSettingsPlaybackPort : PlaybackPort {
     override fun previous() {}
     override fun setQueue(tracks: List<Track>, startIndex: Int) {}
     override fun appendToQueue(tracks: List<Track>) {}
+    override fun playNext(tracks: List<Track>) {}
+    override fun moveQueueItem(fromIndex: Int, toIndex: Int) {}
+    override fun removeQueueItem(index: Int) {}
     override fun jumpToQueueIndex(index: Int) {}
     override fun setShuffleMode(enabled: Boolean) { shuffleModeEnabled = enabled }
     override fun setRepeatMode(mode: RepeatMode) { activeRepeatMode = mode }

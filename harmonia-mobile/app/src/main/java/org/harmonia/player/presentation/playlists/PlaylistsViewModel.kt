@@ -47,4 +47,18 @@ class PlaylistsViewModel(
             playlistRepository.deletePlaylist(id)
         }
     }
+
+    fun addTrackToPlaylist(playlistId: String, trackId: String) {
+        viewModelScope.launch {
+            playlistRepository.addTrackToPlaylist(playlistId, trackId)
+        }
+    }
+
+    fun createPlaylistWithTrack(name: String, trackId: String) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            val playlist = playlistRepository.createPlaylist(name.trim())
+            playlistRepository.addTrackToPlaylist(playlist.id, trackId)
+        }
+    }
 }

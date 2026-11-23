@@ -2,6 +2,7 @@ package org.harmonia.player.presentation.playlists
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -70,8 +71,12 @@ fun PlaylistDetailScreen(
     onBack: () -> Unit,
     onPlay: (tracks: List<Track>, startIndex: Int) -> Unit,
     onShuffle: (tracks: List<Track>) -> Unit,
+    onTrackMenu: ((Track) -> Unit)? = null,
     modifier: Modifier = Modifier,
-    viewModel: PlaylistDetailViewModel = viewModel(factory = PlaylistDetailViewModel.Factory(playlistId))
+    viewModel: PlaylistDetailViewModel = viewModel(
+        key = "playlist_detail_$playlistId",
+        factory = PlaylistDetailViewModel.Factory(playlistId)
+    )
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val colors = HarmoniaThemeTokens.colors
@@ -113,7 +118,7 @@ fun PlaylistDetailScreen(
                     .semantics { contentDescription = "Navigate Back" }
             ) {
                 Icon(
-                    imageVector = HarmoniaIcons.SkipPrevious,
+                    imageVector = HarmoniaIcons.ArrowBack,
                     contentDescription = "Navigate Back",
                     tint = colors.textPrimary
                 )
@@ -321,6 +326,7 @@ fun PlaylistDetailScreen(
                                 onPlay(validTracks, trackIndex)
                             }
                         },
+                        onLongClick = item.track?.let { track -> onTrackMenu?.let { menu -> { menu(track) } } },
                         onMoveUp = { viewModel.moveTrackUp(index) },
                         onMoveDown = { viewModel.moveTrackDown(index) },
                         onRemove = { viewModel.removeTrack(item.trackId) }
@@ -373,6 +379,7 @@ private fun PlaylistItemRow(
     canMoveUp: Boolean,
     canMoveDown: Boolean,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)?,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
     onRemove: () -> Unit
@@ -386,7 +393,7 @@ private fun PlaylistItemRow(
         modifier = Modifier
             .fillMaxWidth()
             .hairlineBorder(colors.borderStructural, cardShape)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .semantics { contentDescription = "Play track $displayTitle" },
         shape = cardShape,
         colors = CardDefaults.cardColors(containerColor = colors.surfaceElevated)

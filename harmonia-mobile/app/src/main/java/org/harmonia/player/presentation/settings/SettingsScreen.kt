@@ -67,6 +67,10 @@ import org.harmonia.player.domain.model.audio.SleepTimerPreset
 import org.harmonia.player.domain.model.equalizer.EqualizerBand
 import java.util.Locale
 
+// MusicBrainz enrichment is not wired into the scan pipeline yet and the app has no
+// INTERNET permission, so the toggle would do nothing. Flip this once enrichment ships.
+private const val SHOW_ONLINE_ENRICHMENT_SETTINGS = false
+
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
@@ -633,64 +637,66 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(spacing.standard))
 
-        // ==========================================
-        // SECTION 4: METADATA & OPEN CATALOG ENRICHMENT
-        // ==========================================
-        SettingsCard(
-            title = "METADATA & OPEN CATALOG ENRICHMENT",
-            subtitle = "Optional MusicBrainz integration (ADR-023)"
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        if (SHOW_ONLINE_ENRICHMENT_SETTINGS) {
+            // ==========================================
+            // SECTION 4: METADATA & OPEN CATALOG ENRICHMENT
+            // ==========================================
+            SettingsCard(
+                title = "METADATA & OPEN CATALOG ENRICHMENT",
+                subtitle = "Optional MusicBrainz integration (ADR-023)"
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Enable MusicBrainz Enrichment",
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                        color = colors.textPrimary
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Fills in missing release years, genre tags, and soundtrack metadata from the MusicBrainz open catalog. Operates strictly offline-first; local file tags always take precedence and are never overwritten.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.textSecondary
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Enable MusicBrainz Enrichment",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                            color = colors.textPrimary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Fills in missing release years, genre tags, and soundtrack metadata from the MusicBrainz open catalog. Operates strictly offline-first; local file tags always take precedence and are never overwritten.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.textSecondary
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(spacing.medium))
+
+                    Switch(
+                        checked = uiState.isOnlineEnrichmentEnabled,
+                        onCheckedChange = { viewModel.setOnlineEnrichmentEnabled(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = colors.backgroundRoot,
+                            checkedTrackColor = colors.primarySignal,
+                            uncheckedThumbColor = colors.textSecondary,
+                            uncheckedTrackColor = colors.surfaceContainer,
+                            uncheckedBorderColor = colors.borderStructural
+                        ),
+                        modifier = Modifier
+                            .touchTarget48()
+                            .semantics { contentDescription = "Toggle online metadata enrichment" }
                     )
                 }
 
-                Spacer(modifier = Modifier.width(spacing.medium))
+                Spacer(modifier = Modifier.height(spacing.medium))
 
-                Switch(
-                    checked = uiState.isOnlineEnrichmentEnabled,
-                    onCheckedChange = { viewModel.setOnlineEnrichmentEnabled(it) },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = colors.backgroundRoot,
-                        checkedTrackColor = colors.primarySignal,
-                        uncheckedThumbColor = colors.textSecondary,
-                        uncheckedTrackColor = colors.surfaceContainer,
-                        uncheckedBorderColor = colors.borderStructural
-                    ),
-                    modifier = Modifier
-                        .touchTarget48()
-                        .semantics { contentDescription = "Toggle online metadata enrichment" }
+                SettingsRow(
+                    label = "Network Etiquette",
+                    value = "1 req/sec rate-limited, local in-memory cache"
+                )
+                SettingsRow(
+                    label = "Offline Fallback",
+                    value = "Instant silent fallback, zero playback block",
+                    isHighlight = true
                 )
             }
 
-            Spacer(modifier = Modifier.height(spacing.medium))
-
-            SettingsRow(
-                label = "Network Etiquette",
-                value = "1 req/sec rate-limited, local in-memory cache"
-            )
-            SettingsRow(
-                label = "Offline Fallback",
-                value = "Instant silent fallback, zero playback block",
-                isHighlight = true
-            )
+            Spacer(modifier = Modifier.height(spacing.standard))
         }
-
-        Spacer(modifier = Modifier.height(spacing.standard))
 
         // ==========================================
         // SECTION 5: DATA PRIVACY, DIAGNOSTICS & ABOUT

@@ -76,6 +76,21 @@ class PlaybackViewModel(
         playbackPort.play()
     }
 
+    fun playNext(track: Track) {
+        playbackPort.playNext(listOf(track))
+    }
+
+    fun addToQueue(track: Track) {
+        if (playbackPort.queue.value.isEmpty()) {
+            playTrackList(listOf(track), 0)
+        } else {
+            playbackPort.appendToQueue(listOf(track))
+        }
+    }
+
+    fun moveQueueItem(fromIndex: Int, toIndex: Int) = playbackPort.moveQueueItem(fromIndex, toIndex)
+    fun removeQueueItem(index: Int) = playbackPort.removeQueueItem(index)
+
     fun shuffleAll() {
         viewModelScope.launch {
             val tracks = trackRepository.observeAllTracks().firstOrNull()

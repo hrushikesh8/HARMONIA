@@ -1,7 +1,11 @@
 package org.harmonia.player.presentation.playback
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,10 +21,21 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -33,10 +48,12 @@ import org.harmonia.player.domain.model.PlaybackState
 import org.harmonia.player.domain.model.Track
 import org.harmonia.player.presentation.components.HarmoniaArtwork
 import org.harmonia.player.presentation.personalization.FavoriteButton
+import kotlin.math.abs
 
 /**
  * Compact persistent mini-player docked above the bottom navigation bar.
  * Adheres to the Obsidian Acoustic Instrument design system (40dp artwork, 2dp progress, 48dp touch targets).
+ * Swipe left/right to skip tracks, swipe up to open Now Playing.
  */
 @Composable
 fun MiniPlayer(
@@ -47,7 +64,8 @@ fun MiniPlayer(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     isFavorite: Boolean = false,
-    onToggleFavorite: (() -> Unit)? = null
+    onToggleFavorite: (() -> Unit)? = null,
+    onPrevious: (() -> Unit)? = null
 ) {
     if (currentTrack == null && playbackState.currentTrackId == null) {
         return
@@ -70,13 +88,56 @@ fun MiniPlayer(
 
     val miniPlayerShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
 
+    val swipeThresholdPx = with(LocalDensity.current) { 72.dp.toPx() }
+    var dragX by remember { mutableFloatStateOf(0f) }
+    var dragY by remember { mutableFloatStateOf(0f) }
+    var isDragging by remember { mutableStateOf(false) }
+    val latestOnNext by rememberUpdatedState(onNext)
+    val latestOnPrevious by rememberUpdatedState(onPrevious)
+    val latestOnClick by rememberUpdatedState(onClick)
+    val contentOffsetX by animateFloatAsState(
+        targetValue = if (isDragging) dragX else 0f,
+        animationSpec = if (isDragging) snap() else spring(),
+        label = "miniPlayerSwipe"
+    )
+
     Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(miniPlayerShape)
             .background(colors.surfaceElevated)
             .hairlineBorder(color = colors.borderStructural, shape = miniPlayerShape, width = 1.dp)
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragStart = {
+                        isDragging = true
+                        dragX = 0f
+                        dragY = 0f
+                    },
+                    onDrag = { change, amount ->
+                        change.consume()
+                        dragX += amount.x
+                        dragY += amount.y
+                    },
+                    onDragEnd = {
+                        isDragging = false
+                        val horizontal = abs(dragX) > abs(dragY)
+                        when {
+                            horizontal && dragX <= -swipeThresholdPx -> latestOnNext()
+                            horizontal && dragX >= swipeThresholdPx -> latestOnPrevious?.invoke()
+                            !horizontal && dragY <= -swipeThresholdPx -> latestOnClick()
+                        }
+                    },
+                    onDragCancel = { isDragging = false }
+                )
+            }
             .clickable(onClick = onClick)
+            .semantics {
+                customActions = listOfNotNull(
+                    CustomAccessibilityAction("Next track") { onNext(); true },
+                    onPrevious?.let { previous -> CustomAccessibilityAction("Previous track") { previous(); true } }
+                )
+            }
     ) {
         // Track Progress Hairline Indicator (2dp)
         LinearProgressIndicator(
@@ -96,7 +157,7 @@ fun MiniPlayer(
         ) {
             // Track Art thumbnail (40dp) via sandboxed HarmoniaArtwork
             HarmoniaArtwork(
-                artworkHash = currentTrack?.artworkHash,
+                artworkHash = currentTrack?.artworkHash ?: currentTrack?.localFile?.fileHash,
                 size = 40.dp,
                 cornerRadius = 8.dp,
                 contentDescription = "Artwork for $title"
@@ -106,7 +167,12 @@ fun MiniPlayer(
 
             // Track metadata
             Column(
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .graphicsLayer {
+                        translationX = contentOffsetX
+                        alpha = 1f - (abs(contentOffsetX) / (swipeThresholdPx * 3)).coerceIn(0f, 0.6f)
+                    }
             ) {
                 Text(
                     text = title,
@@ -133,7 +199,21 @@ fun MiniPlayer(
                 )
             }
 
-            // Play/Pause button with Spotify Green accent
+            if (onPrevious != null) {
+                IconButton(
+                    onClick = onPrevious,
+                    modifier = Modifier.touchTarget48()
+                ) {
+                    Icon(
+                        imageVector = HarmoniaIcons.SkipPrevious,
+                        contentDescription = "Previous Track",
+                        tint = colors.textPrimary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+
+            // Play/Pause button with primary accent
             IconButton(
                 onClick = onPlayPause,
                 modifier = Modifier.touchTarget48()
