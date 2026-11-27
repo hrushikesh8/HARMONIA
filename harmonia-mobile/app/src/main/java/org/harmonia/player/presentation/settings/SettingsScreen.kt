@@ -1,5 +1,12 @@
 package org.harmonia.player.presentation.settings
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.shape.CircleShape
+import org.harmonia.player.domain.model.equalizer.EqualizerPersistenceCodec
+import org.harmonia.player.domain.model.equalizer.UserEqualizerPreset
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.heading
 import org.harmonia.player.domain.model.ThemeMode
@@ -278,7 +285,10 @@ fun SettingsScreen(
                     equalizer = uiState.equalizer,
                     onToggle = { viewModel.setEqualizerEnabled(it) },
                     onBandChange = { band, levelMb -> viewModel.setEqualizerBandLevel(band, levelMb) },
-                    onPresetChange = { presetIndex -> viewModel.useEqualizerPreset(presetIndex) }
+                    onPresetChange = { presetIndex -> viewModel.useEqualizerPreset(presetIndex) },
+                    onSavePreset = viewModel::saveEqualizerPreset,
+                    onApplyUserPreset = viewModel::applyUserEqualizerPreset,
+                    onDeleteUserPreset = viewModel::deleteUserEqualizerPreset
                 )
             }
         }
@@ -731,55 +741,39 @@ private fun settingsSwitchColors() = SwitchDefaults.colors(
     uncheckedBorderColor = HarmoniaThemeTokens.colors.borderStructural
 )
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun EqualizerSection(
     equalizer: EqualizerUiState,
     onToggle: (Boolean) -> Unit,
     onBandChange: (Short, Short) -> Unit,
-    onPresetChange: (Short) -> Unit
+    onPresetChange: (Short) -> Unit,
+    onSavePreset: (String) -> Unit = {},
+    onApplyUserPreset: (UserEqualizerPreset) -> Unit = {},
+    onDeleteUserPreset: (String) -> Unit = {}
 ) {
     val colors = HarmoniaThemeTokens.colors
     val spacing = HarmoniaThemeTokens.spacing
+    var showSaveDialog by remember { mutableStateOf(false) }
+    var presetToDelete by remember { mutableStateOf<UserEqualizerPreset?>(null) }
 
-    val (badgeBg, badgeTextColor, badgeLabel) = when (equalizer.status) {
-        EqualizerUiStatus.UNSUPPORTED -> Triple(colors.statusError.copy(alpha = 0.2f), colors.statusError, "UNSUPPORTED")
-        EqualizerUiStatus.CONTROL_LOST -> Triple(colors.statusWarning.copy(alpha = 0.2f), colors.statusWarning, "CONTROL PREEMPTED")
-        EqualizerUiStatus.ENABLED -> Triple(colors.primarySignal.copy(alpha = 0.2f), colors.primarySignal, "ACTIVE")
-        EqualizerUiStatus.DISABLED -> Triple(colors.surfaceContainer, colors.textSecondary, "DISABLED")
-        EqualizerUiStatus.UNAVAILABLE_NO_SESSION -> Triple(colors.surfaceContainer, colors.textSecondary, "STANDBY")
+    val statusText = when (equalizer.status) {
+        EqualizerUiStatus.UNSUPPORTED -> "This phone or audio output doesn't support the equalizer."
+        EqualizerUiStatus.CONTROL_LOST -> "Another app is controlling the sound right now."
+        EqualizerUiStatus.ENABLED -> "On"
+        EqualizerUiStatus.DISABLED -> "Off"
+        EqualizerUiStatus.UNAVAILABLE_NO_SESSION -> equalizer.statusMessage
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(spacing.medium)) {
-        // Master switch row
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "Equalizer",
-                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                        color = colors.textPrimary
-                    )
-                    Spacer(modifier = Modifier.width(spacing.small))
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(badgeBg)
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = badgeLabel,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = badgeTextColor
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(2.dp))
+                Text(text = "Equalizer", style = MaterialTheme.typography.bodyLarge, color = colors.textPrimary)
                 Text(
-                    text = equalizer.statusMessage,
+                    text = statusText,
                     style = MaterialTheme.typography.bodySmall,
                     color = when (equalizer.status) {
                         EqualizerUiStatus.UNSUPPORTED -> colors.statusError
@@ -789,93 +783,63 @@ internal fun EqualizerSection(
                     }
                 )
             }
-
             Spacer(modifier = Modifier.width(spacing.medium))
-
             Switch(
                 checked = equalizer.isUserEnabled,
                 onCheckedChange = onToggle,
                 enabled = equalizer.status != EqualizerUiStatus.UNSUPPORTED,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = colors.backgroundRoot,
-                    checkedTrackColor = colors.primarySignal,
-                    uncheckedThumbColor = colors.textSecondary,
-                    uncheckedTrackColor = colors.surfaceContainer,
-                    uncheckedBorderColor = colors.borderStructural,
-                    disabledCheckedThumbColor = colors.backgroundRoot.copy(alpha = 0.5f),
-                    disabledCheckedTrackColor = colors.primarySignal.copy(alpha = 0.5f),
-                    disabledUncheckedThumbColor = colors.textDisabled,
-                    disabledUncheckedTrackColor = colors.surfaceContainer.copy(alpha = 0.5f)
-                ),
-                modifier = Modifier
-                    .touchTarget48()
-                    .semantics {
-                        contentDescription = "Toggle Audio Equalizer"
-                    }
+                colors = settingsSwitchColors(),
+                modifier = Modifier.semantics { contentDescription = "Toggle Audio Equalizer" }
             )
         }
 
-        // Presets selector
-        if (equalizer.presets.isNotEmpty()) {
-            Column {
-                Text(
-                    text = "Presets",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = colors.textSecondary
-                )
-                Spacer(modifier = Modifier.height(spacing.small))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(spacing.small)
-                ) {
+        val canEdit = equalizer.isInteractive && equalizer.bands.isNotEmpty()
+        val hasPresetRow = equalizer.presets.isNotEmpty() || equalizer.userPresets.isNotEmpty() || canEdit
+        if (hasPresetRow && equalizer.status != EqualizerUiStatus.UNSUPPORTED) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(spacing.small)
+            ) {
+                if (canEdit) {
+                    PresetPill(
+                        label = "+ Save",
+                        selected = false,
+                        mine = false,
+                        enabled = true,
+                        onClick = { showSaveDialog = true },
+                        description = "Save current sound as a preset"
+                    )
+                }
+                equalizer.userPresets.forEach { preset ->
+                    PresetPill(
+                        label = preset.name,
+                        selected = false,
+                        mine = true,
+                        enabled = equalizer.isUserEnabled,
+                        onClick = { onApplyUserPreset(preset) },
+                        onLongClick = { presetToDelete = preset },
+                        description = "Your equalizer preset ${preset.name}. Long-press to delete."
+                    )
+                }
+                if (!equalizer.isOfflineLayout) {
                     equalizer.presets.forEach { preset ->
-                        val isSelected = preset.index == equalizer.currentPresetIndex
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(
-                                    if (isSelected) colors.primarySignal.copy(alpha = 0.25f)
-                                    else colors.surfaceContainer
-                                )
-                                .border(
-                                    width = 1.dp,
-                                    color = if (isSelected) colors.primarySignal else colors.borderStructural,
-                                    shape = RoundedCornerShape(8.dp)
-                                )
-                                .clickable(enabled = equalizer.isInteractive) {
-                                    onPresetChange(preset.index)
-                                }
-                                .padding(horizontal = spacing.medium, vertical = spacing.small)
-                                .touchTarget48()
-                                .semantics {
-                                    role = Role.Button
-                                    contentDescription = "Equalizer preset ${preset.name}"
-                                }
-                        ) {
-                            Text(
-                                text = preset.name,
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                ),
-                                color = if (isSelected) colors.primarySignal else colors.textPrimary,
-                                modifier = Modifier.align(Alignment.Center)
-                            )
-                        }
+                        PresetPill(
+                            label = preset.name,
+                            selected = preset.index == equalizer.currentPresetIndex,
+                            mine = false,
+                            enabled = equalizer.isInteractive,
+                            onClick = { onPresetChange(preset.index) },
+                            description = "Equalizer preset ${preset.name}"
+                        )
                     }
                 }
             }
         }
 
-        // Frequency bands
         if (equalizer.bands.isNotEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(spacing.small)) {
-                Text(
-                    text = "Bands",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = colors.textSecondary
-                )
+            Column(verticalArrangement = Arrangement.spacedBy(spacing.xSmall)) {
                 equalizer.bands.forEach { band ->
                     EqualizerBandSlider(
                         band = band,
@@ -885,22 +849,115 @@ internal fun EqualizerSection(
                     )
                 }
             }
-        } else if (equalizer.status == EqualizerUiStatus.UNAVAILABLE_NO_SESSION) {
-            Text(
-                text = "Play a song to see the equalizer bands and presets.",
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.textSecondary
-            )
-        } else if (equalizer.status == EqualizerUiStatus.UNSUPPORTED) {
-            Text(
-                text = "This phone or audio output doesn't support the equalizer.",
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.textSecondary
-            )
+            if (!equalizer.isUserEnabled) {
+                Text(
+                    text = "Turn the equalizer on to adjust the sound.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.textSecondary
+                )
+            }
         }
+    }
+
+    if (showSaveDialog) {
+        SavePresetDialog(
+            onSave = { name ->
+                onSavePreset(name)
+                showSaveDialog = false
+            },
+            onDismiss = { showSaveDialog = false }
+        )
+    }
+
+    presetToDelete?.let { preset ->
+        AlertDialog(
+            onDismissRequest = { presetToDelete = null },
+            title = { Text("Delete \"${preset.name}\"?", color = colors.textPrimary) },
+            text = { Text("This removes the preset. Your current sound stays as it is.", color = colors.textSecondary) },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDeleteUserPreset(preset.name)
+                    presetToDelete = null
+                }) { Text("Delete", color = colors.statusError) }
+            },
+            dismissButton = {
+                TextButton(onClick = { presetToDelete = null }) { Text("Cancel", color = colors.textSecondary) }
+            },
+            containerColor = colors.surfaceElevated
+        )
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun PresetPill(
+    label: String,
+    selected: Boolean,
+    mine: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    description: String,
+    onLongClick: (() -> Unit)? = null
+) {
+    val colors = HarmoniaThemeTokens.colors
+    val background = when {
+        selected -> colors.primarySignal
+        mine -> colors.primarySignal.copy(alpha = if (colors.isDark) 0.18f else 0.12f)
+        else -> colors.surfaceContainer
+    }
+    val textColor = when {
+        selected && colors.isDark -> colors.backgroundRoot
+        selected -> colors.surfaceElevated
+        mine -> colors.primarySignal
+        !enabled -> colors.textDisabled
+        else -> colors.textPrimary
+    }
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelMedium,
+        color = textColor,
+        maxLines = 1,
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(background)
+            .combinedClickable(enabled = enabled || onLongClick != null, onClick = { if (enabled) onClick() }, onLongClick = onLongClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .semantics {
+                role = Role.Button
+                contentDescription = description
+            }
+    )
+}
+
+@Composable
+private fun SavePresetDialog(onSave: (String) -> Unit, onDismiss: () -> Unit) {
+    val colors = HarmoniaThemeTokens.colors
+    var name by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Save preset", color = colors.textPrimary) },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it.take(EqualizerPersistenceCodec.MAX_PRESET_NAME_LENGTH) },
+                singleLine = true,
+                placeholder = { Text("Late night", color = colors.textSecondary) },
+                modifier = Modifier.semantics { contentDescription = "Preset name" }
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(name) }, enabled = name.isNotBlank()) {
+                Text("Save", color = if (name.isNotBlank()) colors.primarySignal else colors.textDisabled)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel", color = colors.textSecondary) }
+        },
+        containerColor = colors.surfaceElevated
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun EqualizerBandSlider(
     band: EqualizerBand,
@@ -909,49 +966,59 @@ private fun EqualizerBandSlider(
     onLevelChanged: (Short) -> Unit
 ) {
     val colors = HarmoniaThemeTokens.colors
-    val spacing = HarmoniaThemeTokens.spacing
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = spacing.xSmall)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = formatFrequency(band.centerFreqHz),
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                color = colors.textPrimary
-            )
-            Text(
-                text = formatDb(band.currentLevelMb),
-                style = MaterialTheme.typography.bodySmall,
-                color = if (isInteractive) colors.primarySignal else colors.textSecondary
-            )
-        }
+    val sliderColors = SliderDefaults.colors(
+        thumbColor = colors.textPrimary,
+        activeTrackColor = colors.primarySignal,
+        inactiveTrackColor = colors.surfaceContainer,
+        disabledThumbColor = colors.textDisabled,
+        disabledActiveTrackColor = colors.textDisabled,
+        disabledInactiveTrackColor = colors.surfaceContainer
+    )
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = formatFrequency(band.centerFreqHz),
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.textSecondary,
+            modifier = Modifier.width(64.dp)
+        )
         Slider(
             value = band.currentLevelMb.toFloat(),
             onValueChange = { onLevelChanged(it.toInt().toShort()) },
             valueRange = range.first.toFloat()..range.last.toFloat(),
             enabled = isInteractive,
-            colors = SliderDefaults.colors(
-                thumbColor = colors.primarySignal,
-                activeTrackColor = colors.primarySignal,
-                inactiveTrackColor = colors.surfaceContainer,
-                disabledThumbColor = colors.textDisabled,
-                disabledActiveTrackColor = colors.surfaceContainer,
-                disabledInactiveTrackColor = colors.surfaceElevated
-            ),
+            colors = sliderColors,
+            thumb = {
+                Box(
+                    modifier = Modifier
+                        .size(16.dp)
+                        .clip(CircleShape)
+                        .background(if (isInteractive) colors.textPrimary else colors.textDisabled)
+                )
+            },
+            track = { state ->
+                SliderDefaults.Track(
+                    sliderState = state,
+                    colors = sliderColors,
+                    enabled = isInteractive,
+                    modifier = Modifier.height(4.dp),
+                    thumbTrackGapSize = 0.dp,
+                    drawStopIndicator = null
+                )
+            },
             modifier = Modifier
-                .fillMaxWidth()
-                .touchTarget48()
+                .weight(1f)
+                .height(40.dp)
                 .semantics {
                     contentDescription = "Equalizer band ${formatFrequency(band.centerFreqHz)}"
                     stateDescription = formatDb(band.currentLevelMb)
                 }
+        )
+        Text(
+            text = formatDb(band.currentLevelMb),
+            style = MaterialTheme.typography.bodySmall,
+            color = if (isInteractive) colors.primarySignal else colors.textSecondary,
+            textAlign = TextAlign.End,
+            modifier = Modifier.width(64.dp)
         )
     }
 }

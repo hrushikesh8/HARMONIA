@@ -1,5 +1,6 @@
 package org.harmonia.player.service.equalizer
 
+import org.harmonia.player.domain.model.equalizer.EqualizerLayout
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -92,7 +93,9 @@ class DefaultAudioEffectManager(
                 activeEffect = effect
 
                 val bandRange = queryBandLevelRange(effect)
-                val bands = queryBands(effect, bandRange)
+                val reportedBands = queryBands(effect, bandRange)
+                rememberLayout(reportedBands, bandRange)
+                val bands = applySavedLevels(effect, reportedBands, bandRange)
                 val presets = queryPresets(effect)
 
                 // Wire control status listener guarded by instance generation
@@ -255,6 +258,7 @@ class DefaultAudioEffectManager(
                 effect.setBandLevel(band, levelMb)
                 val (bandRange, _, presets) = extractMetadata(currentState) ?: return@withLock false
                 val updatedBands = queryBands(effect, bandRange)
+                saveLevels(updatedBands)
 
                 if (currentState is EqualizerState.EnabledWithControl) {
                     _state.value = EqualizerState.EnabledWithControl(
@@ -293,6 +297,7 @@ class DefaultAudioEffectManager(
                 effect.usePreset(presetIndex)
                 val (bandRange, _, presets) = extractMetadata(currentState) ?: return@withLock false
                 val updatedBands = queryBands(effect, bandRange)
+                saveLevels(updatedBands)
 
                 if (currentState is EqualizerState.EnabledWithControl) {
                     _state.value = EqualizerState.EnabledWithControl(
@@ -353,6 +358,37 @@ class DefaultAudioEffectManager(
         val range = effect.bandLevelRange
         require(range.size >= 2) { "bandLevelRange must contain at least 2 elements [min, max]" }
         return range[0].toInt()..range[1].toInt()
+    }
+
+    /** Saves the real band layout so the bands can be shown and adjusted while nothing plays. */
+    private fun rememberLayout(bands: List<EqualizerBand>, bandRange: IntRange) {
+        if (bands.isEmpty()) return
+        runCatching {
+            userIntentSource.setLastKnownLayout(
+                EqualizerLayout(bands.map { it.centerFreqHz }, bandRange.first.toShort(), bandRange.last.toShort())
+            )
+        }
+    }
+
+    /**
+     * Re-applies your saved levels to bands with a matching centre frequency, then re-reads the
+     * bands. Unknown frequencies are left at the device's own level.
+     */
+    private fun applySavedLevels(effect: PlatformEqualizer, bands: List<EqualizerBand>, bandRange: IntRange): List<EqualizerBand> {
+        val saved = runCatching { userIntentSource.getCustomBandLevels() }.getOrDefault(emptyMap())
+        if (saved.isEmpty()) return bands
+        var applied = false
+        bands.forEach { band ->
+            val level = saved[band.centerFreqHz] ?: return@forEach
+            val clamped = level.coerceIn(bandRange.first.toShort(), bandRange.last.toShort())
+            runCatching { effect.setBandLevel(band.index, clamped) }.onSuccess { applied = true }
+        }
+        return if (applied) queryBands(effect, bandRange) else bands
+    }
+
+    private fun saveLevels(bands: List<EqualizerBand>) {
+        if (bands.isEmpty()) return
+        runCatching { userIntentSource.setCustomBandLevels(bands.associate { it.centerFreqHz to it.currentLevelMb }) }
     }
 
     private fun queryBands(effect: PlatformEqualizer, bandRange: IntRange): List<EqualizerBand> {

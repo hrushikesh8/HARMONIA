@@ -28,7 +28,7 @@ Status: `Done` · `In progress` · `Planned`
 |---|------|------|--------|
 | 1.1 | Soft Lavender accent, Spotify-style dark neutrals, properly designed light theme | UI | Done |
 | 1.2 | Theme choice: Follow system / Dark / Light | UX, BE | Done |
-| 1.3 | Replace developer jargon in screen copy with plain language | UI, UX | Done (Profile activity list finishes in 3.2) |
+| 1.3 | Replace developer jargon in screen copy with plain language | UI, UX | Done |
 | 1.4 | New font family: Figtree (bundled), no more monospace labels | UI | Done |
 | 1.5 | Move to Compose Navigation, Apple-style bottom tabs, back keeps scroll position | UX, BE | Done |
 | 1.6 | App icon and splash refreshed to the lavender identity | UI | Done |
@@ -51,8 +51,8 @@ Status: `Done` · `In progress` · `Planned`
 | # | Task | Area | Status |
 |---|------|------|--------|
 | 3.1 | Settings regrouped into clear sections, plain language | UI, UX | Done |
-| 3.2 | Profile becomes "Your listening": readable stats, rated songs list | UI, UX, BE | Planned |
-| 3.3 | Equalizer works without music playing; save your own presets | UI, UX, BE | Planned |
+| 3.2 | Profile becomes "Your listening": readable stats, rated songs list | UI, UX, BE | Done |
+| 3.3 | Equalizer works without music playing; save your own presets | UI, UX, BE | Done |
 | 3.4 | Car Mode: progress/seek, favorite, landscape | UI, UX | Planned |
 | 3.5 | Format filter chips generated from your library (OGG, Opus, ALAC...) | UI, BE | Planned |
 | 3.6 | Album grid adapts to screen width / landscape / tablets | UI | Planned |
@@ -261,7 +261,41 @@ Status: `Done` · `In progress` · `Planned`
   "Folder you added" instead of "Internal MediaStore" / "SAF Folder Tree".
 - **Why:** The old screen was five tall cards with all-caps titles and engineering terms; people
   scan settings by section and want short labels with a one-line explanation.
-- **Still to do:** the equalizer block's inner styling (task 3.3).
+
+### 3.2 Your listening (Profile)
+- **What:** Rebuilt `presentation/profile/ProfileHubScreen.kt` as "Your listening", like Apple
+  Music Replay: stat tiles for minutes listened and plays in the last 30 days, songs and favorites;
+  **Top artists** (tap to open the artist), **Top songs**, **Recently played** with real song names
+  and "45 min ago" style times (the old dialog showed raw track IDs), **Your ratings** as a real
+  list with stars (was just a count), and a "More" list for Favorites, Car Mode, Settings, Help
+  and About. Removed the placeholder "Harmonia Listener" identity and the jargon-heavy dialogs.
+- **Backend:** `ListeningSummary.kt` builds all of this from data already on the phone (the
+  play-count query, recent listening events, ratings); minutes are approximate (song length x plays).
+  Unit tested.
+- **Why:** The listening history was being recorded but shown as a debug log. This turns it into
+  something people actually want to look at.
+
+### 3.3 Equalizer
+- **What:** Your band levels are now saved (keyed by band frequency) and re-applied every time
+  playback starts; before, any adjustment was lost when the audio session restarted. The phone's
+  real band layout is remembered the first time music plays, so the bands can be adjusted even
+  while nothing is playing (changes apply on the next play). You can **save your own presets**
+  ("+ Save", name it, tap to apply, long-press to delete), shown before the phone's presets.
+  Restyled the block: plain "Equalizer / On / Off" with a switch, pill presets, slim sliders with
+  frequency and dB on one line; no all-caps status badge.
+- **Code:** `EqualizerPersistence.kt` (layout, levels, presets + plain-text codec),
+  new default methods on `EqualizerUserIntentSource` (stored in
+  `SharedPreferencesEqualizerUserIntentSource`), `DefaultAudioEffectManager` records the layout,
+  re-applies saved levels on attach and saves levels after band/preset changes,
+  `SettingsViewModel` adds offline editing and user presets. Unit tested at all three layers.
+- **Note for Hrushikesh (design change):** the intent store previously documented that *only* the
+  master switch is persisted and "custom frequency profiles are explicitly excluded". This task
+  needed that to change. To keep it safe: levels are matched by centre frequency (a different
+  output device with other bands just ignores them), clamped to the device's range, and the engine
+  still never invents a band layout — it only shows one the phone actually reported. Easy to revert
+  if you prefer the old rule.
+- **Why:** An equalizer that forgets your settings, and can only be touched while music plays,
+  isn't really usable; saved presets are standard in every music player.
 
 ## Decisions and ideas checked
 

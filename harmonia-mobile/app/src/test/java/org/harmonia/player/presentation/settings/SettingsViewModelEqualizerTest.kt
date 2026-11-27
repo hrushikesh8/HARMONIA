@@ -388,6 +388,68 @@ class SettingsViewModelEqualizerTest {
 
         collectJob.cancel()
     }
+
+    @Test
+    fun withNothingPlayingTheRememberedBandsCanBeEditedAndAreSaved() = testScope.runTest {
+        fakeIntentSource.setLastKnownLayout(
+            org.harmonia.player.domain.model.equalizer.EqualizerLayout(listOf(60, 230, 910), -1500, 1500)
+        )
+        fakeIntentSource.setEqualizerEnabled(true)
+        val vm = SettingsViewModel(
+            trackRepository = fakeTrackRepo,
+            storageSourceRepository = fakeStorageRepo,
+            equalizerUserIntentSource = fakeIntentSource,
+            audioEqualizerCoordinator = fakeCoordinator,
+            ioDispatcher = testDispatcher
+        )
+        val collectJob = launch { vm.uiState.collect {} }
+        advanceUntilIdle()
+
+        val eq = vm.uiState.value.equalizer
+        assertTrue(eq.isOfflineLayout)
+        assertTrue(eq.isInteractive)
+        assertEquals(listOf(60, 230, 910), eq.bands.map { it.centerFreqHz })
+
+        vm.setEqualizerBandLevel(1, 500)
+        advanceUntilIdle()
+        assertEquals(500.toShort(), fakeIntentSource.getCustomBandLevels()[230])
+        assertEquals(500.toShort(), vm.uiState.value.equalizer.bands[1].currentLevelMb)
+        assertEquals(null, fakeCoordinator.lastRequestedBand)
+
+        collectJob.cancel()
+    }
+
+    @Test
+    fun userPresetsCanBeSavedAppliedAndDeleted() = testScope.runTest {
+        val collectJob = launch { viewModel.uiState.collect {} }
+        fakeCoordinator.emitState(
+            EqualizerState.EnabledWithControl(
+                bandLevelRange = -1500..1500,
+                bands = sampleBands,
+                presets = samplePresets,
+                currentPresetIndex = 0
+            )
+        )
+        advanceUntilIdle()
+
+        viewModel.saveEqualizerPreset("Late night")
+        advanceUntilIdle()
+        val saved = viewModel.uiState.value.equalizer.userPresets.single()
+        assertEquals("Late night", saved.name)
+        assertEquals(300.toShort(), saved.levelsByFreqHz[14000])
+        assertEquals(1, fakeIntentSource.getUserPresets().size)
+
+        viewModel.applyUserEqualizerPreset(saved.copy(levelsByFreqHz = mapOf(910 to 700.toShort())))
+        advanceUntilIdle()
+        assertEquals(2.toShort(), fakeCoordinator.lastRequestedBand)
+        assertEquals(700.toShort(), fakeCoordinator.lastRequestedBandLevel)
+
+        viewModel.deleteUserEqualizerPreset("Late night")
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.equalizer.userPresets.isEmpty())
+
+        collectJob.cancel()
+    }
 }
 
 private class FakeEqualizerUserIntentSource(initialEnabled: Boolean = false) : EqualizerUserIntentSource {
@@ -400,6 +462,16 @@ private class FakeEqualizerUserIntentSource(initialEnabled: Boolean = false) : E
     }
 
     override fun observeEqualizerEnabled(): Flow<Boolean> = flow
+
+    private var layout: org.harmonia.player.domain.model.equalizer.EqualizerLayout? = null
+    private var levels: Map<Int, Short> = emptyMap()
+    private var presets: List<org.harmonia.player.domain.model.equalizer.UserEqualizerPreset> = emptyList()
+    override fun getLastKnownLayout() = layout
+    override fun setLastKnownLayout(layout: org.harmonia.player.domain.model.equalizer.EqualizerLayout) { this.layout = layout }
+    override fun getCustomBandLevels(): Map<Int, Short> = levels
+    override fun setCustomBandLevels(levels: Map<Int, Short>) { this.levels = levels }
+    override fun getUserPresets() = presets
+    override fun setUserPresets(presets: List<org.harmonia.player.domain.model.equalizer.UserEqualizerPreset>) { this.presets = presets }
 }
 
 private class FakeAudioEqualizerCoordinator : AudioEqualizerCoordinator {

@@ -22,4 +22,15 @@ class InMemoryEqualizerUserIntentSource(
     }
 
     override fun observeEqualizerEnabled(): kotlinx.coroutines.flow.Flow<Boolean> = flow
+
+    private var layout: org.harmonia.player.domain.model.equalizer.EqualizerLayout? = null
+    private var levels: Map<Int, Short> = emptyMap()
+    private var presets: List<org.harmonia.player.domain.model.equalizer.UserEqualizerPreset> = emptyList()
+
+    override fun getLastKnownLayout() = layout
+    override fun setLastKnownLayout(layout: org.harmonia.player.domain.model.equalizer.EqualizerLayout) { this.layout = layout }
+    override fun getCustomBandLevels(): Map<Int, Short> = levels
+    override fun setCustomBandLevels(levels: Map<Int, Short>) { this.levels = levels }
+    override fun getUserPresets() = presets
+    override fun setUserPresets(presets: List<org.harmonia.player.domain.model.equalizer.UserEqualizerPreset>) { this.presets = presets }
 }

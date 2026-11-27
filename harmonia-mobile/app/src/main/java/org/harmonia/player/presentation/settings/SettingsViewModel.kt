@@ -31,6 +31,9 @@ import org.harmonia.player.domain.model.equalizer.EqualizerFailureReason
 import org.harmonia.player.domain.model.equalizer.EqualizerPreset
 import org.harmonia.player.domain.model.equalizer.EqualizerState
 import org.harmonia.player.domain.model.equalizer.EqualizerUserIntentSource
+import org.harmonia.player.domain.model.equalizer.EqualizerLayout
+import org.harmonia.player.domain.model.equalizer.EqualizerPersistenceCodec
+import org.harmonia.player.domain.model.equalizer.UserEqualizerPreset
 import org.harmonia.player.domain.model.audio.SleepTimerMode
 import org.harmonia.player.domain.model.audio.SleepTimerPreset
 import org.harmonia.player.domain.model.audio.SleepTimerState
@@ -52,7 +55,11 @@ data class EqualizerUiState(
     val bands: List<EqualizerBand> = emptyList(),
     val presets: List<EqualizerPreset> = emptyList(),
     val currentPresetIndex: Short = -1,
-    val isInteractive: Boolean = false
+    val isInteractive: Boolean = false,
+    /** Presets you saved yourself. */
+    val userPresets: List<UserEqualizerPreset> = emptyList(),
+    /** True when the bands shown are the remembered layout (nothing playing); edits apply on next play. */
+    val isOfflineLayout: Boolean = false
 )
 
 data class StorageSourceItemUiState(
@@ -152,11 +159,23 @@ class SettingsViewModel(
             coordinatorInstance?.state ?: MutableStateFlow(EqualizerState.NoSession())
         }
 
+    // Your saved levels, presets and the remembered band layout (see EqualizerUserIntentSource).
+    private val _customLevels = MutableStateFlow(runCatching { intentSource.getCustomBandLevels() }.getOrDefault(emptyMap()))
+    private val _userPresets = MutableStateFlow(runCatching { intentSource.getUserPresets() }.getOrDefault(emptyList()))
+    private val _layout = MutableStateFlow(runCatching { intentSource.getLastKnownLayout() }.getOrNull())
+
     private val equalizerUiStateFlow: Flow<EqualizerUiState> = combine(
         intentSource.observeEqualizerEnabled(),
-        equalizerStateFlow
-    ) { isUserEnabled, eqState ->
-        when (eqState) {
+        equalizerStateFlow,
+        _customLevels,
+        _userPresets,
+        _layout
+    ) { isUserEnabled, eqState, customLevels, userPresets, layout ->
+        if (eqState !is EqualizerState.NoSession) {
+            // A live session may have just reported (and saved) the layout and levels.
+            _layout.value = runCatching { intentSource.getLastKnownLayout() }.getOrNull() ?: _layout.value
+        }
+        val liveState = when (eqState) {
             is EqualizerState.NoSession -> {
                 val failure = eqState.failureReason
                 val (status, msg) = when (failure) {
@@ -212,6 +231,22 @@ class SettingsViewModel(
                     isInteractive = true
                 )
             }
+        }
+        val offline = eqState is EqualizerState.NoSession && eqState.failureReason == null
+        when {
+            offline && layout != null -> liveState.copy(
+                statusMessage = if (isUserEnabled) "Changes apply when music plays" else "Off",
+                bandLevelRange = layout.minLevelMb.toInt()..layout.maxLevelMb.toInt(),
+                bands = layoutBands(layout, customLevels),
+                isInteractive = isUserEnabled,
+                isOfflineLayout = true,
+                userPresets = userPresets
+            )
+            offline -> liveState.copy(
+                statusMessage = "Play a song once to set up the equalizer",
+                userPresets = userPresets
+            )
+            else -> liveState.copy(userPresets = userPresets)
         }
     }
 
@@ -457,9 +492,57 @@ class SettingsViewModel(
         } else {
             levelMb
         }
+        if (currentEq.isOfflineLayout) {
+            // Nothing playing: save the level; it is applied when playback starts.
+            val freq = currentEq.bands.firstOrNull { it.index == band }?.centerFreqHz ?: return
+            updateCustomLevels(_customLevels.value + (freq to clampedLevel))
+            return
+        }
         viewModelScope.launch {
             equalizerCoordinatorFlow.value?.setBandLevel(band, clampedLevel)
         }
+    }
+
+    /** Saves the current band levels as a preset called [name] (replacing one with the same name). */
+    fun saveEqualizerPreset(name: String) {
+        val clean = EqualizerPersistenceCodec.cleanPresetName(name)
+        val bands = uiState.value.equalizer.bands
+        if (clean.isEmpty() || bands.isEmpty()) return
+        val preset = UserEqualizerPreset(clean, bands.associate { it.centerFreqHz to it.currentLevelMb })
+        updateUserPresets(_userPresets.value.filterNot { it.name.equals(clean, ignoreCase = true) } + preset)
+    }
+
+    fun applyUserEqualizerPreset(preset: UserEqualizerPreset) {
+        val currentEq = uiState.value.equalizer
+        if (currentEq.isOfflineLayout || currentEq.bands.isEmpty()) {
+            updateCustomLevels(_customLevels.value + preset.levelsByFreqHz)
+            return
+        }
+        viewModelScope.launch {
+            val coordinator = equalizerCoordinatorFlow.value ?: return@launch
+            currentEq.bands.forEach { band ->
+                val level = preset.levelsByFreqHz[band.centerFreqHz] ?: return@forEach
+                coordinator.setBandLevel(
+                    band.index,
+                    level.coerceIn(currentEq.bandLevelRange.first.toShort(), currentEq.bandLevelRange.last.toShort())
+                )
+            }
+            _customLevels.value = runCatching { intentSource.getCustomBandLevels() }.getOrDefault(_customLevels.value)
+        }
+    }
+
+    fun deleteUserEqualizerPreset(name: String) {
+        updateUserPresets(_userPresets.value.filterNot { it.name == name })
+    }
+
+    private fun updateCustomLevels(levels: Map<Int, Short>) {
+        _customLevels.value = levels
+        runCatching { intentSource.setCustomBandLevels(levels) }
+    }
+
+    private fun updateUserPresets(presets: List<UserEqualizerPreset>) {
+        _userPresets.value = presets
+        runCatching { intentSource.setUserPresets(presets) }
     }
 
     fun useEqualizerPreset(presetIndex: Short) {
@@ -610,3 +693,15 @@ class SettingsViewModel(
         _scanErrorMessage.value = null
     }
 }
+
+/** Bands for the remembered layout, at your saved levels (0 dB where none is saved). */
+internal fun layoutBands(layout: EqualizerLayout, levels: Map<Int, Short>): List<EqualizerBand> =
+    layout.centerFreqsHz.mapIndexed { index, freq ->
+        EqualizerBand(
+            index = index.toShort(),
+            centerFreqHz = freq,
+            currentLevelMb = (levels[freq] ?: 0).toShort().coerceIn(layout.minLevelMb, layout.maxLevelMb),
+            minLevelMb = layout.minLevelMb,
+            maxLevelMb = layout.maxLevelMb
+        )
+    }
