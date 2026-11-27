@@ -1,5 +1,6 @@
 package org.harmonia.player
 
+import androidx.compose.ui.semantics.SemanticsActions
 import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -300,7 +301,7 @@ class M3EndToEndIntegrationTest {
         // Open playlist detail
         composeTestRule.onNodeWithText("E2E Ambient Deluxe").performClick()
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("This playlist has no tracks yet").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("This playlist is empty").fetchSemanticsNodes().isNotEmpty()
         }
 
         // Add tracks
@@ -313,11 +314,15 @@ class M3EndToEndIntegrationTest {
         composeTestRule.onNodeWithText("Add (2)").performClick()
 
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("2 tracks", substring = true).fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("2 songs", substring = true).fetchSemanticsNodes().isNotEmpty()
         }
 
         // Reorder: Move first track down
-        composeTestRule.onAllNodesWithContentDescription("Move track down").onFirst().performClick()
+        val firstRow = composeTestRule.onAllNodesWithContentDescription("Drag to reorder", substring = true)
+            .onFirst().fetchSemanticsNode()
+        composeTestRule.runOnUiThread {
+            firstRow.config[SemanticsActions.CustomActions].first { action -> action.label == "Move down" }.action()
+        }
 
         // Verify Room persistence: playlist items are swapped
         val allPlaylists = runBlocking { db.playlistDao().observeAllPlaylists().first() }

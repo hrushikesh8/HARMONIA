@@ -1,5 +1,7 @@
 package org.harmonia.player.presentation
 
+import org.harmonia.player.presentation.playlists.collageArtwork
+import org.harmonia.player.presentation.playlists.playlistSummary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -230,6 +232,38 @@ class PlaylistViewModelTest {
         assertEquals(track1.id, items[0].trackId)
         assertEquals(track2.id, items[1].trackId)
         assertEquals(track3.id, items[2].trackId)
+    }
+
+    @Test
+    fun `PlaylistDetailViewModel moveTrack drags a song across several positions`() = runTest(testDispatcher) {
+        val playlist = playlistRepo.createPlaylist("Drag Test", null)
+        playlistRepo.addTracksToPlaylist(playlist.id, listOf(track1.id, track2.id, track3.id))
+        val detailViewModel = PlaylistDetailViewModel(playlist.id, playlistRepo, trackRepo)
+        advanceUntilIdle()
+
+        detailViewModel.moveTrack(0, 2)
+        advanceUntilIdle()
+        assertEquals(listOf(track2.id, track3.id, track1.id), detailViewModel.uiState.value.items.map { it.trackId })
+
+        // Out-of-range moves are ignored
+        detailViewModel.moveTrack(0, 7)
+        advanceUntilIdle()
+        assertEquals(listOf(track2.id, track3.id, track1.id), detailViewModel.uiState.value.items.map { it.trackId })
+    }
+
+    @Test
+    fun `playlist cover uses a 2x2 collage only with four different covers`() {
+        fun item(id: String, art: String?) = org.harmonia.player.domain.model.PlaylistItem(
+            id = id, playlistId = "p", trackId = id, position = 0,
+            track = Track(id = id, title = id, durationSec = 1.0, artworkHash = art)
+        )
+        val four = listOf(item("a", "1"), item("b", "2"), item("c", "2"), item("d", "3"), item("e", "4"))
+        assertEquals(listOf("1", "2", "3", "4"), collageArtwork(null, four))
+        assertEquals(listOf("1"), collageArtwork(null, four.take(3)))
+        assertEquals(listOf("own"), collageArtwork("own", four))
+        assertEquals("2 songs, 6 min", playlistSummary(2, 390.0))
+        assertEquals("3 songs, 57 sec", playlistSummary(3, 57.0))
+        assertEquals("1 song", playlistSummary(1, 0.0))
     }
 
     @Test

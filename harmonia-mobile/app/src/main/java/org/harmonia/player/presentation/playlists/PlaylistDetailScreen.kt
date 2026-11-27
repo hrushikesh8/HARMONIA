@@ -1,5 +1,22 @@
 package org.harmonia.player.presentation.playlists
 
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.zIndex
+import org.harmonia.player.presentation.components.TrackMenuButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -65,6 +82,11 @@ import org.harmonia.player.presentation.components.HarmoniaArtwork
 import org.harmonia.player.presentation.util.TrackDisplayUtils
 import java.util.Locale
 
+/**
+ * Playlist page (Apple Music layout): artwork collage, name, Play / Shuffle, then the songs.
+ * Drag the handle to reorder (committed once on release), swipe a song away to remove it.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlaylistDetailScreen(
     playlistId: String,
@@ -89,249 +111,316 @@ fun PlaylistDetailScreen(
 
     val playlist = uiState.playlist
     val items = uiState.items
-    val heroArtworkHash = playlist?.artworkHash
-        ?: items.firstOrNull { it.track?.artworkHash != null }?.track?.artworkHash
-
     val validTracks = remember(items) { items.mapNotNull { it.track } }
-    val totalSeconds = remember(items) {
-        items.mapNotNull { it.track?.durationSec }.sum()
+    val totalSeconds = remember(items) { items.mapNotNull { it.track?.durationSec }.sum() }
+    val collage = remember(items, playlist?.artworkHash) { collageArtwork(playlist?.artworkHash, items) }
+
+    // Local order while dragging; reset whenever the saved order changes.
+    var workingItems by remember(items) { mutableStateOf(items) }
+    var draggingId by remember { mutableStateOf<String?>(null) }
+    var dragStartIndex by remember { mutableIntStateOf(-1) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    val listState = rememberLazyListState()
+
+    fun dragBy(deltaY: Float) {
+        val id = draggingId ?: return
+        dragOffset += deltaY
+        val visible = listState.layoutInfo.visibleItemsInfo
+        val dragged = visible.firstOrNull { it.key == id } ?: return
+        val draggedCenter = dragged.offset + dragOffset + dragged.size / 2f
+        val target = visible.firstOrNull { other ->
+            other.key != id && (other.key as? String)?.let { key -> workingItems.any { it.id == key } } == true &&
+                draggedCenter >= other.offset && draggedCenter <= other.offset + other.size
+        } ?: return
+        val from = workingItems.indexOfFirst { it.id == id }
+        val to = workingItems.indexOfFirst { it.id == target.key }
+        if (from < 0 || to < 0) return
+        workingItems = workingItems.toMutableList().apply { add(to, removeAt(from)) }
+        dragOffset += (dragged.offset - target.offset)
     }
 
-    Column(
+    fun endDrag() {
+        val id = draggingId ?: return
+        val to = workingItems.indexOfFirst { it.id == id }
+        if (dragStartIndex >= 0 && to >= 0 && to != dragStartIndex) {
+            viewModel.moveTrack(dragStartIndex, to)
+        }
+        draggingId = null
+        dragStartIndex = -1
+        dragOffset = 0f
+    }
+
+    if (uiState.isLoading && playlist == null) {
+        Box(
+            modifier = modifier.fillMaxSize().background(colors.backgroundRoot),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(color = colors.primarySignal)
+        }
+        return
+    }
+
+    LazyColumn(
+        state = listState,
         modifier = modifier
             .fillMaxSize()
-            .background(colors.backgroundRoot)
-            .padding(horizontal = spacing.standard)
+            .background(colors.backgroundRoot),
+        contentPadding = PaddingValues(bottom = spacing.bottomScaffold)
     ) {
-        Spacer(modifier = Modifier.height(spacing.standard))
-
-        // Top Navigation & Action Bar
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick = onBack,
+        // Top bar
+        item(key = "top_bar") {
+            Row(
                 modifier = Modifier
-                    .touchTarget48()
-                    .semantics { contentDescription = "Navigate Back" }
+                    .fillMaxWidth()
+                    .padding(horizontal = spacing.xSmall, vertical = spacing.xSmall),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = HarmoniaIcons.ArrowBack,
-                    contentDescription = "Navigate Back",
-                    tint = colors.textPrimary
-                )
-            }
-
-            Box {
                 IconButton(
-                    onClick = { showMenu = true },
-                    modifier = Modifier
-                        .touchTarget48()
-                        .semantics { contentDescription = "Playlist Options" }
+                    onClick = onBack,
+                    modifier = Modifier.semantics { contentDescription = "Navigate Back" }
                 ) {
-                    Icon(
-                        imageVector = HarmoniaIcons.MoreVert,
-                        contentDescription = "Playlist Options",
-                        tint = colors.textPrimary
-                    )
+                    Icon(imageVector = HarmoniaIcons.ArrowBack, contentDescription = null, tint = colors.textPrimary)
                 }
-
-                DropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { showMenu = false },
-                    modifier = Modifier
-                        .background(colors.surfaceElevated)
-                        .hairlineBorder(colors.borderStructural, RoundedCornerShape(8.dp))
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Rename Playlist", color = colors.textPrimary) },
-                        leadingIcon = { Icon(HarmoniaIcons.Edit, contentDescription = null, tint = colors.primarySignal) },
-                        onClick = {
-                            showMenu = false
-                            showRenameDialog = true
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Delete Playlist", color = colors.statusError) },
-                        leadingIcon = { Icon(HarmoniaIcons.Delete, contentDescription = null, tint = colors.statusError) },
-                        onClick = {
-                            showMenu = false
-                            showDeleteDialog = true
-                        }
-                    )
+                Box {
+                    IconButton(
+                        onClick = { showMenu = true },
+                        modifier = Modifier.semantics { contentDescription = "Playlist Options" }
+                    ) {
+                        Icon(imageVector = HarmoniaIcons.MoreVert, contentDescription = null, tint = colors.textPrimary)
+                    }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false },
+                        modifier = Modifier.background(colors.surfaceElevated)
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Add songs", color = colors.textPrimary) },
+                            leadingIcon = { Icon(HarmoniaIcons.PlaylistAdd, contentDescription = null, tint = colors.primarySignal) },
+                            onClick = {
+                                showMenu = false
+                                showAddTracksDialog = true
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Rename playlist", color = colors.textPrimary) },
+                            leadingIcon = { Icon(HarmoniaIcons.Edit, contentDescription = null, tint = colors.primarySignal) },
+                            onClick = {
+                                showMenu = false
+                                showRenameDialog = true
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Delete playlist", color = colors.statusError) },
+                            leadingIcon = { Icon(HarmoniaIcons.Delete, contentDescription = null, tint = colors.statusError) },
+                            onClick = {
+                                showMenu = false
+                                showDeleteDialog = true
+                            }
+                        )
+                    }
                 }
             }
         }
 
-        if (uiState.isLoading && playlist == null) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = colors.primarySignal)
-            }
-            return
-        }
-
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = spacing.bottomScaffold)
-        ) {
-            // Hero Section
-            item {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    HarmoniaArtwork(
-                        artworkHash = heroArtworkHash,
-                        modifier = Modifier
-                            .size(160.dp)
-                            .aspectRatio(1f),
-                        size = 160.dp,
-                        cornerRadius = 16.dp,
-                        placeholderIcon = HarmoniaIcons.Playlists,
+        // Header: collage, name, details, actions
+        item(key = "header") {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = spacing.standard),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    val side = minOf(maxWidth * 0.68f, 280.dp)
+                    PlaylistCollage(
+                        artworkHashes = collage,
+                        side = side,
                         contentDescription = "${playlist?.name ?: "Playlist"} cover"
                     )
-
-                    Spacer(modifier = Modifier.height(spacing.medium))
-
-                    Text(
-                        text = playlist?.name ?: "Playlist",
-                        style = MaterialTheme.typography.headlineMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 24.sp
-                        ),
-                        color = colors.textPrimary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
+                }
+                Spacer(modifier = Modifier.height(spacing.large))
+                Text(
+                    text = playlist?.name ?: "Playlist",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = colors.textPrimary,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (!playlist?.description.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
-
-                    val subtitle = buildString {
-                        append("${items.size} ${if (items.size == 1) "track" else "tracks"}")
-                        if (totalSeconds > 0) {
-                            append(" • ${formatMinutes(totalSeconds)}")
-                        }
-                        if (!playlist?.description.isNullOrBlank()) {
-                            append(" • ${playlist.description}")
-                        }
-                    }
                     Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.textSecondary
+                        text = playlist?.description.orEmpty(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.textSecondary,
+                        textAlign = TextAlign.Center
                     )
-
-                    Spacer(modifier = Modifier.height(spacing.large))
-
-                    // Transport & Action Buttons
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = playlistSummary(items.size, totalSeconds),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.textSecondary
+                )
+                Spacer(modifier = Modifier.height(spacing.large))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(spacing.medium)
+                ) {
+                    Button(
+                        onClick = { onPlay(validTracks, 0) },
+                        enabled = validTracks.isNotEmpty(),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .semantics { contentDescription = "Play Playlist" },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = colors.primarySignal,
+                            contentColor = if (colors.isDark) colors.backgroundRoot else colors.surfaceElevated
+                        )
                     ) {
-                        Button(
-                            onClick = { if (validTracks.isNotEmpty()) onPlay(validTracks, 0) },
-                            enabled = validTracks.isNotEmpty(),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(44.dp)
-                                .touchTarget48()
-                                .semantics { contentDescription = "Play Playlist" },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = colors.primarySignal,
-                                contentColor = colors.backgroundRoot
-                            ),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Icon(HarmoniaIcons.Play, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Play", fontWeight = FontWeight.Bold)
-                        }
-
-                        Button(
-                            onClick = { if (validTracks.isNotEmpty()) onShuffle(validTracks) },
-                            enabled = validTracks.isNotEmpty(),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(44.dp)
-                                .touchTarget48()
-                                .semantics { contentDescription = "Shuffle Playlist" },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = colors.surfaceElevated,
-                                contentColor = colors.textPrimary
-                            ),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Icon(HarmoniaIcons.Shuffle, contentDescription = null, tint = colors.primarySignal, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Shuffle", fontWeight = FontWeight.Bold)
-                        }
-
-                        OutlinedButton(
-                            onClick = { showAddTracksDialog = true },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(44.dp)
-                                .touchTarget48()
-                                .semantics { contentDescription = "Add tracks to playlist" },
-                            shape = RoundedCornerShape(10.dp),
-                            border = ButtonDefaults.outlinedButtonBorder.copy(brush = androidx.compose.ui.graphics.SolidColor(colors.borderStructural)),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.primarySignal)
-                        ) {
-                            Text("+ Add", fontWeight = FontWeight.SemiBold)
-                        }
+                        Icon(HarmoniaIcons.Play, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Play", style = MaterialTheme.typography.labelLarge)
+                    }
+                    Button(
+                        onClick = { onShuffle(validTracks) },
+                        enabled = validTracks.isNotEmpty(),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .semantics { contentDescription = "Shuffle Playlist" },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = colors.surfaceContainer,
+                            contentColor = colors.primarySignal
+                        )
+                    ) {
+                        Icon(HarmoniaIcons.Shuffle, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Shuffle", style = MaterialTheme.typography.labelLarge)
                     }
                 }
-
-                Spacer(modifier = Modifier.height(spacing.large))
-            }
-
-            // Playlist Track List
-            if (items.isEmpty()) {
-                item {
-                    Box(
+                if (items.isNotEmpty()) {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 40.dp),
-                        contentAlignment = Alignment.Center
+                            .padding(top = spacing.medium),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("This playlist has no tracks yet", color = colors.textSecondary, style = MaterialTheme.typography.bodyMedium)
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Button(
-                                onClick = { showAddTracksDialog = true },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = colors.primarySignal,
-                                    contentColor = colors.backgroundRoot
-                                ),
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.touchTarget48()
-                            ) {
-                                Text("Add Tracks", fontWeight = FontWeight.Bold)
-                            }
-                        }
+                        Text(
+                            text = "Drag ≡ to reorder · swipe a song to remove it",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.textSecondary,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = "Add songs",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = colors.primarySignal,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { showAddTracksDialog = true }
+                                .padding(horizontal = spacing.small, vertical = spacing.small)
+                                .semantics { contentDescription = "Add tracks to playlist" }
+                        )
                     }
                 }
-            } else {
-                itemsIndexed(items, key = { _, item -> item.id }) { index, item ->
-                    PlaylistItemRow(
-                        item = item,
-                        index = index,
-                        canMoveUp = index > 0,
-                        canMoveDown = index < items.size - 1,
-                        onClick = {
-                            val trackIndex = validTracks.indexOfFirst { it.id == item.trackId }
-                            if (trackIndex >= 0) {
-                                onPlay(validTracks, trackIndex)
-                            }
-                        },
-                        onLongClick = item.track?.let { track -> onTrackMenu?.let { menu -> { menu(track) } } },
-                        onMoveUp = { viewModel.moveTrackUp(index) },
-                        onMoveDown = { viewModel.moveTrackDown(index) },
-                        onRemove = { viewModel.removeTrack(item.trackId) }
+                Spacer(modifier = Modifier.height(spacing.small))
+            }
+        }
+
+        if (items.isEmpty()) {
+            item(key = "empty") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 40.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "This playlist is empty",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = colors.textPrimary
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Add songs from your library to get started.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.textSecondary
+                    )
+                    Spacer(modifier = Modifier.height(spacing.medium))
+                    Button(
+                        onClick = { showAddTracksDialog = true },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = colors.primarySignal,
+                            contentColor = if (colors.isDark) colors.backgroundRoot else colors.surfaceElevated
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.semantics { contentDescription = "Add tracks to playlist" }
+                    ) {
+                        Text("Add songs", style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+            }
+        } else {
+            itemsIndexed(workingItems, key = { _, item -> item.id }) { index, item ->
+                val isDragging = item.id == draggingId
+                val dismissState = rememberSwipeToDismissBoxState()
+                Box(
+                    modifier = if (isDragging) {
+                        Modifier.zIndex(1f).graphicsLayer { translationY = dragOffset }
+                    } else {
+                        Modifier.animateItem()
+                    }
+                ) {
+                    SwipeToDismissBox(
+                        state = dismissState,
+                        gesturesEnabled = draggingId == null,
+                        onDismiss = { viewModel.removeTrack(item.trackId) },
+                        backgroundContent = {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(colors.statusError.copy(alpha = 0.2f))
+                                    .padding(horizontal = spacing.standard),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Icon(HarmoniaIcons.Delete, contentDescription = null, tint = colors.statusError)
+                                Icon(HarmoniaIcons.Delete, contentDescription = null, tint = colors.statusError)
+                            }
+                        }
+                    ) {
+                        PlaylistSongRow(
+                            item = item,
+                            isDragging = isDragging,
+                            onMoveUp = if (index > 0) ({ viewModel.moveTrack(index, index - 1) }) else null,
+                            onMoveDown = if (index < workingItems.lastIndex) ({ viewModel.moveTrack(index, index + 1) }) else null,
+                            onClick = {
+                                val trackIndex = validTracks.indexOfFirst { it.id == item.trackId }
+                                if (trackIndex >= 0) onPlay(validTracks, trackIndex)
+                            },
+                            onMenu = item.track?.let { track -> onTrackMenu?.let { menu -> { menu(track) } } },
+                            dragHandleModifier = Modifier.pointerInput(item.id) {
+                                detectDragGestures(
+                                    onDragStart = {
+                                        draggingId = item.id
+                                        dragStartIndex = workingItems.indexOfFirst { it.id == item.id }
+                                        dragOffset = 0f
+                                    },
+                                    onDrag = { change, amount ->
+                                        change.consume()
+                                        dragBy(amount.y)
+                                    },
+                                    onDragEnd = { endDrag() },
+                                    onDragCancel = { endDrag() }
+                                )
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -372,122 +461,144 @@ fun PlaylistDetailScreen(
     }
 }
 
+/**
+ * Cover artwork for a playlist: its own cover if set, otherwise up to four different album
+ * covers from its songs (shown as a 2x2 collage when there are four).
+ */
+internal fun collageArtwork(playlistArtwork: String?, items: List<PlaylistItem>): List<String> {
+    if (playlistArtwork != null) return listOf(playlistArtwork)
+    val distinct = items.mapNotNull { it.track?.artworkHash }.distinct()
+    return if (distinct.size >= 4) distinct.take(4) else distinct.take(1)
+}
+
+/** "48 min", "1 hr 12 min", or "57 sec" for very short playlists. */
+internal fun formatPlaylistDuration(totalSeconds: Double): String {
+    val minutes = (totalSeconds / 60).toInt()
+    return when {
+        minutes >= 60 -> "${minutes / 60} hr ${minutes % 60} min"
+        minutes > 0 -> "$minutes min"
+        else -> "${totalSeconds.toInt()} sec"
+    }
+}
+
+internal fun playlistSummary(songCount: Int, totalSeconds: Double): String {
+    val songs = "$songCount ${if (songCount == 1) "song" else "songs"}"
+    return if (totalSeconds > 0) "$songs, ${formatPlaylistDuration(totalSeconds)}" else songs
+}
+
 @Composable
-private fun PlaylistItemRow(
+private fun PlaylistCollage(artworkHashes: List<String>, side: Dp, contentDescription: String) {
+    val colors = HarmoniaThemeTokens.colors
+    Box(
+        modifier = Modifier
+            .size(side)
+            .shadow(20.dp, RoundedCornerShape(12.dp), clip = false)
+            .clip(RoundedCornerShape(12.dp))
+            .background(colors.surfaceElevated)
+            .semantics { this.contentDescription = contentDescription }
+    ) {
+        if (artworkHashes.size >= 4) {
+            Column {
+                for (row in 0 until 2) {
+                    Row {
+                        for (col in 0 until 2) {
+                            HarmoniaArtwork(
+                                artworkHash = artworkHashes[row * 2 + col],
+                                size = side / 2,
+                                cornerRadius = 0.dp
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            HarmoniaArtwork(
+                artworkHash = artworkHashes.firstOrNull(),
+                modifier = Modifier.fillMaxSize(),
+                size = side,
+                cornerRadius = 0.dp,
+                placeholderIcon = HarmoniaIcons.Playlists
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlaylistSongRow(
     item: PlaylistItem,
-    index: Int,
-    canMoveUp: Boolean,
-    canMoveDown: Boolean,
+    isDragging: Boolean,
     onClick: () -> Unit,
-    onLongClick: (() -> Unit)?,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit,
-    onRemove: () -> Unit
+    onMenu: (() -> Unit)?,
+    dragHandleModifier: Modifier,
+    onMoveUp: (() -> Unit)? = null,
+    onMoveDown: (() -> Unit)? = null
 ) {
     val colors = HarmoniaThemeTokens.colors
     val spacing = HarmoniaThemeTokens.spacing
-    val cardShape = RoundedCornerShape(10.dp)
-    val displayTitle = item.track?.let { TrackDisplayUtils.formatDisplayTitle(it) } ?: item.trackId
-
-    Card(
+    val track = item.track
+    val title = track?.let { TrackDisplayUtils.formatDisplayTitle(it) } ?: "Unavailable song"
+    val subtitle = track?.let { listOfNotNull(it.artistName, formatSongDuration(it.durationSec)).joinToString(" · ") }
+        ?: "Not on this phone right now"
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .hairlineBorder(colors.borderStructural, cardShape)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .semantics { contentDescription = "Play track $displayTitle" },
-        shape = cardShape,
-        colors = CardDefaults.cardColors(containerColor = colors.surfaceElevated)
+            // Opaque so the swipe-to-remove background never shows through.
+            .background(if (isDragging) colors.surfaceContainer else colors.backgroundRoot)
+            .combinedClickable(onClick = onClick, onLongClick = onMenu)
+            .padding(start = spacing.standard, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        HarmoniaArtwork(
+            artworkHash = track?.artworkHash,
+            size = 48.dp,
+            cornerRadius = 6.dp,
+            contentDescription = null
+        )
+        Spacer(modifier = Modifier.width(spacing.medium))
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "${index + 1}",
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                color = colors.primarySignal,
-                modifier = Modifier.width(24.dp)
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (track != null) colors.textPrimary else colors.textDisabled,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-
-            HarmoniaArtwork(
-                artworkHash = item.track?.artworkHash,
-                size = 40.dp,
-                cornerRadius = 6.dp,
-                contentDescription = null
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-
-            Spacer(modifier = Modifier.width(10.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = displayTitle,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = colors.textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = item.track?.artistName ?: "Unknown Artist",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.textSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            // Move Up button
-            IconButton(
-                onClick = onMoveUp,
-                enabled = canMoveUp,
-                modifier = Modifier
-                    .size(36.dp)
-                    .touchTarget48()
-                    .semantics { contentDescription = "Move track up" }
-            ) {
-                Icon(
-                    imageVector = HarmoniaIcons.ArrowUp,
-                    contentDescription = "Move track up",
-                    tint = if (canMoveUp) colors.textPrimary else colors.textDisabled,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-
-            // Move Down button
-            IconButton(
-                onClick = onMoveDown,
-                enabled = canMoveDown,
-                modifier = Modifier
-                    .size(36.dp)
-                    .touchTarget48()
-                    .semantics { contentDescription = "Move track down" }
-            ) {
-                Icon(
-                    imageVector = HarmoniaIcons.ArrowDown,
-                    contentDescription = "Move track down",
-                    tint = if (canMoveDown) colors.textPrimary else colors.textDisabled,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-
-            // Remove button
-            IconButton(
-                onClick = onRemove,
-                modifier = Modifier
-                    .size(36.dp)
-                    .touchTarget48()
-                    .semantics { contentDescription = "Remove track from playlist" }
-            ) {
-                Icon(
-                    imageVector = HarmoniaIcons.Close,
-                    contentDescription = "Remove track from playlist",
-                    tint = colors.textSecondary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
+        }
+        if (onMenu != null) {
+            TrackMenuButton(trackTitle = title, onClick = onMenu)
+        }
+        Box(
+            modifier = dragHandleModifier
+                .size(48.dp)
+                .semantics {
+                    contentDescription = "Drag to reorder $title"
+                    // Screen readers can't drag, so reordering is also offered as actions.
+                    customActions = listOfNotNull(
+                        onMoveUp?.let { move -> CustomAccessibilityAction("Move up") { move(); true } },
+                        onMoveDown?.let { move -> CustomAccessibilityAction("Move down") { move(); true } }
+                    )
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = HarmoniaIcons.DragHandle,
+                contentDescription = null,
+                tint = colors.textSecondary
+            )
         }
     }
+}
+
+private fun formatSongDuration(durationSec: Double): String {
+    val total = durationSec.toInt()
+    return String.format(java.util.Locale.US, "%d:%02d", total / 60, total % 60)
 }
 
 @Composable
@@ -703,9 +814,4 @@ private fun AddTracksDialog(
         },
         containerColor = colors.surfaceElevated
     )
-}
-
-private fun formatMinutes(seconds: Double): String {
-    val mins = (seconds / 60).toInt()
-    return "$mins min"
 }

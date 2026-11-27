@@ -43,7 +43,7 @@ Status: `Done` · `In progress` · `Planned`
 | 2.4 | Home sections: Recently played, Recently added, Rediscover, Top this month | UI, UX, BE | Done |
 | 2.5 | Album page: hero artwork, Play / Shuffle buttons, Disc 1 / Disc 2 headers | UI, UX | Done |
 | 2.6 | Artist page: hero header, top songs, albums | UI, BE | Done |
-| 2.7 | Playlist page: artwork collage header, drag to reorder | UI, UX | Planned |
+| 2.7 | Playlist page: artwork collage header, drag to reorder | UI, UX | Done |
 | 2.8 | Search restyle and recent searches | UI, UX, BE | Planned |
 
 ## Phase 3: Supporting screens and partly-working features
@@ -225,6 +225,17 @@ Status: `Done` · `In progress` · `Planned`
   `ArtistDetailViewModel` now follows the library live and shows a real error with Try again.
 - **Why:** The old page was a long flat list. Apple Music leads with the artist, then the songs
   you actually play, then the discography, which makes big artists much easier to browse.
+
+### 2.7 Playlist page
+- **What:** Rebuilt `presentation/playlists/PlaylistDetailScreen.kt` in the Apple Music layout: a
+  cover that becomes a 2x2 collage once the playlist has four different album covers, the name,
+  description and "12 songs, 48 min", then Play / Shuffle. Songs show artwork, artist and length.
+  Rename, delete and the new "Add songs" live in the ⋮ menu (plus an "Add songs" link above the list).
+- **Reordering:** Drag the ≡ handle to move a song anywhere (saved once you let go, via the new
+  `PlaylistDetailViewModel.moveTrack`), swipe a song sideways to remove it. Replaces the old
+  up/down arrow buttons. Screen-reader users get "Move up" / "Move down" actions on each song.
+- **Why:** Up/down arrows meant many taps to move a song more than one place; drag is what people
+  expect from Apple Music, Spotify and our own queue editor.
 
 ## Decisions and ideas checked
 

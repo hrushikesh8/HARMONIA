@@ -91,6 +91,15 @@ class PlaylistDetailViewModel(
         }
     }
 
+    /** Moves the song at [fromIndex] to [toIndex] (used by drag to reorder). */
+    fun moveTrack(fromIndex: Int, toIndex: Int) {
+        val size = _uiState.value.items.size
+        if (fromIndex == toIndex || fromIndex !in 0 until size || toIndex !in 0 until size) return
+        viewModelScope.launch {
+            playlistRepository.reorderPlaylistItem(playlistId, fromPosition = fromIndex, toPosition = toIndex)
+        }
+    }
+
     fun moveTrackUp(index: Int) {
         if (index <= 0) return
         viewModelScope.launch {
