@@ -82,6 +82,13 @@ interface PlaybackPort {
     fun removeQueueItem(index: Int)
 
     /**
+     * Connects to the background playback service if that hasn't happened yet. Safe to call
+     * repeatedly. The UI calls this once its first frame is drawn so that starting the service
+     * (which builds the audio player on the main thread) doesn't compete with app launch.
+     */
+    fun ensureConnected() {}
+
+    /**
      * Jumps directly to a specific position in the queue.
      */
     fun jumpToQueueIndex(index: Int)

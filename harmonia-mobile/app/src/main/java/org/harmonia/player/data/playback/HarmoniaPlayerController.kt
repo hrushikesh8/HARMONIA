@@ -2,6 +2,8 @@ package org.harmonia.player.data.playback
 
 import android.content.ComponentName
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -92,6 +94,9 @@ class HarmoniaPlayerController(
     private var storageObservationJob: Job? = null
 
     companion object {
+        /** Connect anyway if no UI asked for it within this time (e.g. Android Auto start). */
+        const val SESSION_CONNECT_FALLBACK_MS = 5_000L
+
         const val STORAGE_DISCONNECTED_MESSAGE = PlaybackState.STORAGE_DISCONNECTED_MESSAGE
         const val TRACK_PREFIX = "track:"
 
@@ -137,6 +142,11 @@ class HarmoniaPlayerController(
         positionPollingJob = null
     }
 
+    // Declared before init {} because Kotlin initialises properties in file order.
+    private var sessionConnectionRequested = false
+    private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
+    private val fallbackConnect = Runnable { ensureConnected() }
+
     init {
         observeStorageLifecycle()
         if (playerOverride != null) {
@@ -144,10 +154,24 @@ class HarmoniaPlayerController(
             setupPlayerListener(playerOverride)
             applyUserPreferences(playerOverride)
             syncControllerWithQueue(playerOverride)
-        } else {
-            initializeSessionConnection()
+        } else if (context != null) {
+            // Don't start the playback service during app launch: the UI calls ensureConnected()
+            // after its first frame. The fallback covers launches with no UI (Android Auto,
+            // media buttons) so listening history is still recorded there.
+            mainHandler.postDelayed(fallbackConnect, SESSION_CONNECT_FALLBACK_MS)
         }
         restorePersistedState()
+    }
+
+    override fun ensureConnected() {
+        if (sessionConnectionRequested || playerOverride != null || context == null) return
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { ensureConnected() }
+            return
+        }
+        sessionConnectionRequested = true
+        mainHandler.removeCallbacks(fallbackConnect)
+        initializeSessionConnection()
     }
 
     private fun observeStorageLifecycle() {
@@ -503,6 +527,7 @@ class HarmoniaPlayerController(
     }
 
     override fun play() {
+        ensureConnected()
         val srcId = currentSourceId
         if (srcId != null && storageVolumeLifecycleCoordinator?.isSourceAvailable(srcId) == false) {
             _playbackState.value = _playbackState.value.copy(
@@ -569,6 +594,7 @@ class HarmoniaPlayerController(
     }
 
     override fun setQueue(tracks: List<Track>, startIndex: Int) {
+        ensureConnected()
         scope.launch {
             val queueItems = tracks.mapIndexed { idx, track ->
                 QueueItem(

@@ -1,6 +1,8 @@
 package org.harmonia.player.presentation
 
 import android.os.Bundle
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
@@ -102,6 +104,13 @@ class MainActivity : ComponentActivity() {
 
             HarmoniaTheme(darkTheme = isDarkTheme) {
                 MainAppContainer()
+            }
+
+            // Start the playback service only after the first frame is on screen, so building
+            // the audio player doesn't fight app launch for the main thread.
+            LaunchedEffect(Unit) {
+                withFrameNanos { }
+                ServiceLocator.getPlaybackPort().ensureConnected()
             }
         }
     }

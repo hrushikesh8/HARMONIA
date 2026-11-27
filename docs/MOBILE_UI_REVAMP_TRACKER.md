@@ -59,7 +59,8 @@ Status: `Done` · `In progress` · `Planned`
 | 3.7 | Queue: auto-scroll while dragging; strict "Play next" with shuffle on | UX, BE | Planned |
 | 3.10 | Restyle song / album / artist rows in category lists (still the older bordered cards) | UI | Planned |
 | 3.9 | Instrumented UI tests (`androidTest`) were already out of date before the revamp (expect a Settings tab, old copy); refresh them | BE | Planned |
-| 3.8 | Check playback service start-up time on a real phone (emulator showed "not responding" on cold start) | BE | Planned |
+| 3.8 | Fix "not responding" on cold start (playback service started during app launch) | BE | Done |
+| 3.11 | Faster first launch: Baseline Profile so the first screen appears quicker | BE | Planned |
 
 ## Phase 4: New features
 
@@ -168,6 +169,20 @@ Status: `Done` · `In progress` · `Planned`
   style). Home's playlist shortcuts open Playlists inside the Library tab.
 - **Why:** Five tabs plus a row of sub-tabs was a lot to scan. Apple Music's list makes each
   category one tap away, and a sort that resets every visit was a common annoyance.
+
+### 3.8 "Isn't responding" on cold start
+- **What:** The app used to connect to the playback service inside `HarmoniaApp.onCreate`, so the
+  service built its audio player (ExoPlayer) on the main thread at the same moment the first screen
+  was being drawn. Android's ANR reports showed the main thread stuck in exactly those two places,
+  and the service missed its 20-second start deadline. Now `HarmoniaPlayerController` waits:
+  `MainActivity` calls the new `PlaybackPort.ensureConnected()` once the first frame is drawn,
+  `play()` / `setQueue()` connect immediately if needed, and a 5-second fallback connects when there's no
+  UI at all (Android Auto, headset buttons) so listening history still works there.
+- **Result:** 3 out of 3 cold starts on the emulator with no "not responding" (before: almost every
+  launch). Playback verified working afterwards.
+- **Still slow on the emulator:** the first screen takes ~20 s there because it's a debug build on
+  software rendering. Real phones with a release build are much faster; task 3.11 would speed up
+  the first launch further.
 
 ## Decisions and ideas checked
 
