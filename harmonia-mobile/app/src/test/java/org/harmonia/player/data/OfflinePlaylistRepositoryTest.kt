@@ -102,6 +102,17 @@ class FakePlaylistDao : PlaylistDao {
         }
     }
 
+    override fun searchPlaylistsWithCount(query: String): Flow<List<org.harmonia.player.data.local.dao.PlaylistWithCount>> {
+        return playlistFlow.map { list ->
+            list.filter { it.name.contains(query, ignoreCase = true) }.map { entity ->
+                org.harmonia.player.data.local.dao.PlaylistWithCount(
+                    playlist = entity,
+                    trackCount = items.count { it.playlistId == entity.id }
+                )
+            }
+        }
+    }
+
     override fun observePlaylistsWithCount(): Flow<List<org.harmonia.player.data.local.dao.PlaylistWithCount>> {
         return playlistFlow.map { list ->
             list.map { entity ->

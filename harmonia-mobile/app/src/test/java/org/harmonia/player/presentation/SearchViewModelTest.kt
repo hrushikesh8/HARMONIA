@@ -48,7 +48,7 @@ class SearchViewModelTest {
     @Before
     fun setup() {
         fakeRepo = FakeSearchRepository()
-        viewModel = SearchViewModel(fakeRepo)
+        viewModel = SearchViewModel(fakeRepo, org.harmonia.player.data.local.preferences.InMemoryUserPreferencesRepository())
 
         fakeRepo.tracks.value = listOf(
             Track(id = "t1", title = "Paranoid Android", artistName = "Radiohead", durationSec = 380.0),

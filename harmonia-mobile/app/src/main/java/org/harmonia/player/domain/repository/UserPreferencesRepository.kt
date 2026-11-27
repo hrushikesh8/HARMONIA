@@ -25,6 +25,10 @@ interface UserPreferencesRepository {
     fun getLibrarySort(category: String): String?
     fun setLibrarySort(category: String, sortOrder: String)
 
+    /** Recent search queries, newest first. */
+    fun getRecentSearches(): List<String> = emptyList()
+    fun setRecentSearches(queries: List<String>) {}
+
     fun isKeepScreenOn(): Boolean
     fun setKeepScreenOn(enabled: Boolean)
     fun observeKeepScreenOn(): Flow<Boolean>

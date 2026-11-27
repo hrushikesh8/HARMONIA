@@ -77,6 +77,7 @@ import org.harmonia.player.presentation.playlists.PlaylistsViewModel
 import org.harmonia.player.presentation.profile.ProfileHubScreen
 import androidx.compose.runtime.DisposableEffect
 import org.harmonia.player.core.di.ServiceLocator
+import org.harmonia.player.presentation.search.SearchBrowseTarget
 import org.harmonia.player.presentation.search.SearchScreen
 import org.harmonia.player.presentation.settings.SettingsScreen
 
@@ -326,7 +327,18 @@ fun MainAppContainer(
                             onTrackMenu = onTrackMenu,
                             onAlbumClick = { album -> navigateToAlbum(album.id) },
                             onArtistClick = { artist -> navigateToArtist(artist.id) },
-                            onPlaylistClick = { playlist -> openPlaylist(playlist.id) }
+                            onPlaylistClick = { playlist -> openPlaylist(playlist.id) },
+                            onBrowse = { target ->
+                                navController.navigate(
+                                    when (target) {
+                                        SearchBrowseTarget.SONGS -> HarmoniaNavDestination.LibraryCategory(LibraryTab.TRACKS.name)
+                                        SearchBrowseTarget.ALBUMS -> HarmoniaNavDestination.LibraryCategory(LibraryTab.ALBUMS.name)
+                                        SearchBrowseTarget.ARTISTS -> HarmoniaNavDestination.LibraryCategory(LibraryTab.ARTISTS.name)
+                                        SearchBrowseTarget.FAVORITES -> HarmoniaNavDestination.LibraryCategory(LibraryTab.FAVORITES.name)
+                                        SearchBrowseTarget.PLAYLISTS -> HarmoniaNavDestination.Playlists
+                                    }
+                                )
+                            }
                         )
                     }
                 }

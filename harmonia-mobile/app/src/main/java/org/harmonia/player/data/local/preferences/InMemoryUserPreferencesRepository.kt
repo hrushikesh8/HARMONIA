@@ -38,6 +38,10 @@ class InMemoryUserPreferencesRepository(
     override fun getLibrarySort(category: String): String? = librarySorts[category]
     override fun setLibrarySort(category: String, sortOrder: String) { librarySorts[category] = sortOrder }
 
+    private var recentSearches = emptyList<String>()
+    override fun getRecentSearches(): List<String> = recentSearches
+    override fun setRecentSearches(queries: List<String>) { recentSearches = queries }
+
     override fun isKeepScreenOn(): Boolean = _keepScreenOn.value
     override fun setKeepScreenOn(enabled: Boolean) { _keepScreenOn.value = enabled }
     override fun observeKeepScreenOn(): Flow<Boolean> = _keepScreenOn.asStateFlow()

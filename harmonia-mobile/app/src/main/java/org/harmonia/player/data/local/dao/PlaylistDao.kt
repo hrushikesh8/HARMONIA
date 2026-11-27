@@ -53,6 +53,18 @@ interface PlaylistDao {
     """)
     fun searchPlaylists(query: String): Flow<List<PlaylistEntity>>
 
+    /** Same matching as [searchPlaylists], with each playlist's song count. */
+    @Query("""
+        SELECT p.*, COUNT(i.id) AS track_count
+        FROM mobile_playlists p
+        LEFT JOIN mobile_playlist_items i ON p.id = i.playlist_id
+        WHERE p.name LIKE '%' || :query || '%'
+           OR (p.description IS NOT NULL AND p.description LIKE '%' || :query || '%')
+        GROUP BY p.id
+        ORDER BY p.name COLLATE NOCASE ASC
+    """)
+    fun searchPlaylistsWithCount(query: String): Flow<List<PlaylistWithCount>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPlaylist(playlist: PlaylistEntity)
 

@@ -1,5 +1,12 @@
 package org.harmonia.player.presentation.search
 
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -62,7 +69,7 @@ import java.util.Locale
 
 enum class SearchFilter(val label: String) {
     ALL("All"),
-    TRACKS("Tracks"),
+    TRACKS("Songs"),
     ALBUMS("Albums"),
     ARTISTS("Artists"),
     PLAYLISTS("Playlists")
@@ -76,14 +83,23 @@ fun SearchScreen(
     onTrackMenu: ((Track) -> Unit)? = null,
     onAlbumClick: (Album) -> Unit = {},
     onArtistClick: (Artist) -> Unit = {},
-    onPlaylistClick: (Playlist) -> Unit = {}
+    onPlaylistClick: (Playlist) -> Unit = {},
+    onBrowse: (SearchBrowseTarget) -> Unit = {}
 ) {
     val query by viewModel.query.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
+    val recentSearches by viewModel.recentSearches.collectAsState()
     val colors = HarmoniaThemeTokens.colors
     val spacing = HarmoniaThemeTokens.spacing
+    val keyboard = LocalSoftwareKeyboardController.current
 
     var selectedFilter by remember { mutableStateOf(SearchFilter.ALL) }
+
+    // Opening a result also remembers the search, like Apple Music's "Recently Searched".
+    val openTrack: (List<Track>, Int) -> Unit = { tracks, index -> viewModel.commitSearch(); onTrackClick(tracks, index) }
+    val openAlbum: (Album) -> Unit = { viewModel.commitSearch(); onAlbumClick(it) }
+    val openArtist: (Artist) -> Unit = { viewModel.commitSearch(); onArtistClick(it) }
+    val openPlaylist: (Playlist) -> Unit = { viewModel.commitSearch(); onPlaylistClick(it) }
 
     Column(
         modifier = modifier
@@ -92,160 +108,253 @@ fun SearchScreen(
             .padding(horizontal = spacing.standard)
     ) {
         Spacer(modifier = Modifier.height(spacing.standard))
-
-        // Title Header
         Text(
             text = "Search",
-            style = MaterialTheme.typography.displayLarge.copy(
-                fontWeight = FontWeight.Black,
-                letterSpacing = 1.5.sp,
-                fontSize = 26.sp
-            ),
+            style = MaterialTheme.typography.displayMedium,
             color = colors.textPrimary
         )
-        Text(
-            text = "Your library",
-            style = MaterialTheme.typography.labelSmall,
-            color = colors.primarySignal
-        )
+        Spacer(modifier = Modifier.height(spacing.medium))
 
-        Spacer(modifier = Modifier.height(spacing.standard))
-
-        // Search Input Field with Clear Button
-        OutlinedTextField(
+        TextField(
             value = query,
             onValueChange = { viewModel.onQueryChanged(it) },
             modifier = Modifier
                 .fillMaxWidth()
                 .semantics { contentDescription = "Search input field" },
-            placeholder = { Text("Search songs, artists, albums, files...", color = colors.textSecondary) },
+            placeholder = { Text("Songs, artists, albums, playlists", color = colors.textSecondary) },
             leadingIcon = {
-                Icon(
-                    imageVector = HarmoniaIcons.Search,
-                    contentDescription = null,
-                    tint = if (query.isNotEmpty()) colors.primarySignal else colors.textSecondary
-                )
+                Icon(imageVector = HarmoniaIcons.Search, contentDescription = null, tint = colors.textSecondary)
             },
             trailingIcon = {
                 if (query.isNotEmpty()) {
                     IconButton(
                         onClick = { viewModel.clearQuery() },
-                        modifier = Modifier
-                            .size(48.dp)
-                            .semantics { contentDescription = "Clear search query" }
+                        modifier = Modifier.semantics { contentDescription = "Clear search query" }
                     ) {
-                        Icon(
-                            imageVector = HarmoniaIcons.Close,
-                            contentDescription = "Clear search query",
-                            tint = colors.textSecondary
-                        )
+                        Icon(imageVector = HarmoniaIcons.Close, contentDescription = null, tint = colors.textSecondary)
                     }
                 }
             },
             singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = {
+                viewModel.commitSearch()
+                keyboard?.hide()
+            }),
             shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = colors.primarySignal,
-                unfocusedBorderColor = colors.borderStructural,
-                focusedContainerColor = colors.surfaceElevated,
-                unfocusedContainerColor = colors.surfaceElevated,
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = colors.surfaceContainer,
+                unfocusedContainerColor = colors.surfaceContainer,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
                 cursorColor = colors.primarySignal,
                 focusedTextColor = colors.textPrimary,
                 unfocusedTextColor = colors.textPrimary
             )
         )
 
-        Spacer(modifier = Modifier.height(spacing.small))
-
-        // Search Category Filter Chips
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(spacing.xSmall)
-        ) {
-            SearchFilter.entries.forEach { filter ->
-                val isSelected = selectedFilter == filter
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (isSelected) colors.primarySignal else colors.surfaceElevated)
-                        .hairlineBorder(
-                            color = if (isSelected) colors.primarySignal else colors.borderStructural,
-                            shape = RoundedCornerShape(8.dp)
-                        )
-                        .clickable { selectedFilter = filter }
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                ) {
+        if (query.isNotBlank()) {
+            Spacer(modifier = Modifier.height(spacing.medium))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(spacing.small)
+            ) {
+                SearchFilter.entries.forEach { filter ->
+                    val isSelected = selectedFilter == filter
                     Text(
                         text = filter.label,
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = if (isSelected) colors.backgroundRoot else colors.textSecondary
+                        style = MaterialTheme.typography.labelMedium,
+                        color = when {
+                            !isSelected -> colors.textPrimary
+                            colors.isDark -> colors.backgroundRoot
+                            else -> colors.surfaceElevated
+                        },
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(if (isSelected) colors.primarySignal else colors.surfaceContainer)
+                            .clickable { selectedFilter = filter }
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(spacing.standard))
+        Spacer(modifier = Modifier.height(spacing.medium))
 
-        // Body Content State Handling
-        if (query.isBlank()) {
-            EmptyPromptState()
-        } else if (uiState.isEmpty && uiState.isSearching) {
-            Text(
-                text = "Searching\u2026",
+        when {
+            query.isBlank() -> SearchStartState(
+                recentSearches = recentSearches,
+                onRecentClick = { viewModel.useRecentSearch(it) },
+                onRemoveRecent = { viewModel.removeRecentSearch(it) },
+                onClearRecent = { viewModel.clearRecentSearches() },
+                onBrowse = onBrowse
+            )
+            uiState.isEmpty && uiState.isSearching -> Text(
+                text = "Searching…",
                 style = MaterialTheme.typography.bodyMedium,
                 color = colors.textSecondary,
                 modifier = Modifier.padding(top = spacing.standard)
             )
-        } else if (uiState.isEmpty) {
-            NoResultsState(query = query)
-        } else {
-            SearchResultsList(
+            uiState.isEmpty -> NoResultsState(query = query)
+            else -> SearchResultsList(
                 uiState = uiState,
                 filter = selectedFilter,
-                onTrackClick = onTrackClick,
+                onTrackClick = openTrack,
                 onTrackMenu = onTrackMenu,
-                onAlbumClick = onAlbumClick,
-                onArtistClick = onArtistClick,
-                onPlaylistClick = onPlaylistClick
+                onAlbumClick = openAlbum,
+                onArtistClick = openArtist,
+                onPlaylistClick = openPlaylist
             )
         }
     }
 }
 
+/** Library shortcuts shown on the empty Search screen. */
+enum class SearchBrowseTarget(val label: String) {
+    SONGS("Songs"),
+    ALBUMS("Albums"),
+    ARTISTS("Artists"),
+    PLAYLISTS("Playlists"),
+    FAVORITES("Favorites")
+}
+
+/** What Search shows before you type: recent searches, then Browse tiles (Apple Music style). */
 @Composable
-private fun EmptyPromptState() {
+private fun SearchStartState(
+    recentSearches: List<String>,
+    onRecentClick: (String) -> Unit,
+    onRemoveRecent: (String) -> Unit,
+    onClearRecent: () -> Unit,
+    onBrowse: (SearchBrowseTarget) -> Unit
+) {
     val colors = HarmoniaThemeTokens.colors
-    Box(
+    val spacing = HarmoniaThemeTokens.spacing
+    LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+        contentPadding = PaddingValues(bottom = spacing.bottomScaffold)
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(horizontal = 32.dp)
-        ) {
-            Icon(
-                imageVector = HarmoniaIcons.Search,
-                contentDescription = null,
-                tint = colors.primarySignal.copy(alpha = 0.6f),
-                modifier = Modifier.size(56.dp)
-            )
-            Spacer(modifier = Modifier.height(16.dp))
+        if (recentSearches.isNotEmpty()) {
+            item(key = "recent_header") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Recent searches",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = colors.textPrimary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = "Clear",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colors.primarySignal,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable(onClick = onClearRecent)
+                            .padding(horizontal = spacing.small, vertical = spacing.small)
+                            .semantics { contentDescription = "Clear recent searches" }
+                    )
+                }
+            }
+            items(recentSearches, key = { "recent_$it" }) { recent ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onRecentClick(recent) }
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = HarmoniaIcons.Timer,
+                        contentDescription = null,
+                        tint = colors.textSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(spacing.medium))
+                    Text(
+                        text = recent,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = colors.textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(
+                        onClick = { onRemoveRecent(recent) },
+                        modifier = Modifier.semantics { contentDescription = "Remove $recent from recent searches" }
+                    ) {
+                        Icon(
+                            imageVector = HarmoniaIcons.Close,
+                            contentDescription = null,
+                            tint = colors.textSecondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+            item(key = "recent_spacer") { Spacer(modifier = Modifier.height(spacing.large)) }
+        }
+
+        item(key = "browse_header") {
             Text(
-                text = "Search your music",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                text = "Browse your library",
+                style = MaterialTheme.typography.titleLarge,
                 color = colors.textPrimary,
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = "Find songs, albums, artists and playlists",
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.textSecondary,
-                textAlign = TextAlign.Center
+                modifier = Modifier.padding(bottom = spacing.medium)
             )
         }
+        item(key = "browse_tiles") {
+            val targets = SearchBrowseTarget.entries
+            Column(verticalArrangement = Arrangement.spacedBy(spacing.medium)) {
+                targets.chunked(2).forEach { pair ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(spacing.medium)) {
+                        pair.forEach { target ->
+                            BrowseTile(target = target, onClick = { onBrowse(target) }, modifier = Modifier.weight(1f))
+                        }
+                        if (pair.size == 1) Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrowseTile(target: SearchBrowseTarget, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = HarmoniaThemeTokens.colors
+    val icon = when (target) {
+        SearchBrowseTarget.SONGS -> HarmoniaIcons.MusicNote
+        SearchBrowseTarget.ALBUMS -> HarmoniaIcons.Album
+        SearchBrowseTarget.ARTISTS -> HarmoniaIcons.Person
+        SearchBrowseTarget.PLAYLISTS -> HarmoniaIcons.Playlists
+        SearchBrowseTarget.FAVORITES -> HarmoniaIcons.Favorite
+    }
+    Box(
+        modifier = modifier
+            .height(88.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(colors.primarySignal.copy(alpha = if (colors.isDark) 0.18f else 0.12f))
+            .clickable(onClick = onClick)
+            .padding(14.dp)
+            .semantics { contentDescription = "Browse ${target.label}" }
+    ) {
+        Text(
+            text = target.label,
+            style = MaterialTheme.typography.titleMedium,
+            color = colors.textPrimary,
+            modifier = Modifier.align(Alignment.TopStart)
+        )
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = colors.primarySignal,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .size(30.dp)
+        )
     }
 }
 

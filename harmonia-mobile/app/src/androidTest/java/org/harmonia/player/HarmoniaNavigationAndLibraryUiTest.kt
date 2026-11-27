@@ -93,10 +93,10 @@ class HarmoniaNavigationAndLibraryUiTest {
         // 4. Navigate to Search
         composeTestRule.onNodeWithText("Search").performClick()
         composeTestRule.waitUntil(3000) {
-            composeTestRule.onAllNodesWithText("Your library").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Browse your library").fetchSemanticsNodes().isNotEmpty()
         }
-        composeTestRule.onNodeWithText("Your library").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Your library").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Browse your library").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Browse your library").assertIsDisplayed()
 
         // 5. Navigate to Settings
         composeTestRule.onNodeWithText("Settings").performClick()
@@ -207,13 +207,13 @@ class HarmoniaNavigationAndLibraryUiTest {
         }
 
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("Your library").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Browse your library").fetchSemanticsNodes().isNotEmpty()
         }
 
-        composeTestRule.onNodeWithText("Your library").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Your library").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Browse your library").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Browse your library").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Search input field").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Type to search local catalog").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Songs, artists, albums, playlists").assertIsDisplayed()
     }
 
     @Test
@@ -225,7 +225,7 @@ class HarmoniaNavigationAndLibraryUiTest {
         }
 
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("Your library").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Browse your library").fetchSemanticsNodes().isNotEmpty()
         }
 
         val searchField = composeTestRule.onNodeWithContentDescription("Search input field")
@@ -237,7 +237,7 @@ class HarmoniaNavigationAndLibraryUiTest {
 
         // Clicking clear button resets the search field
         composeTestRule.onNodeWithContentDescription("Clear search query").performClick()
-        composeTestRule.onNodeWithText("Type to search local catalog").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Songs, artists, albums, playlists").assertIsDisplayed()
     }
 
     @Test
@@ -249,7 +249,7 @@ class HarmoniaNavigationAndLibraryUiTest {
         }
 
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("Your library").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Browse your library").fetchSemanticsNodes().isNotEmpty()
         }
 
         val searchField = composeTestRule.onNodeWithContentDescription("Search input field")

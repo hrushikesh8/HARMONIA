@@ -44,7 +44,7 @@ Status: `Done` · `In progress` · `Planned`
 | 2.5 | Album page: hero artwork, Play / Shuffle buttons, Disc 1 / Disc 2 headers | UI, UX | Done |
 | 2.6 | Artist page: hero header, top songs, albums | UI, BE | Done |
 | 2.7 | Playlist page: artwork collage header, drag to reorder | UI, UX | Done |
-| 2.8 | Search restyle and recent searches | UI, UX, BE | Planned |
+| 2.8 | Search restyle and recent searches | UI, UX, BE | Done |
 
 ## Phase 3: Supporting screens and partly-working features
 
@@ -236,6 +236,19 @@ Status: `Done` · `In progress` · `Planned`
   up/down arrow buttons. Screen-reader users get "Move up" / "Move down" actions on each song.
 - **Why:** Up/down arrows meant many taps to move a song more than one place; drag is what people
   expect from Apple Music, Spotify and our own queue editor.
+
+### 2.8 Search
+- **What:** Restyled `presentation/search/SearchScreen.kt`: big "Search" title, a filled rounded
+  search box (keyboard Search key runs the search), pill filters (All, Songs, Albums, Artists,
+  Playlists) shown only while searching. Before you type: **Recent searches** (tap to search again,
+  ✕ to remove, Clear for all) and **Browse your library** tiles for Songs, Albums, Artists, Playlists
+  and Favorites that open those pages.
+- **Backend:** Up to 8 recent searches are saved in user preferences (`getRecentSearches` /
+  `setRecentSearches`); a search is remembered when you press Search or open one of its results.
+  Also fixed playlist results always saying "0 songs": the search query now counts songs
+  (`PlaylistDao.searchPlaylistsWithCount`).
+- **Why:** Apple Music's Search starts with your recent searches and browse categories instead of
+  an empty page, which makes it useful even before you type.
 
 ## Decisions and ideas checked
 

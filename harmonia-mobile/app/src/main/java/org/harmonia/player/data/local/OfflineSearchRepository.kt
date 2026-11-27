@@ -76,8 +76,8 @@ class OfflineSearchRepository(
     override fun searchPlaylists(query: String): Flow<List<Playlist>> {
         val clean = query.trim()
         if (clean.isBlank()) return flowOf(emptyList())
-        return playlistDao.searchPlaylists(clean).map { entities ->
-            entities.map { it.toDomain() }
+        return playlistDao.searchPlaylistsWithCount(clean).map { rows ->
+            rows.map { it.playlist.toDomain(trackCount = it.trackCount) }
         }
     }
 }
