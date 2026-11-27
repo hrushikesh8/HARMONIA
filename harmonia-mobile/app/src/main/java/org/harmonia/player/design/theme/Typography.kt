@@ -1,92 +1,81 @@
 package org.harmonia.player.design.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
+import org.harmonia.player.R
 
 /**
- * Harmonia Official Typography Hierarchy — Direction 2: Acoustic Sanctuary
+ * Harmonia typography: Figtree everywhere.
  *
- * Principles:
- * - Natural, legible Sans-Serif hierarchy for content and navigation.
- * - Monospace strictly reserved for numerical values, timers, bitrates, and technical formats (FLAC/WAV).
- * - Calibrated optical letter spacing and line heights for maximum legibility.
- * - Text colors come from the active theme's semantic colors, so styles stay legible in light mode
- *   (dark: WarmSignalWhite primary, MutedStone secondary, AnalogWarmGold technical labels).
+ * Figtree is a friendly geometric sans (SIL Open Font License, see third_party/figtree/OFL.txt),
+ * bundled as one variable font file so it works offline and every weight comes from ~60 KB.
+ * Numbers use tabular figures so timers and durations don't jitter while they count.
+ * Text colours come from the active theme, so styles stay legible in light and dark mode.
  */
+@OptIn(ExperimentalTextApi::class)
+private fun figtree(weight: FontWeight) = Font(
+    resId = R.font.figtree_variable,
+    weight = weight,
+    variationSettings = FontVariation.Settings(FontVariation.weight(weight.weight))
+)
+
+val HarmoniaFontFamily = FontFamily(
+    figtree(FontWeight.Normal),
+    figtree(FontWeight.Medium),
+    figtree(FontWeight.SemiBold),
+    figtree(FontWeight.Bold),
+    figtree(FontWeight.ExtraBold),
+    figtree(FontWeight.Black)
+)
+
+private const val TABULAR_FIGURES = "tnum"
+
+private fun style(
+    weight: FontWeight,
+    size: TextUnit,
+    lineHeight: TextUnit,
+    letterSpacing: TextUnit,
+    color: androidx.compose.ui.graphics.Color
+) = TextStyle(
+    fontFamily = HarmoniaFontFamily,
+    fontWeight = weight,
+    fontSize = size,
+    lineHeight = lineHeight,
+    letterSpacing = letterSpacing,
+    color = color,
+    fontFeatureSettings = TABULAR_FIGURES
+)
+
 fun harmoniaTypography(colors: HarmoniaSemanticColors) = Typography(
-    // Large ambient headings, greeting titles
-    displayLarge = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.ExtraBold,
-        fontSize = 28.sp,
-        lineHeight = 34.sp,
-        letterSpacing = (-0.5).sp,
-        color = colors.textPrimary
-    ),
-    // Screen titles (Home, Library, Now Playing)
-    titleLarge = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Bold,
-        fontSize = 20.sp,
-        lineHeight = 26.sp,
-        letterSpacing = (-0.2).sp,
-        color = colors.textPrimary
-    ),
-    // Section headers, card titles, track titles in lists
-    titleMedium = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 16.sp,
-        lineHeight = 22.sp,
-        letterSpacing = 0.sp,
-        color = colors.textPrimary
-    ),
-    // Primary body content, descriptive text
-    bodyLarge = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Normal,
-        fontSize = 15.sp,
-        lineHeight = 22.sp,
-        letterSpacing = 0.15.sp,
-        color = colors.textPrimary
-    ),
+    // Big screen greetings and hero titles (album / artist / playlist headers)
+    displayLarge = style(FontWeight.ExtraBold, 30.sp, 36.sp, (-0.6).sp, colors.textPrimary),
+    displayMedium = style(FontWeight.ExtraBold, 26.sp, 32.sp, (-0.5).sp, colors.textPrimary),
+    displaySmall = style(FontWeight.Bold, 24.sp, 30.sp, (-0.4).sp, colors.textPrimary),
+    headlineLarge = style(FontWeight.Bold, 24.sp, 30.sp, (-0.4).sp, colors.textPrimary),
+    headlineMedium = style(FontWeight.Bold, 22.sp, 28.sp, (-0.3).sp, colors.textPrimary),
+    headlineSmall = style(FontWeight.Bold, 20.sp, 26.sp, (-0.2).sp, colors.textPrimary),
+    // Screen titles and section headers
+    titleLarge = style(FontWeight.Bold, 21.sp, 27.sp, (-0.3).sp, colors.textPrimary),
+    // Track titles in lists, card titles
+    titleMedium = style(FontWeight.SemiBold, 16.sp, 22.sp, 0.sp, colors.textPrimary),
+    titleSmall = style(FontWeight.SemiBold, 14.sp, 20.sp, 0.sp, colors.textPrimary),
+    // Body and descriptive text
+    bodyLarge = style(FontWeight.Normal, 15.sp, 22.sp, 0.1.sp, colors.textPrimary),
     // Artist names, secondary metadata
-    bodyMedium = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Normal,
-        fontSize = 13.sp,
-        lineHeight = 18.sp,
-        letterSpacing = 0.15.sp,
-        color = colors.textSecondary
-    ),
-    // Album years, track counts, duration labels
-    bodySmall = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.Normal,
-        fontSize = 12.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.2.sp,
-        color = colors.textSecondary
-    ),
-    // Interactive buttons, tabs, category action pills
-    labelMedium = TextStyle(
-        fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 12.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.25.sp,
-        color = colors.textPrimary
-    ),
-    // STRICTLY for technical audio parameters, timestamps, bitrates, sample rates, format pills
-    labelSmall = TextStyle(
-        fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 11.sp,
-        lineHeight = 14.sp,
-        letterSpacing = 0.5.sp,
-        color = colors.technicalAccent
-    )
+    bodyMedium = style(FontWeight.Normal, 13.sp, 18.sp, 0.1.sp, colors.textSecondary),
+    // Years, track counts, durations
+    bodySmall = style(FontWeight.Normal, 12.sp, 16.sp, 0.15.sp, colors.textSecondary),
+    // Buttons (Material buttons read labelLarge)
+    labelLarge = style(FontWeight.Bold, 14.sp, 20.sp, 0.1.sp, colors.textPrimary),
+    // Tabs, pills, chips
+    labelMedium = style(FontWeight.SemiBold, 12.sp, 16.sp, 0.2.sp, colors.textPrimary),
+    // Small tags: formats (FLAC, MP3), timestamps, eyebrow labels
+    labelSmall = style(FontWeight.Bold, 11.sp, 14.sp, 0.4.sp, colors.technicalAccent)
 )

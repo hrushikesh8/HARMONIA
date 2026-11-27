@@ -65,7 +65,8 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val userPrefs = remember { ServiceLocator.getUserPreferencesRepository() }
-            val isDarkTheme by userPrefs.observeIsDarkTheme().collectAsState(initial = userPrefs.isDarkTheme())
+            val themeMode by userPrefs.observeThemeMode().collectAsState(initial = userPrefs.getThemeMode())
+            val isDarkTheme = themeMode.resolveDark(androidx.compose.foundation.isSystemInDarkTheme())
             val keepScreenOn by userPrefs.observeKeepScreenOn().collectAsState(initial = userPrefs.isKeepScreenOn())
 
             DisposableEffect(keepScreenOn) {

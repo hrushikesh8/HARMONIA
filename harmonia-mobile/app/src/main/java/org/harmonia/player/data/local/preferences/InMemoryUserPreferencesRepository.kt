@@ -4,26 +4,27 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.harmonia.player.domain.model.RepeatMode
+import org.harmonia.player.domain.model.ThemeMode
 import org.harmonia.player.domain.repository.UserPreferencesRepository
 
 /**
  * Pure in-memory implementation of [UserPreferencesRepository] for unit tests and fallbacks.
  */
 class InMemoryUserPreferencesRepository(
-    initialDarkTheme: Boolean = true,
+    initialThemeMode: ThemeMode = ThemeMode.DARK,
     initialShuffle: Boolean = false,
     initialRepeatMode: RepeatMode = RepeatMode.OFF,
     initialKeepScreenOn: Boolean = false
 ) : UserPreferencesRepository {
 
-    private val _darkTheme = MutableStateFlow(initialDarkTheme)
+    private val _themeMode = MutableStateFlow(initialThemeMode)
     private val _shuffle = MutableStateFlow(initialShuffle)
     private val _repeatMode = MutableStateFlow(initialRepeatMode)
     private val _keepScreenOn = MutableStateFlow(initialKeepScreenOn)
 
-    override fun isDarkTheme(): Boolean = _darkTheme.value
-    override fun setIsDarkTheme(isDark: Boolean) { _darkTheme.value = isDark }
-    override fun observeIsDarkTheme(): Flow<Boolean> = _darkTheme.asStateFlow()
+    override fun getThemeMode(): ThemeMode = _themeMode.value
+    override fun setThemeMode(mode: ThemeMode) { _themeMode.value = mode }
+    override fun observeThemeMode(): Flow<ThemeMode> = _themeMode.asStateFlow()
 
     override fun isDefaultShuffleEnabled(): Boolean = _shuffle.value
     override fun setDefaultShuffleEnabled(enabled: Boolean) { _shuffle.value = enabled }

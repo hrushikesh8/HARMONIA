@@ -3,69 +3,90 @@ package org.harmonia.player.design.theme
 import androidx.compose.ui.graphics.Color
 
 /**
- * Harmonia Official Brand Color Palette — Direction 2: Obsidian & Warm Analog (Acoustic Sanctuary)
+ * Harmonia colour palette: "Soft Lavender".
  *
- * Core Principles:
- * - Deep obsidian abyss background hierarchy (ObsidianAbyss, ObsidianSurface, ObsidianContainer).
- * - Sonic Amber (#F5A623 / #FFB020) reserved for vital playback actions and active playback states.
- * - Electric Cerulean (#3BA5FF) remains secondary and technical (storage indicators, local sync).
- * - Analog Warm Gold (#D4AF37) for hi-res audio badges, bitrates, format pills.
- * - Warm Signal White (#FAF8F5) for primary text (no harsh ocular glare), Muted Stone for secondary.
- * - Coherent, refined daylight palette with verified WCAG AAA/AA contrast.
- * - Full backward-compatibility aliases maintained for existing screen references.
+ * - Dark theme follows the Spotify approach: a neutral near-black canvas, a few grey
+ *   surface steps, white/grey text, and ONE accent colour (lavender) reserved for
+ *   playback actions, progress, the active tab and the playing track.
+ * - Light theme is designed, not inverted: white surfaces with a faint lavender-grey
+ *   tint and a deeper lavender so the accent passes contrast on white.
+ * - Contrast ratios are noted next to each token (WCAG 2.1).
  */
 
-// ── Obsidian & Acoustic Sanctuary Foundations (Dark Theme) ───────────────
-val ObsidianAbyss = Color(0xFF080A0E)          // Root background
-val ObsidianSurface = Color(0xFF12161F)        // Elevated surfaces (cards, bottom sheet)
-val ObsidianContainer = Color(0xFF1A202C)      // Inner containers, list items, pill backgrounds
-val ObsidianBorder = Color(0xFF232B3B)         // Subtle structural separators
-val ObsidianHighlight = Color(0xFF2C364A)      // Interactive hover / pressed surfaces
+// ── Dark theme neutrals ────────────────────────────────────────────────────
+val InkBackground = Color(0xFF121212)          // Root canvas
+val InkSurface = Color(0xFF181818)             // Cards, sheets, mini player
+val InkContainer = Color(0xFF242424)           // Chips, list containers, pills
+val InkBorder = Color(0xFF2E2E2E)              // Hairline separators
+val InkHighlight = Color(0xFF333333)           // Pressed / selected surfaces
 
-// ── Primary Playback Accent — Sonic Amber ──────────────────────────────────
-// Reserved strictly for primary playback actions, playing state indicators, active scrubbers
-val SonicAmber = Color(0xFFF5A623)             // 9.77:1 contrast on ObsidianAbyss (WCAG AAA)
-val SonicAmberBright = Color(0xFFFFB020)       // 10.83:1 contrast on ObsidianAbyss (WCAG AAA)
-val SonicAmberHover = Color(0xFFFFBE4D)        // Pressed/hover state
-val SonicAmberGlow = Color(0x33F5A623)         // Ambient drop shadow / aura
+// ── Accent: Soft Lavender ──────────────────────────────────────────────────
+val Lavender = Color(0xFFA99BFF)                // 7.87:1 on InkBackground (AAA)
+val LavenderBright = Color(0xFFC4B9FF)          // 10.46:1 on InkBackground, links / secondary accent
+val LavenderPressed = Color(0xFFBDB1FF)
+val LavenderGlow = Color(0x33A99BFF)
+val LavenderMist = Color(0xFFBDB6E0)            // 9.75:1, technical labels (format, bitrate)
+val LavenderTint = Color(0x26A99BFF)            // Soft accent wash behind pills
 
-// ── Secondary Technical Accent — Electric Cerulean & Analog Gold ──────────
-// Cerulean remains secondary and technical for storage indicators, local sync, and neutral navigation
-val CeruleanTechnical = Color(0xFF3BA5FF)      // 7.56:1 contrast on ObsidianAbyss (WCAG AAA)
-val CeruleanTechnicalHover = Color(0xFF5CB9FF)
-val CeruleanTechnicalGlow = Color(0x333BA5FF)
-val CeruleanMutedHighlight = Color(0xFF82B1FF)
-val CeruleanIceAccent = Color(0xFF90CAF9)
-val CeruleanFormatPillBg = Color(0x1F3BA5FF)
+// ── Dark theme text ────────────────────────────────────────────────────────
+val InkTextPrimary = Color(0xFFFFFFFF)          // 18.73:1 on InkBackground
+val InkTextSecondary = Color(0xFFB3B3B3)        // 8.93:1 on InkBackground
+val InkTextDisabled = Color(0xFF6A6A6A)         // 3.46:1, disabled only
 
-// Analog Warm Gold for bitrates, sample rates, format badges (FLAC/DSD/WAV)
-val AnalogWarmGold = Color(0xFFD4AF37)
+// ── Status ─────────────────────────────────────────────────────────────────
+val StatusSuccessMint = Color(0xFF4ADE80)
+val StatusWarningAmber = Color(0xFFFFB547)       // 10.66:1 on InkBackground
+val StatusErrorCrimson = Color(0xFFFF6B6B)       // 6.75:1 on InkBackground
 
-// ── Typography & Content Signals (Dark Theme) ─────────────────────────────
-val WarmSignalWhite = Color(0xFFFAF8F5)        // 18.69:1 contrast on ObsidianAbyss (WCAG AAA)
-val MutedStone = Color(0xFFA0AABF)             // 8.49:1 contrast on ObsidianAbyss (WCAG AAA)
-val SubtleCharcoal = Color(0xFF67738A)         // 4.54:1 contrast on ObsidianAbyss (WCAG AA)
+// ── Light theme ────────────────────────────────────────────────────────────
+val PaperBackground = Color(0xFFF7F6FB)         // Canvas with a faint lavender tint
+val PaperSurface = Color(0xFFFFFFFF)            // Cards, sheets
+val PaperContainer = Color(0xFFEEECF5)          // Chips, list containers
+val PaperBorder = Color(0xFFE0DDEA)             // Hairline separators
+val PaperTextPrimary = Color(0xFF121212)        // 17.7:1 on PaperBackground
+val PaperTextSecondary = Color(0xFF5E5C66)      // 6.11:1 on PaperBackground
+val PaperTextDisabled = Color(0xFF9A98A3)
+val DayLavender = Color(0xFF5B4BC4)             // 6.01:1 on PaperBackground (AA)
+val DayLavenderDeep = Color(0xFF4E3FB0)         // 7.89:1 on white, links
+val DayLavenderMist = Color(0xFF5E5791)         // 6.47:1, technical labels
+val DayWarning = Color(0xFFA35A00)              // 5.22:1 on white
+val DayError = Color(0xFFC62828)                // 5.62:1 on white
+val DaySuccess = Color(0xFF1B7F3B)
 
-// ── Status & Semantic Badges ──────────────────────────────────────────────
-val StatusSuccessMint = Color(0xFF34C759)
-val StatusWarningAmber = Color(0xFFFFB020)
-val StatusErrorCrimson = Color(0xFFFF4B4B)
-val OfflineBadgeColor = CeruleanTechnical
-val StreamingBadgeColor = MutedStone
-
-// ── Daylight / Light Theme Foundations (Acoustic Daylight) ────────────────
-// Coherent warm light palette designed intentionally rather than inverted
-val ParchmentDay = Color(0xFFF6F8FA)           // Warm clean daylight canvas
-val PureDayWhite = Color(0xFFFFFFFF)           // Elevated daylight surfaces
-val DayContainer = Color(0xFFEDF1F5)           // Daylight inner containers / chips
-val DayBorder = Color(0xFFD8E0E8)              // Subtle daylight separators
-val DayInkPrimary = Color(0xFF0A0E17)          // 18.13:1 contrast on ParchmentDay (WCAG AAA)
-val DaySlateSecondary = Color(0xFF4A5568)      // 7.07:1 contrast on ParchmentDay (WCAG AAA)
-val DayDimDisabled = Color(0xFF8E9BAE)         // 3.5:1 contrast
-val DaySonicAmber = Color(0xFF844400)          // Deep warm amber: 7.03:1 contrast on ParchmentDay (WCAG AAA)
-val DayCeruleanTechnical = Color(0xFF0A66C2)   // Deep cerulean: 5.34:1 contrast on ParchmentDay (WCAG AA)
-val DayAmberWarning = Color(0xFFB45309)
-val DayCrimsonError = Color(0xFFB91C1C)
+// ── Legacy names (pre-lavender) ────────────────────────────────────────────
+// Older code and docs refer to these; they now resolve to the lavender palette.
+val ObsidianAbyss = InkBackground
+val ObsidianSurface = InkSurface
+val ObsidianContainer = InkContainer
+val ObsidianBorder = InkBorder
+val ObsidianHighlight = InkHighlight
+val SonicAmber = Lavender
+val SonicAmberBright = LavenderBright
+val SonicAmberHover = LavenderPressed
+val SonicAmberGlow = LavenderGlow
+val CeruleanTechnical = LavenderBright
+val CeruleanTechnicalHover = LavenderPressed
+val CeruleanTechnicalGlow = LavenderGlow
+val CeruleanMutedHighlight = LavenderBright
+val CeruleanIceAccent = LavenderMist
+val CeruleanFormatPillBg = LavenderTint
+val AnalogWarmGold = LavenderMist
+val WarmSignalWhite = InkTextPrimary
+val MutedStone = InkTextSecondary
+val SubtleCharcoal = InkTextDisabled
+val OfflineBadgeColor = LavenderBright
+val StreamingBadgeColor = InkTextSecondary
+val ParchmentDay = PaperBackground
+val PureDayWhite = PaperSurface
+val DayContainer = PaperContainer
+val DayBorder = PaperBorder
+val DayInkPrimary = PaperTextPrimary
+val DaySlateSecondary = PaperTextSecondary
+val DayDimDisabled = PaperTextDisabled
+val DaySonicAmber = DayLavender
+val DayCeruleanTechnical = DayLavenderDeep
+val DayAmberWarning = DayWarning
+val DayCrimsonError = DayError
 
 // ── Backward-Compatibility Aliases ─────────────────────────────────────────
 // Map legacy tokens cleanly so existing screen composables and imports compile seamlessly
@@ -113,7 +134,7 @@ val CloudContainer = DayContainer
 val MistBorder = DayBorder
 val DeepBlueAccent = DaySonicAmber
 val LightBlueAccent = DayCeruleanTechnical
-val InkBlack = DayInkPrimary
+val InkBlack = PaperTextPrimary
 val SlateTextSecondary = DaySlateSecondary
 val DimTextDisabled = DayDimDisabled
 val DeepAmberWarning = DayAmberWarning
@@ -131,9 +152,9 @@ data class HarmoniaSemanticColors(
     val surfaceContainer: Color,
     val borderStructural: Color,
     val primarySignal: Color,
-    val primarySignalHover: Color = SonicAmberHover,
+    val primarySignalHover: Color = LavenderPressed,
     val secondarySignal: Color,
-    val technicalAccent: Color = CeruleanIceAccent,
+    val technicalAccent: Color = LavenderMist,
     val textPrimary: Color,
     val textSecondary: Color,
     val textDisabled: Color,
@@ -144,17 +165,17 @@ data class HarmoniaSemanticColors(
 )
 
 val DarkHarmoniaSemanticColors = HarmoniaSemanticColors(
-    backgroundRoot = ObsidianAbyss,
-    surfaceElevated = ObsidianSurface,
-    surfaceContainer = ObsidianContainer,
-    borderStructural = ObsidianBorder,
-    primarySignal = SonicAmber,
-    primarySignalHover = SonicAmberHover,
-    secondarySignal = CeruleanTechnical,
-    technicalAccent = AnalogWarmGold,
-    textPrimary = WarmSignalWhite,
-    textSecondary = MutedStone,
-    textDisabled = SubtleCharcoal,
+    backgroundRoot = InkBackground,
+    surfaceElevated = InkSurface,
+    surfaceContainer = InkContainer,
+    borderStructural = InkBorder,
+    primarySignal = Lavender,
+    primarySignalHover = LavenderPressed,
+    secondarySignal = LavenderBright,
+    technicalAccent = LavenderMist,
+    textPrimary = InkTextPrimary,
+    textSecondary = InkTextSecondary,
+    textDisabled = InkTextDisabled,
     statusSuccess = StatusSuccessMint,
     statusWarning = StatusWarningAmber,
     statusError = StatusErrorCrimson,
@@ -162,19 +183,19 @@ val DarkHarmoniaSemanticColors = HarmoniaSemanticColors(
 )
 
 val LightHarmoniaSemanticColors = HarmoniaSemanticColors(
-    backgroundRoot = ParchmentDay,
-    surfaceElevated = PureDayWhite,
-    surfaceContainer = DayContainer,
-    borderStructural = DayBorder,
-    primarySignal = DaySonicAmber,
-    primarySignalHover = DaySonicAmber,
-    secondarySignal = DayCeruleanTechnical,
-    technicalAccent = DayCeruleanTechnical,
-    textPrimary = DayInkPrimary,
-    textSecondary = DaySlateSecondary,
-    textDisabled = DayDimDisabled,
-    statusSuccess = DaySonicAmber,
-    statusWarning = DayAmberWarning,
-    statusError = DayCrimsonError,
+    backgroundRoot = PaperBackground,
+    surfaceElevated = PaperSurface,
+    surfaceContainer = PaperContainer,
+    borderStructural = PaperBorder,
+    primarySignal = DayLavender,
+    primarySignalHover = DayLavenderDeep,
+    secondarySignal = DayLavenderDeep,
+    technicalAccent = DayLavenderMist,
+    textPrimary = PaperTextPrimary,
+    textSecondary = PaperTextSecondary,
+    textDisabled = PaperTextDisabled,
+    statusSuccess = DaySuccess,
+    statusWarning = DayWarning,
+    statusError = DayError,
     isDark = false
 )

@@ -6,6 +6,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.harmonia.player.domain.model.RepeatMode
+import org.harmonia.player.domain.model.ThemeMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -25,35 +26,46 @@ class SharedPreferencesUserPreferencesRepositoryTest {
     }
 
     @Test
-    fun defaultDarkThemeIsTrue() {
-        assertTrue("Default theme must be dark", repo.isDarkTheme())
+    fun defaultThemeModeFollowsSystem() {
+        assertEquals(ThemeMode.SYSTEM, repo.getThemeMode())
     }
 
     @Test
-    fun setIsDarkThemePersistsValue() {
-        repo.setIsDarkTheme(false)
-        assertFalse(repo.isDarkTheme())
-        assertFalse(fakePrefs.getBoolean(SharedPreferencesUserPreferencesRepository.KEY_DARK_THEME, true))
+    fun setThemeModePersistsValue() {
+        repo.setThemeMode(ThemeMode.LIGHT)
+        assertEquals(ThemeMode.LIGHT, repo.getThemeMode())
+        assertEquals("LIGHT", fakePrefs.getString(SharedPreferencesUserPreferencesRepository.KEY_THEME_MODE, null))
 
-        repo.setIsDarkTheme(true)
-        assertTrue(repo.isDarkTheme())
-        assertTrue(fakePrefs.getBoolean(SharedPreferencesUserPreferencesRepository.KEY_DARK_THEME, false))
+        repo.setThemeMode(ThemeMode.DARK)
+        assertEquals(ThemeMode.DARK, repo.getThemeMode())
     }
 
     @Test
-    fun observeIsDarkThemeEmitsInitialAndUpdates() = runTest {
-        val emissions = mutableListOf<Boolean>()
+    fun legacyDarkSwitchIsMigrated() {
+        fakePrefs.edit().putBoolean(SharedPreferencesUserPreferencesRepository.KEY_DARK_THEME, false).apply()
+        assertEquals(ThemeMode.LIGHT, repo.getThemeMode())
+
+        fakePrefs.edit().putBoolean(SharedPreferencesUserPreferencesRepository.KEY_DARK_THEME, true).apply()
+        assertEquals(ThemeMode.DARK, repo.getThemeMode())
+
+        repo.setThemeMode(ThemeMode.SYSTEM)
+        assertEquals("New setting wins over the legacy switch", ThemeMode.SYSTEM, repo.getThemeMode())
+    }
+
+    @Test
+    fun observeThemeModeEmitsInitialAndUpdates() = runTest {
+        val emissions = mutableListOf<ThemeMode>()
         val job = launch(UnconfinedTestDispatcher()) {
-            repo.observeIsDarkTheme().collect { emissions.add(it) }
+            repo.observeThemeMode().collect { emissions.add(it) }
         }
 
-        assertEquals(listOf(true), emissions)
+        assertEquals(listOf(ThemeMode.SYSTEM), emissions)
 
-        repo.setIsDarkTheme(false)
-        assertEquals(listOf(true, false), emissions)
+        repo.setThemeMode(ThemeMode.LIGHT)
+        assertEquals(listOf(ThemeMode.SYSTEM, ThemeMode.LIGHT), emissions)
 
-        repo.setIsDarkTheme(true)
-        assertEquals(listOf(true, false, true), emissions)
+        repo.setThemeMode(ThemeMode.DARK)
+        assertEquals(listOf(ThemeMode.SYSTEM, ThemeMode.LIGHT, ThemeMode.DARK), emissions)
 
         job.cancel()
     }

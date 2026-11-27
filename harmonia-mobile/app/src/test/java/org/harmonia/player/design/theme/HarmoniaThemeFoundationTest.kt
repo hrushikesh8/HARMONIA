@@ -151,4 +151,22 @@ class HarmoniaThemeFoundationTest {
         assertTrue("Expected error status on elevated surface >= 3.0 but was $errorContrast", errorContrast >= 3.0)
         assertTrue("Expected warning status on elevated surface >= 3.0 but was $warningContrast", warningContrast >= 3.0)
     }
+
+    @Test
+    fun testDarkTheme_textOnLavenderButton_exceedsWcagAa() {
+        val contrast = calculateContrastRatio(DarkHarmoniaSemanticColors.backgroundRoot, DarkHarmoniaSemanticColors.primarySignal)
+        assertTrue("Expected dark text on lavender >= 4.5 but was $contrast", contrast >= 4.5)
+    }
+
+    @Test
+    fun testLightTheme_whiteOnLavenderButton_exceedsWcagAa() {
+        val contrast = calculateContrastRatio(LightHarmoniaSemanticColors.surfaceElevated, LightHarmoniaSemanticColors.primarySignal)
+        assertTrue("Expected white text on lavender >= 4.5 but was $contrast", contrast >= 4.5)
+    }
+
+    @Test
+    fun testLightTheme_lavenderOnWhiteSurface_exceedsWcagAa() {
+        val contrast = calculateContrastRatio(LightHarmoniaSemanticColors.primarySignal, LightHarmoniaSemanticColors.surfaceElevated)
+        assertTrue("Expected lavender on white >= 4.5 but was $contrast", contrast >= 4.5)
+    }
 }

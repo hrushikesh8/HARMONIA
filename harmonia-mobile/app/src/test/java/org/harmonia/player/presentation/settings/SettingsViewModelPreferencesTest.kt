@@ -1,5 +1,6 @@
 package org.harmonia.player.presentation.settings
 
+import org.harmonia.player.domain.model.ThemeMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -81,13 +82,13 @@ class SettingsViewModelPreferencesTest {
         subscribeUiState(viewModel)
         advanceUntilIdle()
 
-        assertTrue("Initial theme must be dark", viewModel.uiState.value.isDarkTheme)
+        assertEquals(ThemeMode.DARK, viewModel.uiState.value.themeMode)
 
-        viewModel.setIsDarkTheme(false)
+        viewModel.setThemeMode(ThemeMode.SYSTEM)
         advanceUntilIdle()
 
-        assertFalse("Theme must be updated to false", viewModel.uiState.value.isDarkTheme)
-        assertFalse(userPrefs.isDarkTheme())
+        assertEquals(ThemeMode.SYSTEM, viewModel.uiState.value.themeMode)
+        assertEquals(ThemeMode.SYSTEM, userPrefs.getThemeMode())
     }
 
     @Test

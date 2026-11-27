@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import org.harmonia.player.domain.model.RepeatMode
+import org.harmonia.player.domain.model.ThemeMode
 import org.harmonia.player.domain.repository.UserPreferencesRepository
 
 /**
@@ -16,22 +17,30 @@ class SharedPreferencesUserPreferencesRepository(
     private val sharedPreferences: SharedPreferences
 ) : UserPreferencesRepository {
 
-    override fun isDarkTheme(): Boolean {
-        return sharedPreferences.getBoolean(KEY_DARK_THEME, DEFAULT_DARK_THEME)
+    override fun getThemeMode(): ThemeMode {
+        val raw = sharedPreferences.getString(KEY_THEME_MODE, null)
+        if (raw != null) {
+            return ThemeMode.entries.firstOrNull { it.name == raw } ?: DEFAULT_THEME_MODE
+        }
+        // Migrate the old dark/light switch: an explicit choice is kept, otherwise follow the system.
+        if (sharedPreferences.contains(KEY_DARK_THEME)) {
+            return if (sharedPreferences.getBoolean(KEY_DARK_THEME, true)) ThemeMode.DARK else ThemeMode.LIGHT
+        }
+        return DEFAULT_THEME_MODE
     }
 
-    override fun setIsDarkTheme(isDark: Boolean) {
-        sharedPreferences.edit().putBoolean(KEY_DARK_THEME, isDark).apply()
+    override fun setThemeMode(mode: ThemeMode) {
+        sharedPreferences.edit().putString(KEY_THEME_MODE, mode.name).apply()
     }
 
-    override fun observeIsDarkTheme(): Flow<Boolean> = callbackFlow {
+    override fun observeThemeMode(): Flow<ThemeMode> = callbackFlow {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == KEY_DARK_THEME || key == null) {
-                trySend(isDarkTheme())
+            if (key == KEY_THEME_MODE || key == KEY_DARK_THEME || key == null) {
+                trySend(getThemeMode())
             }
         }
         sharedPreferences.registerOnSharedPreferenceChangeListener(listener)
-        trySend(isDarkTheme())
+        trySend(getThemeMode())
         awaitClose {
             sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener)
         }
@@ -107,12 +116,14 @@ class SharedPreferencesUserPreferencesRepository(
 
     companion object {
         const val PREFERENCES_NAME = "harmonia_user_preferences"
+        /** Legacy boolean dark-mode switch, only read to migrate to [KEY_THEME_MODE]. */
         const val KEY_DARK_THEME = "key_dark_theme"
+        const val KEY_THEME_MODE = "key_theme_mode"
         const val KEY_DEFAULT_SHUFFLE = "key_default_shuffle"
         const val KEY_DEFAULT_REPEAT_MODE = "key_default_repeat_mode"
         const val KEY_KEEP_SCREEN_ON = "key_keep_screen_on"
 
-        const val DEFAULT_DARK_THEME = true
+        val DEFAULT_THEME_MODE = ThemeMode.SYSTEM
         const val DEFAULT_SHUFFLE = false
         const val DEFAULT_KEEP_SCREEN_ON = false
     }

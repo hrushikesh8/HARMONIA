@@ -165,7 +165,7 @@ fun ProfileHubScreen(
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 ) {
                                     Text(
-                                        text = "BLUE EDITION • LOCAL-FIRST",
+                                        text = "LOCAL-FIRST • ON-DEVICE",
                                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                                         color = colors.primarySignal
                                     )

@@ -1,5 +1,10 @@
 package org.harmonia.player.presentation.settings
 
+import org.harmonia.player.domain.model.ThemeMode
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.graphics.Color
 import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -173,47 +178,27 @@ fun SettingsScreen(
             title = "APPEARANCE & VISUAL IDENTITY",
             subtitle = "Theme styling and active display preferences"
         ) {
-            // Theme Mode Toggle
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Harmonia Blue Edition",
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                        color = colors.textPrimary
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = if (uiState.isDarkTheme) {
-                            "Dark Mode: Near-black and deep navy (#070A0F) with electric-blue signals"
-                        } else {
-                            "Daylight Mode: Slate day (#F3F6FA) with deep-blue signals"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.textSecondary
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(spacing.medium))
-
-                Switch(
-                    checked = uiState.isDarkTheme,
-                    onCheckedChange = { viewModel.setIsDarkTheme(it) },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = colors.backgroundRoot,
-                        checkedTrackColor = colors.primarySignal,
-                        uncheckedThumbColor = colors.textSecondary,
-                        uncheckedTrackColor = colors.surfaceContainer,
-                        uncheckedBorderColor = colors.borderStructural
-                    ),
-                    modifier = Modifier
-                        .touchTarget48()
-                        .semantics { contentDescription = "Toggle Dark Mode" }
-                )
-            }
+            // Theme mode: follow system / dark / light
+            Text(
+                text = "Theme",
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                color = colors.textPrimary
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = when (uiState.themeMode) {
+                    ThemeMode.SYSTEM -> "Matches your phone's dark mode setting"
+                    ThemeMode.DARK -> "Always dark"
+                    ThemeMode.LIGHT -> "Always light"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.textSecondary
+            )
+            Spacer(modifier = Modifier.height(spacing.small))
+            ThemeModeSelector(
+                selected = uiState.themeMode,
+                onSelect = viewModel::setThemeMode
+            )
 
             Spacer(modifier = Modifier.height(spacing.medium))
 
@@ -1222,4 +1207,53 @@ internal fun formatDb(levelMb: Short): String {
     val db = levelMb.toDouble() / 100.0
     val sign = if (db > 0) "+" else ""
     return "$sign${String.format(Locale.US, "%.1f dB", db)}"
+}
+
+@Composable
+private fun ThemeModeSelector(
+    selected: ThemeMode,
+    onSelect: (ThemeMode) -> Unit
+) {
+    val colors = HarmoniaThemeTokens.colors
+    val options = listOf(
+        ThemeMode.SYSTEM to "System",
+        ThemeMode.DARK to "Dark",
+        ThemeMode.LIGHT to "Light"
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(50))
+            .background(colors.surfaceContainer)
+            .padding(4.dp)
+            .selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        options.forEach { (mode, label) ->
+            val isSelected = mode == selected
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 40.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(if (isSelected) colors.primarySignal else Color.Transparent)
+                    .selectable(
+                        selected = isSelected,
+                        onClick = { onSelect(mode) },
+                        role = Role.RadioButton
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = when {
+                        !isSelected -> colors.textPrimary
+                        colors.isDark -> colors.backgroundRoot
+                        else -> colors.surfaceElevated
+                    }
+                )
+            }
+        }
+    }
 }

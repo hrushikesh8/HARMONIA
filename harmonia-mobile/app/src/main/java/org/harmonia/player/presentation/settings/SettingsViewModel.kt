@@ -78,7 +78,7 @@ data class SettingsUiState(
     val scanErrorMessage: String? = null,
     val equalizer: EqualizerUiState = EqualizerUiState(),
     val isOnlineEnrichmentEnabled: Boolean = false,
-    val isDarkTheme: Boolean = true,
+    val themeMode: org.harmonia.player.domain.model.ThemeMode = org.harmonia.player.domain.model.ThemeMode.SYSTEM,
     val defaultShuffle: Boolean = false,
     val defaultRepeatMode: org.harmonia.player.domain.model.RepeatMode = org.harmonia.player.domain.model.RepeatMode.OFF,
     val keepScreenOn: Boolean = false,
@@ -253,7 +253,7 @@ class SettingsViewModel(
     }
 
     private data class UserPreferencesTuple(
-        val isDark: Boolean,
+        val themeMode: org.harmonia.player.domain.model.ThemeMode,
         val shuffle: Boolean,
         val repeat: org.harmonia.player.domain.model.RepeatMode,
         val keepScreenOn: Boolean
@@ -270,12 +270,12 @@ class SettingsViewModel(
     )
 
     private val prefsFlow = combine(
-        userPrefs.observeIsDarkTheme(),
+        userPrefs.observeThemeMode(),
         userPrefs.observeDefaultShuffleEnabled(),
         userPrefs.observeDefaultRepeatMode(),
         userPrefs.observeKeepScreenOn()
-    ) { isDark, shuffle, repeat, keepOn ->
-        UserPreferencesTuple(isDark, shuffle, repeat, keepOn)
+    ) { themeMode, shuffle, repeat, keepOn ->
+        UserPreferencesTuple(themeMode, shuffle, repeat, keepOn)
     }
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
@@ -364,7 +364,7 @@ class SettingsViewModel(
             scanErrorMessage = errorMsg,
             equalizer = aux.equalizer,
             isOnlineEnrichmentEnabled = aux.isEnrichmentEnabled,
-            isDarkTheme = aux.prefs.isDark,
+            themeMode = aux.prefs.themeMode,
             defaultShuffle = aux.prefs.shuffle,
             defaultRepeatMode = aux.prefs.repeat,
             keepScreenOn = aux.prefs.keepScreenOn,
@@ -380,15 +380,15 @@ class SettingsViewModel(
             equalizer = EqualizerUiState(
                 isUserEnabled = intentSource.isEqualizerEnabled()
             ),
-            isDarkTheme = userPrefs.isDarkTheme(),
+            themeMode = userPrefs.getThemeMode(),
             defaultShuffle = userPrefs.isDefaultShuffleEnabled(),
             defaultRepeatMode = userPrefs.getDefaultRepeatMode(),
             keepScreenOn = userPrefs.isKeepScreenOn()
         )
     )
 
-    fun setIsDarkTheme(isDark: Boolean) {
-        userPrefs.setIsDarkTheme(isDark)
+    fun setThemeMode(mode: org.harmonia.player.domain.model.ThemeMode) {
+        userPrefs.setThemeMode(mode)
     }
 
     fun setDefaultShuffle(enabled: Boolean) {

@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.HarmoniaMobile" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Window colours match the Compose theme so app launch doesn't flash a different colour. -->
+    <style name="Theme.HarmoniaMobile" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/harmonia_window_background</item>
+    </style>
 </resources>
