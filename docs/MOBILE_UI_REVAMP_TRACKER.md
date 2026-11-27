@@ -39,7 +39,7 @@ Status: `Done` · `In progress` · `Planned`
 |---|------|------|--------|
 | 2.1 | Now Playing redesign: big artwork, swipe down to close, queue toggle, volume slider (lyrics toggle arrives with 4.3) | UI, UX | Done |
 | 2.2 | Mini player restyle to match | UI | Done |
-| 2.3 | Library landing list (Playlists, Artists, Albums, Songs, Genres, Folders, Favorites); sort is remembered and visible | UI, UX, BE | Planned |
+| 2.3 | Library landing list (Playlists, Artists, Albums, Songs, Folders, Favorites); sort is remembered and visible (Genres row arrives with 4.2) | UI, UX, BE | Done |
 | 2.4 | Home sections: Recently played, Recently added, Rediscover, Top this month | UI, UX, BE | Planned |
 | 2.5 | Album page: hero artwork, Play / Shuffle buttons, Disc 1 / Disc 2 headers | UI, UX | Planned |
 | 2.6 | Artist page: hero header, top songs, albums | UI, BE | Planned |
@@ -57,6 +57,7 @@ Status: `Done` · `In progress` · `Planned`
 | 3.5 | Format filter chips generated from your library (OGG, Opus, ALAC...) | UI, BE | Planned |
 | 3.6 | Album grid adapts to screen width / landscape / tablets | UI | Planned |
 | 3.7 | Queue: auto-scroll while dragging; strict "Play next" with shuffle on | UX, BE | Planned |
+| 3.10 | Restyle song / album / artist rows in category lists (still the older bordered cards) | UI | Planned |
 | 3.9 | Instrumented UI tests (`androidTest`) were already out of date before the revamp (expect a Settings tab, old copy); refresh them | BE | Planned |
 | 3.8 | Check playback service start-up time on a real phone (emulator showed "not responding" on cold start) | BE | Planned |
 
@@ -154,6 +155,19 @@ Status: `Done` · `In progress` · `Planned`
   gestures (left/right to skip, up to open Now Playing) are unchanged. Light mode gets a soft shadow.
 - **Why:** Matches the new Now Playing and the floating mini players in Apple Music and Spotify.
   Keeping play/pause neutral leaves the lavender for progress, so the accent isn't overused.
+
+### 2.3 Library landing list
+- **What:** The Library tab now opens on a list (new `presentation/library/LibraryHomeScreen.kt`):
+  Playlists, Artists, Albums, Songs, Folders and Favorites with counts, then a "Recently added"
+  album grid. Each row opens that category as its own page with a back arrow (the existing
+  `LibraryScreen` in a single-category mode, route `LibraryCategory`), so no list logic was
+  rewritten. Each page shows "Sorted by ..." and tapping it changes the sort.
+- **Remembered sort:** Songs, Albums and Artists sort orders are saved in user preferences
+  (`getLibrarySort` / `setLibrarySort`) and survive leaving the page and restarting the app.
+- **Playlists moved into Library:** the bottom bar is now Home, Search and Library (Apple Music
+  style). Home's playlist shortcuts open Playlists inside the Library tab.
+- **Why:** Five tabs plus a row of sub-tabs was a lot to scan. Apple Music's list makes each
+  category one tap away, and a sort that resets every visit was a common annoyance.
 
 ## Decisions and ideas checked
 

@@ -58,7 +58,8 @@ import org.harmonia.player.presentation.components.HarmoniaArtwork
 fun PlaylistsScreen(
     modifier: Modifier = Modifier,
     viewModel: PlaylistsViewModel = viewModel(),
-    onPlaylistClick: (Playlist) -> Unit = {}
+    onPlaylistClick: (Playlist) -> Unit = {},
+    onBack: (() -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val colors = HarmoniaThemeTokens.colors
@@ -82,7 +83,19 @@ fun PlaylistsScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column {
+            if (onBack != null) {
+                androidx.compose.material3.IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.semantics { contentDescription = "Back to Library" }
+                ) {
+                    androidx.compose.material3.Icon(
+                        imageVector = org.harmonia.player.design.theme.HarmoniaIcons.ArrowBack,
+                        contentDescription = null,
+                        tint = colors.textPrimary
+                    )
+                }
+            }
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Playlists",
                     style = MaterialTheme.typography.displayLarge.copy(

@@ -1,5 +1,6 @@
 package org.harmonia.player.presentation.library
 
+import androidx.compose.runtime.LaunchedEffect
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
@@ -138,9 +139,14 @@ fun LibraryScreen(
     onArtistClick: (Artist) -> Unit = {},
     onRequestPermission: (() -> Unit)? = null,
     onOpenSettings: (() -> Unit)? = null,
-    onProfileClick: (() -> Unit)? = null
+    onProfileClick: (() -> Unit)? = null,
+    category: LibraryTab? = null,
+    onBack: (() -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    // When opened from the Library landing list, show just this one category (no tab row).
+    LaunchedEffect(category) { category?.let { viewModel.selectTab(it) } }
+    val activeTab = category ?: uiState.selectedTab
     val favoriteTracks by personalizationViewModel.favoriteTracks.collectAsState()
 
     var showSortMenu by remember { mutableStateOf(false) }
@@ -219,7 +225,7 @@ fun LibraryScreen(
 
     // MediaStore URIs carry no folder, so look folders up only while the Folders tab is open
     val folderLookupContext = LocalContext.current.applicationContext
-    val isFoldersTab = uiState.selectedTab == LibraryTab.FOLDERS
+    val isFoldersTab = activeTab == LibraryTab.FOLDERS
     val trackUris = remember(uiState.tracks) { uiState.tracks.mapNotNull { it.localFile?.fileUri } }
     val resolvedFolders by produceState(initialValue = emptyMap<String, String>(), trackUris, isFoldersTab) {
         if (isFoldersTab) {
@@ -313,21 +319,47 @@ fun LibraryScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column {
-                Text(
-                    text = "Library",
-                    style = MaterialTheme.typography.displayLarge.copy(
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 1.5.sp,
-                        fontSize = 24.sp
-                    ),
-                    color = colors.textPrimary
-                )
-                Text(
-                    text = "Your music",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = colors.primarySignal
-                )
+            if (category != null) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (onBack != null) {
+                        IconButton(
+                            onClick = onBack,
+                            modifier = Modifier.semantics { contentDescription = "Back to Library" }
+                        ) {
+                            Icon(
+                                imageVector = HarmoniaIcons.ArrowBack,
+                                contentDescription = null,
+                                tint = colors.textPrimary
+                            )
+                        }
+                    }
+                    Text(
+                        text = libraryCategoryTitle(category),
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = colors.textPrimary,
+                        maxLines = 1
+                    )
+                }
+            } else {
+                Column {
+                    Text(
+                        text = "Library",
+                        style = MaterialTheme.typography.displayLarge.copy(
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 1.5.sp,
+                            fontSize = 24.sp
+                        ),
+                        color = colors.textPrimary
+                    )
+                    Text(
+                        text = "Your music",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.primarySignal
+                    )
+                }
             }
 
             Row(
@@ -384,7 +416,7 @@ fun LibraryScreen(
                             .background(colors.surfaceElevated)
                             .hairlineBorder(colors.borderStructural, RoundedCornerShape(8.dp), 1.dp)
                     ) {
-                        when (uiState.selectedTab) {
+                        when (activeTab) {
                             LibraryTab.TRACKS -> {
                                 DropdownMenuItem(
                                     text = { Text("Title (A-Z)", color = colors.textPrimary) },
@@ -495,7 +527,7 @@ fun LibraryScreen(
                 }
 
                 // Profile Avatar Button
-                if (onProfileClick != null) {
+                if (onProfileClick != null && category == null) {
                     Box(
                         modifier = Modifier
                             .size(40.dp)
@@ -532,7 +564,7 @@ fun LibraryScreen(
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = {
                         Text(
-                            text = "Filter ${uiState.selectedTab.name.lowercase().replaceFirstChar { it.uppercase() }}...",
+                            text = "Filter ${libraryCategoryTitle(activeTab).lowercase()}\u2026",
                             style = MaterialTheme.typography.bodyMedium,
                             color = colors.textSecondary
                         )
@@ -569,6 +601,21 @@ fun LibraryScreen(
                     )
                 )
             }
+        }
+
+        if (category != null && activeTab != LibraryTab.FOLDERS) {
+            Text(
+                text = "Sorted by ${sortLabel(activeTab, uiState, favoriteSortOrder)}",
+                style = MaterialTheme.typography.labelMedium,
+                color = colors.primarySignal,
+                modifier = Modifier
+                    .padding(top = spacing.small)
+                    .clip(RoundedCornerShape(50))
+                    .clickable { showSortMenu = true }
+                    .background(colors.surfaceContainer)
+                    .padding(horizontal = spacing.medium, vertical = 6.dp)
+                    .semantics { contentDescription = "Change sort order" }
+            )
         }
 
         Spacer(modifier = Modifier.height(spacing.medium))
@@ -630,7 +677,7 @@ fun LibraryScreen(
             )
             val selectedIndex = tabs.indexOfFirst { it.first == uiState.selectedTab }.coerceAtLeast(0)
 
-            ScrollableTabRow(
+            if (category == null) ScrollableTabRow(
                 selectedTabIndex = selectedIndex,
                 containerColor = colors.backgroundRoot,
                 contentColor = colors.primarySignal,
@@ -673,8 +720,8 @@ fun LibraryScreen(
             Spacer(modifier = Modifier.height(spacing.small))
 
             // ── 5. Audio Format Filter Pills (Active for Tracks & Favorites) ─
-            if (uiState.selectedTab == LibraryTab.TRACKS || uiState.selectedTab == LibraryTab.FAVORITES) {
-                val currentTrackSet = if (uiState.selectedTab == LibraryTab.TRACKS) uiState.tracks else sortedFavoriteTracks
+            if (activeTab == LibraryTab.TRACKS || activeTab == LibraryTab.FAVORITES) {
+                val currentTrackSet = if (activeTab == LibraryTab.TRACKS) uiState.tracks else sortedFavoriteTracks
                 FormatFilterPillsRow(
                     selectedFilter = selectedFormatFilter,
                     allTracks = currentTrackSet,
@@ -684,7 +731,7 @@ fun LibraryScreen(
             }
 
             // ── 6. Tab Content Switching ─────────────────────────────────────
-            when (uiState.selectedTab) {
+            when (activeTab) {
                 LibraryTab.TRACKS -> TracksTabContent(
                     tracks = filteredTracks,
                     favoriteTrackIds = favoriteTrackIds,
@@ -1707,4 +1754,39 @@ private fun formatDuration(durationSec: Double): String {
     val minutes = totalSec / 60
     val seconds = totalSec % 60
     return String.format(Locale.US, "%d:%02d", minutes, seconds)
+}
+
+/** User-facing name of a library category (Apple Music says "Songs", not "Tracks"). */
+internal fun libraryCategoryTitle(tab: LibraryTab): String = when (tab) {
+    LibraryTab.TRACKS -> "Songs"
+    LibraryTab.ALBUMS -> "Albums"
+    LibraryTab.ARTISTS -> "Artists"
+    LibraryTab.FOLDERS -> "Folders"
+    LibraryTab.FAVORITES -> "Favorites"
+}
+
+/** Label for the current sort order of [tab], shown as "Sorted by …". */
+internal fun sortLabel(tab: LibraryTab, state: LibraryUiState, favoriteSortOrder: FavoriteSortOrder): String = when (tab) {
+    LibraryTab.TRACKS -> when (state.trackSortOrder) {
+        TrackSortOrder.TITLE_ASC -> "Title (A-Z)"
+        TrackSortOrder.TITLE_DESC -> "Title (Z-A)"
+        TrackSortOrder.ARTIST_ASC -> "Artist"
+        TrackSortOrder.DATE_ADDED_DESC -> "Recently added"
+        TrackSortOrder.DURATION_DESC -> "Duration"
+    }
+    LibraryTab.ALBUMS -> when (state.albumSortOrder) {
+        AlbumSortOrder.TITLE_ASC -> "Album title"
+        AlbumSortOrder.ARTIST_ASC -> "Artist"
+        AlbumSortOrder.YEAR_DESC -> "Release year"
+    }
+    LibraryTab.ARTISTS -> when (state.artistSortOrder) {
+        ArtistSortOrder.NAME_ASC -> "Name (A-Z)"
+        ArtistSortOrder.NAME_DESC -> "Name (Z-A)"
+    }
+    LibraryTab.FAVORITES -> when (favoriteSortOrder) {
+        FavoriteSortOrder.RECENTLY_FAVORITED -> "Recently favorited"
+        FavoriteSortOrder.TITLE_ASC -> "Title (A-Z)"
+        FavoriteSortOrder.ARTIST_ASC -> "Artist"
+    }
+    LibraryTab.FOLDERS -> "Folder name"
 }

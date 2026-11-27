@@ -93,6 +93,13 @@ class SharedPreferencesUserPreferencesRepository(
         }
     }.distinctUntilChanged()
 
+    override fun getLibrarySort(category: String): String? =
+        sharedPreferences.getString(KEY_LIBRARY_SORT_PREFIX + category, null)
+
+    override fun setLibrarySort(category: String, sortOrder: String) {
+        sharedPreferences.edit().putString(KEY_LIBRARY_SORT_PREFIX + category, sortOrder).apply()
+    }
+
     override fun isKeepScreenOn(): Boolean {
         return sharedPreferences.getBoolean(KEY_KEEP_SCREEN_ON, DEFAULT_KEEP_SCREEN_ON)
     }
@@ -122,6 +129,7 @@ class SharedPreferencesUserPreferencesRepository(
         const val KEY_DEFAULT_SHUFFLE = "key_default_shuffle"
         const val KEY_DEFAULT_REPEAT_MODE = "key_default_repeat_mode"
         const val KEY_KEEP_SCREEN_ON = "key_keep_screen_on"
+        const val KEY_LIBRARY_SORT_PREFIX = "key_library_sort_"
 
         val DEFAULT_THEME_MODE = ThemeMode.SYSTEM
         const val DEFAULT_SHUFFLE = false

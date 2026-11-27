@@ -82,7 +82,10 @@ class LibrarySortingTest {
         albumRepo.albums.value = sampleAlbums
         artistRepo.artists.value = sampleArtists
 
-        viewModel = LibraryViewModel(trackRepo, albumRepo, artistRepo)
+        viewModel = LibraryViewModel(
+            trackRepo, albumRepo, artistRepo,
+            userPreferences = org.harmonia.player.data.local.preferences.InMemoryUserPreferencesRepository()
+        )
     }
 
     @Test

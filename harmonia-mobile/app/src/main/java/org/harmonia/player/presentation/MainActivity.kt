@@ -59,6 +59,8 @@ import org.harmonia.player.domain.model.Track
 import org.harmonia.player.presentation.components.AddToPlaylistDialog
 import org.harmonia.player.presentation.components.TrackActionsSheet
 import org.harmonia.player.presentation.home.HomeScreen
+import org.harmonia.player.presentation.library.LibraryDestination
+import org.harmonia.player.presentation.library.LibraryHomeScreen
 import org.harmonia.player.presentation.library.LibraryScreen
 import org.harmonia.player.presentation.library.LibraryTab
 import org.harmonia.player.presentation.library.LibraryViewModel
@@ -122,8 +124,7 @@ enum class NavigationTab(
 ) {
     HOME("Home", HarmoniaIcons.Home, HarmoniaNavDestination.HomeTab, HarmoniaNavDestination.Home),
     SEARCH("Search", HarmoniaIcons.Search, HarmoniaNavDestination.SearchTab, HarmoniaNavDestination.Search),
-    LIBRARY("Library", HarmoniaIcons.Library, HarmoniaNavDestination.LibraryTab, HarmoniaNavDestination.Library),
-    PLAYLISTS("Playlists", HarmoniaIcons.Playlists, HarmoniaNavDestination.PlaylistsTab, HarmoniaNavDestination.Playlists)
+    LIBRARY("Library", HarmoniaIcons.Library, HarmoniaNavDestination.LibraryTab, HarmoniaNavDestination.Library)
 }
 
 /** The tab a back stack belongs to: the newest entry that sits inside one of the tab graphs. */
@@ -179,10 +180,16 @@ fun MainAppContainer(
         }
     }
 
-    fun openLibraryTab(tab: LibraryTab) {
-        libraryViewModel.selectTab(tab)
+    /** Jump to the Library tab's first screen, then open [destination] on top of it. */
+    fun openInLibrary(destination: HarmoniaNavDestination) {
         selectTab(NavigationTab.LIBRARY)
         navController.popBackStack(HarmoniaNavDestination.Library, inclusive = false)
+        navController.navigate(destination)
+    }
+
+    fun openLibraryTab(tab: LibraryTab) {
+        libraryViewModel.selectTab(tab)
+        openInLibrary(HarmoniaNavDestination.LibraryCategory(tab.name))
     }
 
     fun navigateToAlbum(albumId: String) {
@@ -275,7 +282,7 @@ fun MainAppContainer(
                             playbackState = playerUiState.playbackState,
                             currentTrack = playerUiState.currentTrack,
                             onNavigateToLibrary = { selectTab(NavigationTab.LIBRARY) },
-                            onNavigateToPlaylists = { selectTab(NavigationTab.PLAYLISTS) },
+                            onNavigateToPlaylists = { openInLibrary(HarmoniaNavDestination.Playlists) },
                             onViewAllAlbums = { openLibraryTab(LibraryTab.ALBUMS) },
                             onViewAllArtists = { openLibraryTab(LibraryTab.ARTISTS) },
                             onPlaylistClick = { playlist -> openPlaylist(playlist.id) },
@@ -316,23 +323,44 @@ fun MainAppContainer(
                 }
                 navigation<HarmoniaNavDestination.LibraryTab>(startDestination = HarmoniaNavDestination.Library) {
                     composable<HarmoniaNavDestination.Library> {
-                        LibraryScreen(
+                        LibraryHomeScreen(
+                            onOpen = { destination ->
+                                when (destination) {
+                                    LibraryDestination.Playlists ->
+                                        navController.navigate(HarmoniaNavDestination.Playlists)
+                                    is LibraryDestination.Category ->
+                                        navController.navigate(HarmoniaNavDestination.LibraryCategory(destination.tab.name))
+                                }
+                            },
+                            onAlbumClick = { album -> navigateToAlbum(album.id) },
                             viewModel = libraryViewModel,
                             personalizationViewModel = personalizationViewModel,
+                            playlistsViewModel = playlistsViewModel,
                             onTrackClick = playTracks,
                             onTrackMenu = onTrackMenu,
-                            onAlbumClick = { album -> navigateToAlbum(album.id) },
-                            onArtistClick = { artist -> navigateToArtist(artist.id) },
                             onProfileClick = { navController.navigate(HarmoniaNavDestination.Profile) }
                         )
                     }
                 }
-                navigation<HarmoniaNavDestination.PlaylistsTab>(startDestination = HarmoniaNavDestination.Playlists) {
-                    composable<HarmoniaNavDestination.Playlists> {
-                        PlaylistsScreen(
-                            onPlaylistClick = { playlist -> openPlaylist(playlist.id) }
-                        )
-                    }
+
+                composable<HarmoniaNavDestination.LibraryCategory> { entry ->
+                    val tab = entry.toRoute<HarmoniaNavDestination.LibraryCategory>().tab
+                    LibraryScreen(
+                        viewModel = libraryViewModel,
+                        personalizationViewModel = personalizationViewModel,
+                        onTrackClick = playTracks,
+                        onTrackMenu = onTrackMenu,
+                        onAlbumClick = { album -> navigateToAlbum(album.id) },
+                        onArtistClick = { artist -> navigateToArtist(artist.id) },
+                        category = LibraryTab.entries.firstOrNull { it.name == tab } ?: LibraryTab.TRACKS,
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+                composable<HarmoniaNavDestination.Playlists> {
+                    PlaylistsScreen(
+                        onPlaylistClick = { playlist -> openPlaylist(playlist.id) },
+                        onBack = { navController.popBackStack() }
+                    )
                 }
 
                 composable<HarmoniaNavDestination.AlbumDetail> { entry ->

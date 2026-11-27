@@ -180,6 +180,7 @@ class LibraryViewModelTest {
             mediaReconciliationEngine = engine,
             storageSourceRepository = sources,
             storageVolumeLifecycleCoordinator = lifecycleCoordinator,
+            userPreferences = org.harmonia.player.data.local.preferences.InMemoryUserPreferencesRepository(),
             ioDispatcher = testDispatcher
         )
     }

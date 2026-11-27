@@ -28,6 +28,7 @@ import org.harmonia.player.domain.repository.AlbumRepository
 import org.harmonia.player.domain.repository.ArtistRepository
 import org.harmonia.player.domain.repository.StorageSourceRepository
 import org.harmonia.player.domain.repository.TrackRepository
+import org.harmonia.player.domain.repository.UserPreferencesRepository
 import org.harmonia.player.domain.scanner.MediaReconciliationEngine
 
 enum class LibraryTab {
@@ -116,6 +117,7 @@ class LibraryViewModel(
     private val mediaReconciliationEngine: MediaReconciliationEngine? = null,
     private val storageSourceRepository: StorageSourceRepository? = null,
     private val storageVolumeLifecycleCoordinator: StorageVolumeLifecycleCoordinator? = null,
+    private val userPreferences: UserPreferencesRepository? = runCatching { ServiceLocator.getUserPreferencesRepository() }.getOrNull(),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
@@ -132,9 +134,10 @@ class LibraryViewModel(
         get() = storageVolumeLifecycleCoordinator ?: runCatching { ServiceLocator.getStorageVolumeLifecycleCoordinator() }.getOrNull()
 
     private val _selectedTab = MutableStateFlow(LibraryTab.TRACKS)
-    private val _trackSortOrder = MutableStateFlow(TrackSortOrder.TITLE_ASC)
-    private val _albumSortOrder = MutableStateFlow(AlbumSortOrder.TITLE_ASC)
-    private val _artistSortOrder = MutableStateFlow(ArtistSortOrder.NAME_ASC)
+    // Sort orders are remembered per category between visits and app launches.
+    private val _trackSortOrder = MutableStateFlow(savedSort(LibraryTab.TRACKS, TrackSortOrder.TITLE_ASC))
+    private val _albumSortOrder = MutableStateFlow(savedSort(LibraryTab.ALBUMS, AlbumSortOrder.TITLE_ASC))
+    private val _artistSortOrder = MutableStateFlow(savedSort(LibraryTab.ARTISTS, ArtistSortOrder.NAME_ASC))
 
     private val _permissionState = MutableStateFlow(
         storagePermissionChecker?.getPermissionState() ?: runCatching {
@@ -259,14 +262,22 @@ class LibraryViewModel(
 
     fun setTrackSortOrder(order: TrackSortOrder) {
         _trackSortOrder.value = order
+        userPreferences?.setLibrarySort(LibraryTab.TRACKS.name, order.name)
     }
 
     fun setAlbumSortOrder(order: AlbumSortOrder) {
         _albumSortOrder.value = order
+        userPreferences?.setLibrarySort(LibraryTab.ALBUMS.name, order.name)
     }
 
     fun setArtistSortOrder(order: ArtistSortOrder) {
         _artistSortOrder.value = order
+        userPreferences?.setLibrarySort(LibraryTab.ARTISTS.name, order.name)
+    }
+
+    private inline fun <reified T : Enum<T>> savedSort(tab: LibraryTab, default: T): T {
+        val saved = userPreferences?.getLibrarySort(tab.name) ?: return default
+        return enumValues<T>().firstOrNull { it.name == saved } ?: default
     }
 
     fun onPermissionResult(granted: Boolean, canRequestAgain: Boolean = true) {

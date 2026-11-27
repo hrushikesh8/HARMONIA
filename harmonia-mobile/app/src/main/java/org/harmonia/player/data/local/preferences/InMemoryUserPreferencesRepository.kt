@@ -34,6 +34,10 @@ class InMemoryUserPreferencesRepository(
     override fun setDefaultRepeatMode(mode: RepeatMode) { _repeatMode.value = mode }
     override fun observeDefaultRepeatMode(): Flow<RepeatMode> = _repeatMode.asStateFlow()
 
+    private val librarySorts = mutableMapOf<String, String>()
+    override fun getLibrarySort(category: String): String? = librarySorts[category]
+    override fun setLibrarySort(category: String, sortOrder: String) { librarySorts[category] = sortOrder }
+
     override fun isKeepScreenOn(): Boolean = _keepScreenOn.value
     override fun setKeepScreenOn(enabled: Boolean) { _keepScreenOn.value = enabled }
     override fun observeKeepScreenOn(): Flow<Boolean> = _keepScreenOn.asStateFlow()

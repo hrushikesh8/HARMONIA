@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 /**
  * Type-safe routes for the app's Navigation Compose graph (see MainActivity).
  *
- * Each bottom tab is a nested graph ([HomeTab], [SearchTab], [LibraryTab], [PlaylistsTab]) whose
+ * Each bottom tab is a nested graph ([HomeTab], [SearchTab], [LibraryTab]) whose
  * start screen is the matching top-level destination. Detail screens (album, artist, playlist,
  * profile, settings, car mode) are pushed onto whichever tab is open, and every tab keeps its own
  * back stack and scroll position when you switch away and back.
@@ -20,9 +20,6 @@ sealed interface HarmoniaNavDestination {
 
     @Serializable
     data object LibraryTab : HarmoniaNavDestination
-
-    @Serializable
-    data object PlaylistsTab : HarmoniaNavDestination
 
     // Tab start screens
     @Serializable
@@ -46,6 +43,10 @@ sealed interface HarmoniaNavDestination {
 
     @Serializable
     data object CarMode : HarmoniaNavDestination
+
+    /** One Library category (songs, albums, artists, folders, favorites) opened from the Library list. */
+    @Serializable
+    data class LibraryCategory(val tab: String) : HarmoniaNavDestination
 
     @Serializable
     data class AlbumDetail(val albumId: String) : HarmoniaNavDestination

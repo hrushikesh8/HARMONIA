@@ -21,6 +21,10 @@ interface UserPreferencesRepository {
     fun setDefaultRepeatMode(mode: RepeatMode)
     fun observeDefaultRepeatMode(): Flow<RepeatMode>
 
+    /** Saved sort order for a library category (e.g. "TRACKS" -> "TITLE_ASC"), or null if never set. */
+    fun getLibrarySort(category: String): String?
+    fun setLibrarySort(category: String, sortOrder: String)
+
     fun isKeepScreenOn(): Boolean
     fun setKeepScreenOn(enabled: Boolean)
     fun observeKeepScreenOn(): Flow<Boolean>
