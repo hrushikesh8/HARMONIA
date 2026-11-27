@@ -1,5 +1,6 @@
 package org.harmonia.player.service
 
+import android.os.Looper
 import android.app.PendingIntent
 import android.content.Intent
 import androidx.media3.common.AudioAttributes
@@ -59,6 +60,13 @@ class HarmoniaPlaybackService : MediaLibraryService() {
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
+
+        // Keep "Play next" and "Add to queue" in order while shuffle is on.
+        exoPlayer.setShuffleOrder(
+            PlayNextShuffleOrder(length = 0) {
+                if (Looper.myLooper() == exoPlayer.applicationLooper) exoPlayer.currentMediaItemIndex else C.INDEX_UNSET
+            }
+        )
 
         player = exoPlayer
 

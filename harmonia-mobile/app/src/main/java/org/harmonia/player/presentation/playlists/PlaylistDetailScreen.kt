@@ -16,6 +16,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.zIndex
+import org.harmonia.player.presentation.components.DragAutoScroll
 import org.harmonia.player.presentation.components.TrackMenuButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -149,6 +150,14 @@ fun PlaylistDetailScreen(
         dragStartIndex = -1
         dragOffset = 0f
     }
+
+    // Scroll the list when a dragged song reaches the top or bottom edge.
+    DragAutoScroll(
+        listState = listState,
+        draggingKey = draggingId,
+        dragOffset = { dragOffset },
+        onScrolled = { dragBy(it) }
+    )
 
     if (uiState.isLoading && playlist == null) {
         Box(

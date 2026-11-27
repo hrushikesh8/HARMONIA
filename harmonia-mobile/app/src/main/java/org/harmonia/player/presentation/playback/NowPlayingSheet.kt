@@ -82,6 +82,7 @@ import org.harmonia.player.domain.model.Track
 import org.harmonia.player.domain.model.audio.SleepTimerMode
 import org.harmonia.player.domain.model.audio.SleepTimerPreset
 import org.harmonia.player.domain.model.audio.SleepTimerState
+import org.harmonia.player.presentation.components.DragAutoScroll
 import org.harmonia.player.presentation.components.HarmoniaArtwork
 import org.harmonia.player.presentation.personalization.FavoriteButton
 import org.harmonia.player.presentation.personalization.RatingDialog
@@ -831,6 +832,14 @@ private fun QueueView(
         dragStartIndex = -1
         dragOffset = 0f
     }
+
+    // Scroll the queue when a dragged song reaches the top or bottom edge.
+    DragAutoScroll(
+        listState = listState,
+        draggingKey = draggingKey,
+        dragOffset = { dragOffset },
+        onScrolled = { dragBy(it) }
+    )
 
     val upNextCount = (queue.size - activeIndex - 1).coerceAtLeast(0)
 

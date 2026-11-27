@@ -54,10 +54,10 @@ Status: `Done` · `In progress` · `Planned`
 | 3.2 | Profile becomes "Your listening": readable stats, rated songs list | UI, UX, BE | Done |
 | 3.3 | Equalizer works without music playing; save your own presets | UI, UX, BE | Done |
 | 3.4 | Car Mode: progress/seek, favorite, landscape | UI, UX | Done |
-| 3.5 | Format filter chips generated from your library (OGG, Opus, ALAC...) | UI, BE | Planned |
-| 3.6 | Album grid adapts to screen width / landscape / tablets | UI | Planned |
-| 3.7 | Queue: auto-scroll while dragging; strict "Play next" with shuffle on | UX, BE | Planned |
-| 3.10 | Restyle song / album / artist rows in category lists (still the older bordered cards) | UI | Planned |
+| 3.5 | Format filter chips generated from your library (OGG, Opus, ALAC...) | UI, BE | Done |
+| 3.6 | Album grid adapts to screen width / landscape / tablets | UI | Done |
+| 3.7 | Queue: auto-scroll while dragging; strict "Play next" with shuffle on | UX, BE | Done |
+| 3.10 | Restyle song / album / artist rows in category lists (still the older bordered cards) | UI | Done |
 | 3.9 | Instrumented UI tests (`androidTest`) were already out of date before the revamp (expect a Settings tab, old copy); refresh them | BE | Planned |
 | 3.8 | Fix "not responding" on cold start (playback service started during app launch) | BE | Done |
 | 3.11 | Faster first launch: Baseline Profile so the first screen appears quicker | BE | Planned |
@@ -312,6 +312,54 @@ Status: `Done` · `In progress` · `Planned`
   Mode.
 - **Why:** In a car you need a glance-and-tap screen: big targets, the time left in the song, and
   one tap to like a song. Most car mounts hold the phone sideways, so landscape matters.
+
+### 3.10 Song, album and artist rows
+- **What:** New shared rows in `presentation/components/MediaRows.kt`: `SongListRow`,
+  `AlbumListRow`, `ArtistListRow`, `CollectionListRow` and `AlbumGridItem`. They follow the Apple
+  Music style: no card or border, 48dp artwork, a regular-weight title and a grey "Artist · Album"
+  line. Albums show as cover + title + artist with nothing behind them; artists get round photos
+  and a chevron. Used by every Library category (Songs, Albums, Artists, Folders, Favorites) and by
+  Search results, which still had the old bordered cards too. Folders became a flat row ("6 songs ·
+  Music/...") that expands into normal song rows.
+- **Removed from song rows:** duration, the "#3" track number and the tiny format tag. Apple Music
+  lists don't show them, and the format is still visible through the format chips. The missing-
+  storage labels ("Storage Unmounted" etc.) now show in place of the artist line, coloured.
+  `TrackRowCard` keeps its name and parameters so the instrumented tests still compile.
+- **Why:** Library and Search were the last places that looked like the old app; now every list
+  uses one style.
+
+### 3.5 Format chips from your library
+- **What:** The format filter used a fixed list (ALL, MP3, FLAC, M4A, WAV), so OGG and Opus songs
+  could never be filtered and empty chips showed for formats you don't have. Chips now come from
+  the songs on screen, most common first, with counts ("MP3  120", "FLAC  14"). The row hides when
+  there's only one format, and if the chosen format isn't in the list (e.g. after switching to
+  Favorites) it falls back to "All" instead of showing an empty list. Chips restyled as pills.
+- **Code:** `presentation/library/FormatFilters.kt` (`formatFilterOptions`,
+  `effectiveFormatFilter`, `matchesFormat`), unit tested.
+- **Not done:** ALAC can't get its own chip yet: it is stored in `.m4a` files and the scanner
+  records the file extension, not the codec.
+
+### 3.6 Album grid adapts to the screen
+- **What:** The album grids (Library → Albums and "Recently added") used a fixed 2 columns, so
+  covers became huge in landscape and on tablets. They now fit as many columns as allow 150dp each
+  (`AlbumGridMinCellWidth`): 2 on a phone held upright, 5 sideways on a Pixel 8, more on tablets.
+- **Why:** Same reason as Car Mode landscape: phones get turned sideways, and tablets exist.
+
+### 3.7 Queue: auto-scroll while dragging, strict "Play next" with shuffle
+- **Auto-scroll:** dragging a song in the queue (Now Playing) or in a playlist now scrolls the
+  list when your finger reaches the top or bottom edge, faster the closer you get. Before, you
+  could only move a song within the part of the list on screen. Shared helper
+  `presentation/components/DragAutoScroll.kt`.
+- **Play next with shuffle on:** ExoPlayer's default shuffle puts every added song at a random
+  place, so "Play next" could play twenty songs later. The playback service now uses
+  `service/PlayNextShuffleOrder.kt`: the queue you start is still shuffled, but songs inserted
+  right after the current one play next, and songs added to the end play after everything already
+  queued. Reordering the queue keeps who-plays-when intact (the default did not handle moves at all).
+- **Tested:** unit tests for the shuffle order (insert, play next, add to queue, remove, move,
+  clear) and the scroll speed. Not checked by hand on the emulator: the six 19-second test songs
+  fit on one screen and end too fast to show either change.
+- **Known gap:** with shuffle on, the queue list still shows songs in queue order, not play order.
+  Showing the real shuffled order is a bigger change; worth doing as its own task.
 
 ## Decisions and ideas checked
 
