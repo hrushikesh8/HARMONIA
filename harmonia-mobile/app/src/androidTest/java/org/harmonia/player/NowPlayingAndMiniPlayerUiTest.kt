@@ -302,7 +302,7 @@ class NowPlayingAndMiniPlayerUiTest {
         // Switch to Search tab
         composeTestRule.onNodeWithText("Search").performClick()
         composeTestRule.waitUntil(3000) {
-            composeTestRule.onAllNodesWithText("Your library").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Browse your library").fetchSemanticsNodes().isNotEmpty()
         }
 
         // MiniPlayer remains visible

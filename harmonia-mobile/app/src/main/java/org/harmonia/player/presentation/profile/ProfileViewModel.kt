@@ -24,15 +24,19 @@ data class ProfileUiState(
     val totalListeningEvents: Int = 0,
     val recentListeningEvents: List<ListeningEvent> = emptyList(),
     val averageRating: Double? = null,
-    val storageUsageEstimateMb: Double = 0.0
+    val storageUsageEstimateMb: Double = 0.0,
+    val listening: ListeningSummary = ListeningSummary()
 )
 
 class ProfileViewModel(
     trackRepository: TrackRepository = ServiceLocator.getTrackRepository(),
     personalizationRepository: PersonalizationRepository = ServiceLocator.getPersonalizationRepository(),
     storageSourceRepository: StorageSourceRepository = ServiceLocator.getStorageSourceRepository(),
-    listeningEventRepository: ListeningEventRepository = ServiceLocator.getListeningEventRepository()
+    listeningEventRepository: ListeningEventRepository = ServiceLocator.getListeningEventRepository(),
+    clock: () -> Long = System::currentTimeMillis
 ) : ViewModel() {
+
+    private val openedAt = clock()
 
     private val catalogStatsFlow = combine(
         trackRepository.observeAllTracks(),
@@ -56,12 +60,22 @@ class ProfileViewModel(
     private val activityFlow = listeningEventRepository.observeRecentEvents(50)
         .map { events -> events to listeningEventRepository.getEventCount() }
 
+    private val listeningFlow: Flow<ListeningSummary> = combine(
+        trackRepository.observeAllTracks(),
+        listeningEventRepository.observeTrackPlayStats(recentSince = openedAt - LISTENING_WINDOW_MS),
+        listeningEventRepository.observeRecentEvents(200),
+        personalizationRepository.observeRatedTracks()
+    ) { tracks, stats, events, rated ->
+        buildListeningSummary(tracks, stats, events, rated)
+    }
+
     val uiState: StateFlow<ProfileUiState> = combine(
         catalogStatsFlow,
         personalizationStatsFlow,
         storageSourceRepository.observeAllSources(),
-        activityFlow
-    ) { (totalTracks, offlineTracks, storageMb), (favsCount, ratedCount, avgRating), sources, (events, eventCount) ->
+        activityFlow,
+        listeningFlow
+    ) { (totalTracks, offlineTracks, storageMb), (favsCount, ratedCount, avgRating), sources, (events, eventCount), listening ->
         ProfileUiState(
             totalTracks = totalTracks,
             offlineTracks = offlineTracks,
@@ -71,7 +85,8 @@ class ProfileViewModel(
             totalListeningEvents = eventCount,
             recentListeningEvents = events,
             averageRating = avgRating,
-            storageUsageEstimateMb = storageMb
+            storageUsageEstimateMb = storageMb,
+            listening = listening
         )
     }.stateIn(
         scope = viewModelScope,

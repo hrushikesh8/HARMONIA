@@ -159,10 +159,10 @@ class M3EndToEndIntegrationTest {
         // 3. Switch to Search tab
         composeTestRule.onAllNodesWithText("Search").onFirst().performClick()
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("Your library").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Browse your library").fetchSemanticsNodes().isNotEmpty()
         }
-        composeTestRule.onNodeWithText("Your library").assertIsDisplayed()
-        composeTestRule.onAllNodesWithText("Type to search local catalog", substring = true).onFirst().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Browse your library").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Songs, artists, albums, playlists", substring = true).onFirst().assertIsDisplayed()
 
         // 4. Switch to Playlists tab
         composeTestRule.onAllNodesWithText("Playlists").onFirst().performClick()
@@ -205,10 +205,10 @@ class M3EndToEndIntegrationTest {
         // 3. Switch to Search tab -> unaffected by storage permission
         composeTestRule.onAllNodesWithText("Search").onFirst().performClick()
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("Your library").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Browse your library").fetchSemanticsNodes().isNotEmpty()
         }
-        composeTestRule.onNodeWithText("Your library").assertIsDisplayed()
-        composeTestRule.onAllNodesWithText("Type to search local catalog", substring = true).onFirst().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Browse your library").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Songs, artists, albums, playlists", substring = true).onFirst().assertIsDisplayed()
 
         // 4. Switch to Playlists tab -> unaffected by storage permission
         composeTestRule.onAllNodesWithText("Playlists").onFirst().performClick()
@@ -236,7 +236,7 @@ class M3EndToEndIntegrationTest {
         // Navigate to Search tab
         composeTestRule.onAllNodesWithText("Search").onFirst().performClick()
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("Your library").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Browse your library").fetchSemanticsNodes().isNotEmpty()
         }
 
         // Enter search query into dedicated search field

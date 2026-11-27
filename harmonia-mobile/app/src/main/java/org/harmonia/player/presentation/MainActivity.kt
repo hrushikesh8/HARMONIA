@@ -422,7 +422,9 @@ fun MainAppContainer(
                         onBack = { navController.popBackStack() },
                         onOpenLikes = { openLibraryTab(LibraryTab.FAVORITES) },
                         onOpenCarMode = { navController.navigate(HarmoniaNavDestination.CarMode) },
-                        onOpenSettings = { navController.navigate(HarmoniaNavDestination.Settings) }
+                        onOpenSettings = { navController.navigate(HarmoniaNavDestination.Settings) },
+                        onPlayTracks = playTracks,
+                        onArtistClick = { artistId -> navigateToArtist(artistId) }
                     )
                 }
                 composable<HarmoniaNavDestination.Settings> {

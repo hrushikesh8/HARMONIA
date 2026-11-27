@@ -11,19 +11,20 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -34,27 +35,26 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import org.harmonia.player.design.theme.HarmoniaIcons
 import org.harmonia.player.design.theme.HarmoniaThemeTokens
-import org.harmonia.player.design.theme.hairlineBorder
-import org.harmonia.player.design.theme.touchTarget48
+import org.harmonia.player.domain.model.Track
+import org.harmonia.player.presentation.components.HarmoniaArtwork
 import java.util.Locale
 
-sealed interface ProfileDialogDestination {
-    object None : ProfileDialogDestination
-    object ProfileSummary : ProfileDialogDestination
-    object ListeningActivity : ProfileDialogDestination
-    object RatingsSummary : ProfileDialogDestination
-    object AccountDetails : ProfileDialogDestination
-    object HelpFeedback : ProfileDialogDestination
-}
+private enum class ProfileDialog { None, Help, About }
 
+/**
+ * "Your listening" (the Profile destination): this month's stats, top artists and songs,
+ * recently played, your ratings, and shortcuts. Everything comes from data on this phone.
+ */
 @Composable
 fun ProfileHubScreen(
     onBack: () -> Unit,
@@ -62,501 +62,285 @@ fun ProfileHubScreen(
     onOpenCarMode: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: ProfileViewModel = viewModel()
+    viewModel: ProfileViewModel = viewModel(),
+    onPlayTracks: (List<Track>, Int) -> Unit = { _, _ -> },
+    onArtistClick: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val listening = uiState.listening
     val colors = HarmoniaThemeTokens.colors
     val spacing = HarmoniaThemeTokens.spacing
+    var dialog by remember { mutableStateOf(ProfileDialog.None) }
+    val now = remember(listening) { System.currentTimeMillis() }
 
-    var activeDialog by remember { mutableStateOf<ProfileDialogDestination>(ProfileDialogDestination.None) }
-
-    Box(
+    LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .background(colors.backgroundRoot)
+            .background(colors.backgroundRoot),
+        contentPadding = PaddingValues(start = spacing.standard, end = spacing.standard, bottom = spacing.bottomScaffold)
     ) {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = spacing.standard),
-            contentPadding = PaddingValues(bottom = spacing.bottomScaffold)
-        ) {
-            // Header
-            item {
-                Spacer(modifier = Modifier.height(spacing.small))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = onBack,
-                        modifier = Modifier
-                            .touchTarget48()
-                            .semantics { contentDescription = "Close Profile Menu" }
-                    ) {
-                        Icon(
-                            imageVector = HarmoniaIcons.ArrowBack,
-                            contentDescription = "Back",
-                            tint = colors.textPrimary
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(spacing.small))
-                    Text(
-                        text = "Profile",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colors.primarySignal
-                    )
+        item {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(top = spacing.small)
+            ) {
+                IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "Back" }) {
+                    Icon(imageVector = HarmoniaIcons.ArrowBack, contentDescription = null, tint = colors.textPrimary)
                 }
-
-                Spacer(modifier = Modifier.height(spacing.medium))
-
-                // Profile Hero Card with Grounded Statistics
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .hairlineBorder(colors.borderStructural, RoundedCornerShape(16.dp)),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = colors.surfaceElevated)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(spacing.large)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(64.dp)
-                                    .clip(CircleShape)
-                                    .background(colors.primarySignal.copy(alpha = 0.2f))
-                                    .hairlineBorder(colors.primarySignal, CircleShape, 2.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = HarmoniaIcons.Person,
-                                    contentDescription = null,
-                                    tint = colors.primarySignal,
-                                    modifier = Modifier.size(36.dp)
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(spacing.medium))
-
-                            Column {
-                                Text(
-                                    text = "Harmonia Listener",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = colors.textPrimary
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "Your music, on your phone",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = colors.secondarySignal
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(colors.primarySignal.copy(alpha = 0.15f))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                ) {
-                                    Text(
-                                        text = "Your music stays on this phone",
-                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                                        color = colors.primarySignal
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(spacing.medium))
-
-                        // Grounded Live Metric Badges Row
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(spacing.small)
-                        ) {
-                            ProfileStatPill(
-                                label = "Songs",
-                                value = "${uiState.totalTracks}",
-                                modifier = Modifier.weight(1f)
-                            )
-                            ProfileStatPill(
-                                label = "Likes",
-                                value = "${uiState.favoritesCount}",
-                                modifier = Modifier.weight(1f)
-                            )
-                            ProfileStatPill(
-                                label = "Rated",
-                                value = "${uiState.ratedTracksCount}",
-                                modifier = Modifier.weight(1f)
-                            )
-                            ProfileStatPill(
-                                label = "Sources",
-                                value = String.format(Locale.US, "%.1f MB", uiState.storageUsageEstimateMb),
-                                modifier = Modifier.weight(1.2f)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(spacing.large))
+                Spacer(modifier = Modifier.width(spacing.xSmall))
+                Text(text = "Your listening", style = MaterialTheme.typography.displayMedium, color = colors.textPrimary)
             }
-
-            // Section: My Library
-            item {
-                Text(
-                    text = "Your library",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = colors.primarySignal,
-                    modifier = Modifier.padding(bottom = spacing.small)
-                )
-
-                ProfileMenuItem(
-                    icon = HarmoniaIcons.Favorite,
-                    title = "Favorites",
-                    subtitle = "${uiState.favoritesCount} favorite songs",
-                    onClick = onOpenLikes
-                )
-
-                ProfileMenuItem(
-                    icon = HarmoniaIcons.Album,
-                    title = "Music folders",
-                    subtitle = "${uiState.storageSourcesCount} music sources",
-                    onClick = onOpenSettings
-                )
-
-                Spacer(modifier = Modifier.height(spacing.large))
-
-                Text(
-                    text = "Listening",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = colors.primarySignal,
-                    modifier = Modifier.padding(bottom = spacing.small)
-                )
-
-                ProfileMenuItem(
-                    icon = HarmoniaIcons.DirectionsCar,
-                    title = "Car Mode",
-                    subtitle = "Big, simple controls for the car",
-                    onClick = onOpenCarMode
-                )
-
-                ProfileMenuItem(
-                    icon = HarmoniaIcons.Playlists,
-                    title = "Listening Activity",
-                    subtitle = "${uiState.totalListeningEvents} plays recorded on this phone",
-                    onClick = { activeDialog = ProfileDialogDestination.ListeningActivity }
-                )
-
-                Spacer(modifier = Modifier.height(spacing.large))
-
-                Text(
-                    text = "Personalization",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = colors.primarySignal,
-                    modifier = Modifier.padding(bottom = spacing.small)
-                )
-
-                ProfileMenuItem(
-                    icon = HarmoniaIcons.Star,
-                    title = "Rated Music",
-                    subtitle = if (uiState.averageRating != null) {
-                        String.format(Locale.US, "%.1f ★ average across %d scored tracks", uiState.averageRating, uiState.ratedTracksCount)
-                    } else {
-                        "No scored tracks yet • Rate tracks from Now Playing"
-                    },
-                    onClick = { activeDialog = ProfileDialogDestination.RatingsSummary }
-                )
-
-                ProfileMenuItem(
-                    icon = HarmoniaIcons.MusicNote,
-                    title = "Equalizer",
-                    subtitle = "Shape the sound with bands and presets",
-                    onClick = onOpenSettings
-                )
-
-                Spacer(modifier = Modifier.height(spacing.large))
-
-                Text(
-                    text = "App",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = colors.primarySignal,
-                    modifier = Modifier.padding(bottom = spacing.small)
-                )
-
-                ProfileMenuItem(
-                    icon = HarmoniaIcons.Settings,
-                    title = "Settings",
-                    subtitle = "Theme, playback, folders and more",
-                    onClick = onOpenSettings
-                )
-
-                ProfileMenuItem(
-                    icon = HarmoniaIcons.Info,
-                    title = "Help and supported formats",
-                    subtitle = "Supported formats and how playback works",
-                    onClick = { activeDialog = ProfileDialogDestination.HelpFeedback }
-                )
-
-                ProfileMenuItem(
-                    icon = HarmoniaIcons.Person,
-                    title = "About Harmonia",
-                    subtitle = "Everything stays on this device",
-                    onClick = { activeDialog = ProfileDialogDestination.AccountDetails }
-                )
-            }
-        }
-
-        // Informational Dialogs for Destinations
-        when (activeDialog) {
-            ProfileDialogDestination.ListeningActivity -> {
-                ListeningActivityDialog(
-                    totalEvents = uiState.totalListeningEvents,
-                    events = uiState.recentListeningEvents,
-                    onDismiss = { activeDialog = ProfileDialogDestination.None }
-                )
-            }
-            ProfileDialogDestination.RatingsSummary -> {
-                ProfileInfoDialog(
-                    title = "Your ratings",
-                    message = if (uiState.ratedTracksCount > 0) {
-                        "Cataloged Ratings: ${uiState.ratedTracksCount} tracks scored\n" +
-                                "Average Rating: ${String.format(Locale.US, "%.1f", uiState.averageRating ?: 0.0)} ★\n\n" +
-                                "Ratings are stored 100% locally in Harmonia's SQLite database decoupled from external tags per ADR-021."
-                    } else {
-                        "No tracks rated yet.\n\nOpen Now Playing for any track and tap the star icon to record your 1-5 star rating."
-                    },
-                    onDismiss = { activeDialog = ProfileDialogDestination.None }
-                )
-            }
-            ProfileDialogDestination.ProfileSummary -> {
-                ProfileInfoDialog(
-                    title = "Profile",
-                    message = "Harmonia is an independent, sovereign audio player. Your listening profile is stored 100% locally on this device without tracking, remote telemetry, or mandatory cloud accounts.",
-                    onDismiss = { activeDialog = ProfileDialogDestination.None }
-                )
-            }
-            ProfileDialogDestination.AccountDetails -> {
-                ProfileInfoDialog(
-                    title = "Your details",
-                    message = "Account Architecture: Local-First Sovereign\nDatabase: SQLite Room v5 (WAL Mode)\nApplication Version: 0.1.0-alpha\nTarget SDK: Android 16 (API 36)\nData Directory: App-scoped private storage\nExternal Network Tracking: Disabled by design (MRD-001)",
-                    onDismiss = { activeDialog = ProfileDialogDestination.None }
-                )
-            }
-            ProfileDialogDestination.HelpFeedback -> {
-                ProfileInfoDialog(
-                    title = "Help and supported formats",
-                    message = "Audio Pipeline: AndroidX Media3 / ExoPlayer\nSupported Codecs: FLAC, ALAC, MP3, Opus, AAC, Vorbis, WAV\nAudio DSP: 5-Band Hardware-backed AudioFX Equalizer with decibel presets\nStorage: MediaStore and Storage Access Framework (SAF)",
-                    onDismiss = { activeDialog = ProfileDialogDestination.None }
-                )
-            }
-            ProfileDialogDestination.None -> {}
-        }
-    }
-}
-
-@Composable
-private fun ProfileStatPill(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier
-) {
-    val colors = HarmoniaThemeTokens.colors
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(colors.surfaceContainer)
-            .hairlineBorder(colors.borderStructural, RoundedCornerShape(8.dp))
-            .padding(vertical = 6.dp, horizontal = 4.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = value,
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                color = colors.primarySignal,
-                maxLines = 1
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                text = "The last 30 days on this phone",
+                style = MaterialTheme.typography.bodyMedium,
                 color = colors.textSecondary,
-                maxLines = 1
+                modifier = Modifier.padding(start = spacing.small, bottom = spacing.medium)
             )
         }
+
+        // Stats
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(spacing.medium)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(spacing.medium)) {
+                    StatTile("Minutes listened", formatCount(listening.minutesThisMonth), Modifier.weight(1f), highlight = true)
+                    StatTile("Plays", formatCount(listening.playsThisMonth), Modifier.weight(1f), highlight = true)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(spacing.medium)) {
+                    StatTile("Songs on this phone", formatCount(uiState.totalTracks), Modifier.weight(1f))
+                    StatTile("Favorites", formatCount(uiState.favoritesCount), Modifier.weight(1f))
+                }
+            }
+        }
+
+        if (listening.playsThisMonth == 0) {
+            item {
+                Text(
+                    text = "Play some music and your top artists and songs will show up here.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.textSecondary,
+                    modifier = Modifier.padding(vertical = spacing.large)
+                )
+            }
+        }
+
+        if (listening.topArtists.isNotEmpty()) {
+            item { SectionTitle("Top artists") }
+            itemsIndexed(listening.topArtists, key = { _, artist -> "artist_${artist.name}" }) { index, artist ->
+                RankedRow(
+                    rank = index + 1,
+                    title = artist.name,
+                    subtitle = playsLabel(artist.plays),
+                    icon = HarmoniaIcons.Person,
+                    onClick = artist.artistId?.let { id -> { onArtistClick(id) } }
+                )
+            }
+        }
+
+        if (listening.topSongs.isNotEmpty()) {
+            item { SectionTitle("Top songs") }
+            itemsIndexed(listening.topSongs, key = { _, track -> "top_${track.id}" }) { index, track ->
+                SongRow(
+                    track = track,
+                    leading = "${index + 1}",
+                    detail = track.artistName ?: "Unknown artist",
+                    onClick = { onPlayTracks(listening.topSongs, index) }
+                )
+            }
+        }
+
+        if (listening.recentlyPlayed.isNotEmpty()) {
+            item { SectionTitle("Recently played") }
+            val recentTracks = listening.recentlyPlayed.map { it.track }
+            itemsIndexed(listening.recentlyPlayed, key = { index, play -> "recent_${play.track.id}_$index" }) { index, play ->
+                SongRow(
+                    track = play.track,
+                    detail = listOfNotNull(play.track.artistName, formatTimeAgo(now, play.playedAt)).joinToString(" · "),
+                    onClick = { onPlayTracks(recentTracks, index) }
+                )
+            }
+        }
+
+        item { SectionTitle("Your ratings") }
+        if (listening.ratedTracks.isEmpty()) {
+            item {
+                Text(
+                    text = "Rate a song from Now Playing (the star button) and it will appear here.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.textSecondary
+                )
+            }
+        } else {
+            val ratedTracks = listening.ratedTracks.map { it.track }
+            itemsIndexed(listening.ratedTracks, key = { _, rated -> "rated_${rated.track.id}" }) { index, rated ->
+                SongRow(
+                    track = rated.track,
+                    detail = "★".repeat(rated.rating) + "  " + (rated.track.artistName ?: ""),
+                    onClick = { onPlayTracks(ratedTracks, index) }
+                )
+            }
+        }
+
+        item { SectionTitle("More") }
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(colors.surfaceElevated)
+            ) {
+                MenuRow(HarmoniaIcons.Favorite, "Favorites", "${uiState.favoritesCount} songs", onOpenLikes)
+                MenuRow(HarmoniaIcons.DirectionsCar, "Car Mode", "Big, simple controls for driving", onOpenCarMode)
+                MenuRow(HarmoniaIcons.Settings, "Settings", "Theme, playback, folders and more", onOpenSettings)
+                MenuRow(HarmoniaIcons.Info, "Help", "What Harmonia can play", { dialog = ProfileDialog.Help })
+                MenuRow(HarmoniaIcons.Person, "About Harmonia", "Version and privacy", { dialog = ProfileDialog.About })
+            }
+        }
+    }
+
+    when (dialog) {
+        ProfileDialog.Help -> InfoDialog(
+            title = "Help",
+            message = "Harmonia plays the music files already on your phone: MP3, FLAC, ALAC, AAC/M4A, Opus, Ogg Vorbis and WAV.\n\n" +
+                "Add folders (for example on an SD card) in Settings › Music library. Long-press any song for Play next, Add to queue and more.",
+            onDismiss = { dialog = ProfileDialog.None }
+        )
+        ProfileDialog.About -> InfoDialog(
+            title = "About Harmonia",
+            message = "Version 0.1.0-alpha\n\nYour songs, playlists, ratings and listening history stay on this phone. No accounts, no tracking, no ads.",
+            onDismiss = { dialog = ProfileDialog.None }
+        )
+        ProfileDialog.None -> Unit
     }
 }
 
+internal fun playsLabel(plays: Int): String = if (plays == 1) "1 play" else "$plays plays"
+
+private fun formatCount(value: Int): String = String.format(Locale.US, "%,d", value)
+
 @Composable
-private fun ProfileMenuItem(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit
-) {
+private fun SectionTitle(text: String) {
     val colors = HarmoniaThemeTokens.colors
     val spacing = HarmoniaThemeTokens.spacing
-
-    Row(
+    Text(
+        text = text,
+        style = MaterialTheme.typography.headlineSmall,
+        color = colors.textPrimary,
         modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .padding(vertical = spacing.small, horizontal = spacing.xSmall),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(colors.surfaceElevated),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = colors.primarySignal,
-                modifier = Modifier.size(22.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.width(spacing.medium))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                color = colors.textPrimary
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.textSecondary
-            )
-        }
-
-        Icon(
-            imageVector = HarmoniaIcons.ChevronRight,
-            contentDescription = null,
-            tint = colors.textSecondary,
-            modifier = Modifier.size(20.dp)
-        )
-    }
-}
-
-@Composable
-private fun ProfileInfoDialog(
-    title: String,
-    message: String,
-    onDismiss: () -> Unit
-) {
-    val colors = HarmoniaThemeTokens.colors
-
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = colors.textPrimary
-            )
-        },
-        text = {
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.textSecondary
-            )
-        },
-        confirmButton = {
-            androidx.compose.material3.TextButton(onClick = onDismiss) {
-                Text("Close", color = colors.primarySignal, fontWeight = FontWeight.Bold)
-            }
-        },
-        containerColor = colors.surfaceElevated,
-        shape = RoundedCornerShape(16.dp)
+            .padding(top = spacing.large, bottom = spacing.small)
+            .semantics { heading() }
     )
 }
 
 @Composable
-private fun ListeningActivityDialog(
-    totalEvents: Int,
-    events: List<org.harmonia.player.domain.model.ListeningEvent>,
-    onDismiss: () -> Unit
-) {
+private fun StatTile(label: String, value: String, modifier: Modifier = Modifier, highlight: Boolean = false) {
+    val colors = HarmoniaThemeTokens.colors
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (highlight) colors.primarySignal.copy(alpha = if (colors.isDark) 0.18f else 0.12f) else colors.surfaceElevated)
+            .padding(16.dp)
+            .semantics(mergeDescendants = true) {}
+    ) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.displaySmall,
+            color = if (highlight) colors.primarySignal else colors.textPrimary
+        )
+        Text(text = label, style = MaterialTheme.typography.bodyMedium, color = colors.textSecondary)
+    }
+}
+
+@Composable
+private fun RankedRow(rank: Int, title: String, subtitle: String, icon: ImageVector, onClick: (() -> Unit)?) {
     val colors = HarmoniaThemeTokens.colors
     val spacing = HarmoniaThemeTokens.spacing
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(enabled = onClick != null) { onClick?.invoke() }
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = "$rank", style = MaterialTheme.typography.titleMedium, color = colors.textSecondary, modifier = Modifier.width(28.dp))
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(colors.surfaceContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(imageVector = icon, contentDescription = null, tint = colors.primarySignal)
+        }
+        Spacer(modifier = Modifier.width(spacing.medium))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, style = MaterialTheme.typography.bodyLarge, color = colors.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
+        }
+        if (onClick != null) {
+            Icon(imageVector = HarmoniaIcons.ChevronRight, contentDescription = null, tint = colors.textDisabled)
+        }
+    }
+}
 
-    androidx.compose.material3.AlertDialog(
+@Composable
+private fun SongRow(track: Track, detail: String, onClick: () -> Unit, leading: String? = null) {
+    val colors = HarmoniaThemeTokens.colors
+    val spacing = HarmoniaThemeTokens.spacing
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 6.dp)
+            .semantics(mergeDescendants = true) { role = Role.Button },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (leading != null) {
+            Text(text = leading, style = MaterialTheme.typography.titleMedium, color = colors.textSecondary, modifier = Modifier.width(28.dp))
+        }
+        HarmoniaArtwork(artworkHash = track.artworkHash, size = 48.dp, cornerRadius = 6.dp, contentDescription = null)
+        Spacer(modifier = Modifier.width(spacing.medium))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = track.title, style = MaterialTheme.typography.bodyLarge, color = colors.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(text = detail, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+private fun MenuRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
+    val colors = HarmoniaThemeTokens.colors
+    val spacing = HarmoniaThemeTokens.spacing
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .clickable(onClick = onClick)
+            .padding(horizontal = spacing.standard, vertical = spacing.small)
+            .semantics(mergeDescendants = true) { role = Role.Button },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(imageVector = icon, contentDescription = null, tint = colors.primarySignal, modifier = Modifier.size(22.dp))
+        Spacer(modifier = Modifier.width(spacing.medium))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, style = MaterialTheme.typography.bodyLarge, color = colors.textPrimary)
+            Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
+        }
+        Icon(imageVector = HarmoniaIcons.ChevronRight, contentDescription = null, tint = colors.textDisabled)
+    }
+}
+
+@Composable
+private fun InfoDialog(title: String, message: String, onDismiss: () -> Unit) {
+    val colors = HarmoniaThemeTokens.colors
+    AlertDialog(
         onDismissRequest = onDismiss,
-        title = {
-            Column {
-                Text(
-                    text = "Listening Activity",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = colors.textPrimary
-                )
-                Text(
-                    text = "$totalEvents plays recorded on this phone",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.primarySignal
-                )
-            }
-        },
-        text = {
-            if (events.isEmpty()) {
-                Text(
-                    text = "Nothing here yet. Play a song and your history will show up here.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = colors.textSecondary
-                )
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(280.dp),
-                    verticalArrangement = Arrangement.spacedBy(spacing.xSmall)
-                ) {
-                    items(events.take(30)) { event ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(colors.surfaceContainer)
-                                .padding(horizontal = 8.dp, vertical = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = event.eventType.name,
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = colors.primarySignal
-                                )
-                                Text(
-                                    text = "Track: ${event.trackId.take(12)}...",
-                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                                    color = colors.textSecondary
-                                )
-                            }
-                            Text(
-                                text = String.format(Locale.US, "%.1fs", event.durationPlayedSec),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = colors.textPrimary
-                            )
-                        }
-                    }
-                }
-            }
-        },
+        title = { Text(text = title, style = MaterialTheme.typography.titleLarge, color = colors.textPrimary) },
+        text = { Text(text = message, style = MaterialTheme.typography.bodyMedium, color = colors.textSecondary) },
         confirmButton = {
-            androidx.compose.material3.TextButton(onClick = onDismiss) {
-                Text("Close", color = colors.primarySignal, fontWeight = FontWeight.Bold)
+            TextButton(onClick = onDismiss) {
+                Text(text = "Done", color = colors.primarySignal, style = MaterialTheme.typography.labelLarge)
             }
         },
         containerColor = colors.surfaceElevated,
