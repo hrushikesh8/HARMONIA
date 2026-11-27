@@ -40,7 +40,7 @@ Status: `Done` · `In progress` · `Planned`
 | 2.1 | Now Playing redesign: big artwork, swipe down to close, queue toggle, volume slider (lyrics toggle arrives with 4.3) | UI, UX | Done |
 | 2.2 | Mini player restyle to match | UI | Done |
 | 2.3 | Library landing list (Playlists, Artists, Albums, Songs, Folders, Favorites); sort is remembered and visible (Genres row arrives with 4.2) | UI, UX, BE | Done |
-| 2.4 | Home sections: Recently played, Recently added, Rediscover, Top this month | UI, UX, BE | Planned |
+| 2.4 | Home sections: Recently played, Recently added, Rediscover, Top this month | UI, UX, BE | Done |
 | 2.5 | Album page: hero artwork, Play / Shuffle buttons, Disc 1 / Disc 2 headers | UI, UX | Planned |
 | 2.6 | Artist page: hero header, top songs, albums | UI, BE | Planned |
 | 2.7 | Playlist page: artwork collage header, drag to reorder | UI, UX | Planned |
@@ -183,6 +183,20 @@ Status: `Done` · `In progress` · `Planned`
 - **Still slow on the emulator:** the first screen takes ~20 s there because it's a debug build on
   software rendering. Real phones with a release build are much faster; task 3.11 would speed up
   the first launch further.
+
+### 2.4 Home sections
+- **What:** Home gains two sections. **Top this month**: your 5 most played songs in the last 30
+  days, as a numbered list. **Rediscover**: songs played 3+ times that you haven't played in over
+  a month. Order is now Recently played, Top this month, Recently added, Rediscover, Albums,
+  Artists, Playlists, with sentence-case headings. Also fixed the "View Library" link, which sat
+  above its heading instead of beside it.
+- **Backend:** one new grouped SQL query, `ListeningEventDao.observeTrackPlayStats`, counts song
+  starts per track (all-time, last 30 days, last played) from existing listening history; no
+  schema change or migration. The selection rules live in `presentation/home/HomeSections.kt`
+  and are unit tested.
+- **Why:** The listening history was already being recorded but only fed "Recently played".
+  These are the sections people expect from Apple Music / Spotify Home, built purely from what
+  you played on this phone (no recommendations, nothing leaves the device).
 
 ## Decisions and ideas checked
 

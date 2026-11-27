@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.map
 import org.harmonia.player.data.local.dao.ListeningEventDao
 import org.harmonia.player.data.local.entity.ListeningEventEntity
 import org.harmonia.player.domain.model.ListeningEvent
+import org.harmonia.player.domain.model.TrackPlayStats
 import org.harmonia.player.domain.repository.ListeningEventRepository
 
 class OfflineListeningEventRepository(
@@ -24,4 +25,9 @@ class OfflineListeningEventRepository(
     override suspend fun getEventCount(): Int {
         return dao.count()
     }
+
+    override fun observeTrackPlayStats(recentSince: Long): Flow<List<TrackPlayStats>> =
+        dao.observeTrackPlayStats(recentSince).map { rows ->
+            rows.map { TrackPlayStats(it.trackId, it.totalPlays, it.recentPlays, it.lastPlayedAt) }
+        }
 }

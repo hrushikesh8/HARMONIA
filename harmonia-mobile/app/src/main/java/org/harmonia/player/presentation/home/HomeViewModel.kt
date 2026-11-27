@@ -13,6 +13,7 @@ import org.harmonia.player.domain.model.ListeningEvent
 import org.harmonia.player.domain.model.PlaybackState
 import org.harmonia.player.domain.model.Playlist
 import org.harmonia.player.domain.model.Track
+import org.harmonia.player.domain.model.TrackPlayStats
 import org.harmonia.player.domain.repository.AlbumRepository
 import org.harmonia.player.domain.repository.ArtistRepository
 import org.harmonia.player.domain.repository.ListeningEventRepository
@@ -23,6 +24,8 @@ import org.harmonia.player.domain.repository.TrackRepository
 data class HomeUiState(
     val recentlyPlayed: List<Track> = emptyList(),
     val recentlyAdded: List<Track> = emptyList(),
+    val topThisMonth: List<Track> = emptyList(),
+    val rediscover: List<Track> = emptyList(),
     val albums: List<Album> = emptyList(),
     val artists: List<Artist> = emptyList(),
     val playlists: List<Playlist> = emptyList(),
@@ -41,7 +44,8 @@ private data class HomeCatalog(
 private data class HomeActivity(
     val playlists: List<Playlist>,
     val recentEvents: List<ListeningEvent>,
-    val playbackState: PlaybackState?
+    val playbackState: PlaybackState?,
+    val playStats: List<TrackPlayStats>
 )
 
 class HomeViewModel(
@@ -50,8 +54,11 @@ class HomeViewModel(
     private val artistRepository: ArtistRepository = ServiceLocator.getArtistRepository(),
     private val playlistRepository: PlaylistRepository = ServiceLocator.getPlaylistRepository(),
     private val listeningEventRepository: ListeningEventRepository = ServiceLocator.getListeningEventRepository(),
-    private val playbackStateRepository: PlaybackStateRepository = ServiceLocator.getPlaybackStateRepository()
+    private val playbackStateRepository: PlaybackStateRepository = ServiceLocator.getPlaybackStateRepository(),
+    private val clock: () -> Long = System::currentTimeMillis
 ) : ViewModel() {
+
+    private val openedAt = clock()
 
     private val catalogFlow = combine(
         trackRepository.observeAllTracks(),
@@ -64,9 +71,10 @@ class HomeViewModel(
     private val activityFlow = combine(
         playlistRepository.observeAllPlaylists(),
         listeningEventRepository.observeRecentEvents(30),
-        playbackStateRepository.observePlaybackState()
-    ) { playlists, events, state ->
-        HomeActivity(playlists, events, state)
+        playbackStateRepository.observePlaybackState(),
+        listeningEventRepository.observeTrackPlayStats(recentSince = openedAt - TOP_WINDOW_MS)
+    ) { playlists, events, state, stats ->
+        HomeActivity(playlists, events, state, stats)
     }
 
     val uiState: StateFlow<HomeUiState> = combine(
@@ -91,6 +99,8 @@ class HomeViewModel(
         HomeUiState(
             recentlyPlayed = recentlyPlayed,
             recentlyAdded = recentlyAdded,
+            topThisMonth = topThisMonth(activity.playStats, trackMap),
+            rediscover = rediscover(activity.playStats, trackMap, now = openedAt),
             albums = catalog.albums,
             artists = catalog.artists,
             playlists = activity.playlists,

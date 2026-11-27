@@ -174,7 +174,7 @@ fun HomeScreen(
             item {
                 Box(modifier = Modifier.padding(horizontal = spacing.standard)) {
                     EditorialSectionHeader(
-                        title = "Recently Played",
+                        title = "Recently played",
                         subtitle = "Pick up where you left off"
                     )
                 }
@@ -198,12 +198,37 @@ fun HomeScreen(
             }
         }
 
+        // ── 4b. Top this month: most played in the last 30 days ──────────
+        if (uiState.topThisMonth.isNotEmpty()) {
+            item {
+                Box(modifier = Modifier.padding(horizontal = spacing.standard)) {
+                    EditorialSectionHeader(
+                        title = "Top this month",
+                        subtitle = "Your most played songs in the last 30 days"
+                    )
+                }
+                Spacer(modifier = Modifier.height(spacing.small))
+                Column(modifier = Modifier.padding(horizontal = spacing.standard)) {
+                    uiState.topThisMonth.forEachIndexed { index, track ->
+                        TopSongRow(
+                            rank = index + 1,
+                            track = track,
+                            isPlaying = activePlaybackState?.currentTrackId == track.id && activePlaybackState.isPlaying,
+                            onClick = { onTrackClick(uiState.topThisMonth, index) },
+                            onMenu = onTrackMenu?.let { menu -> { menu(track) } }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(28.dp))
+            }
+        }
+
         // ── 5. Recently Added Carousel (New Local Tracks) ─────────────────
         if (uiState.recentlyAdded.isNotEmpty()) {
             item {
                 Box(modifier = Modifier.padding(horizontal = spacing.standard)) {
                     EditorialSectionHeader(
-                        title = "Recently Added",
+                        title = "Recently added",
                         subtitle = "New on this phone",
                         actionLabel = "View Library",
                         onAction = onNavigateToLibrary
@@ -221,6 +246,33 @@ fun HomeScreen(
                             track = track,
                             isPlaying = isPlaying,
                             onClick = { onTrackClick(uiState.recentlyAdded, index) },
+                            onLongClick = onTrackMenu?.let { menu -> { menu(track) } }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(28.dp))
+            }
+        }
+
+        // ── 5b. Rediscover: songs you played a lot but not lately ────────
+        if (uiState.rediscover.isNotEmpty()) {
+            item {
+                Box(modifier = Modifier.padding(horizontal = spacing.standard)) {
+                    EditorialSectionHeader(
+                        title = "Rediscover",
+                        subtitle = "Songs you loved but haven't played lately"
+                    )
+                }
+                Spacer(modifier = Modifier.height(spacing.small))
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = spacing.standard),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    itemsIndexed(uiState.rediscover, key = { _, track -> "rediscover_${track.id}" }) { index, track ->
+                        ArtworkTrackCard(
+                            track = track,
+                            isPlaying = activePlaybackState?.currentTrackId == track.id && activePlaybackState.isPlaying,
+                            onClick = { onTrackClick(uiState.rediscover, index) },
                             onLongClick = onTrackMenu?.let { menu -> { menu(track) } }
                         )
                     }
@@ -764,19 +816,24 @@ private fun EditorialSectionHeader(
             }
         }
         if (actionLabel != null && onAction != null) {
-            Text(
-                text = actionLabel,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = colors.primarySignal,
-                    fontSize = 13.sp
-                ),
+            // Centre the label inside its 48dp touch target so it lines up with the heading.
+            Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(4.dp))
                     .clickable(onClick = onAction)
-                    .padding(vertical = 4.dp, horizontal = 6.dp)
                     .touchTarget48()
-            )
+                    .padding(horizontal = 6.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = actionLabel,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = colors.primarySignal,
+                        fontSize = 13.sp
+                    )
+                )
+            }
         }
     }
 }
@@ -1070,3 +1127,66 @@ private fun EmptyHomeCard(onNavigateToLibrary: () -> Unit) {
     }
 }
 
+
+/** Numbered row for "Top this month" (Apple Music top-songs style). */
+@Composable
+private fun TopSongRow(
+    rank: Int,
+    track: Track,
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+    onMenu: (() -> Unit)?
+) {
+    val colors = HarmoniaThemeTokens.colors
+    val spacing = HarmoniaThemeTokens.spacing
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = rank.toString(),
+            style = MaterialTheme.typography.titleLarge,
+            color = if (isPlaying) colors.primarySignal else colors.textSecondary,
+            modifier = Modifier.width(28.dp)
+        )
+        HarmoniaArtwork(
+            artworkHash = track.artworkHash,
+            size = 48.dp,
+            cornerRadius = 6.dp,
+            contentDescription = "${track.title} artwork"
+        )
+        Spacer(modifier = Modifier.width(spacing.medium))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = track.title,
+                style = MaterialTheme.typography.titleMedium,
+                color = if (isPlaying) colors.primarySignal else colors.textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = track.artistName ?: "Unknown artist",
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        if (onMenu != null) {
+            IconButton(
+                onClick = onMenu,
+                modifier = Modifier.semantics { contentDescription = "More options for ${track.title}" }
+            ) {
+                Icon(
+                    imageVector = HarmoniaIcons.MoreVert,
+                    contentDescription = null,
+                    tint = colors.textSecondary
+                )
+            }
+        }
+    }
+}

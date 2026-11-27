@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import org.harmonia.player.data.local.OfflineListeningEventRepository
 import org.harmonia.player.data.local.dao.ListeningEventDao
+import org.harmonia.player.data.local.dao.TrackPlayStatsRow
 import org.harmonia.player.data.local.entity.ListeningEventEntity
 import org.harmonia.player.domain.model.ListeningEvent
 import org.harmonia.player.domain.model.ListeningEventType
@@ -30,6 +31,21 @@ class FakeListeningEventDao : ListeningEventDao {
     }
 
     override suspend fun count(): Int = events.size
+
+    /** Same aggregation as the SQL query in ListeningEventDao. */
+    override fun observeTrackPlayStats(recentSince: Long): Flow<List<TrackPlayStatsRow>> =
+        eventsFlow.map { list ->
+            list.filter { it.eventType == "STARTED" }
+                .groupBy { it.trackId }
+                .map { (trackId, plays) ->
+                    TrackPlayStatsRow(
+                        trackId = trackId,
+                        totalPlays = plays.size,
+                        recentPlays = plays.count { it.timestamp >= recentSince },
+                        lastPlayedAt = plays.maxOf { it.timestamp }
+                    )
+                }
+        }
 
     override suspend fun pruneOldSyncedEvents(cutoffTimestamp: Long): Int {
         val before = events.size
@@ -110,5 +126,21 @@ class OfflineListeningEventRepositoryTest {
         assertEquals(ListeningEventType.COMPLETED, recent[0].eventType)
         assertTrue(recent[0].completedFully)
         assertEquals("evt-2", recent[1].id)
+    }
+
+    @Test
+    fun `play stats count only song starts and split out recent plays`() = runBlocking {
+        fun event(id: String, track: String, type: ListeningEventType, at: Long) =
+            ListeningEvent(id = id, eventType = type, trackId = track, timestamp = at)
+        repository.recordEvent(event("1", "song-a", ListeningEventType.STARTED, at = 100L))
+        repository.recordEvent(event("2", "song-a", ListeningEventType.STARTED, at = 900L))
+        repository.recordEvent(event("3", "song-a", ListeningEventType.PAUSED, at = 950L))
+        repository.recordEvent(event("4", "song-b", ListeningEventType.STARTED, at = 200L))
+
+        val stats = repository.observeTrackPlayStats(recentSince = 500L).first().associateBy { it.trackId }
+        assertEquals(2, stats.getValue("song-a").totalPlays)
+        assertEquals(1, stats.getValue("song-a").recentPlays)
+        assertEquals(900L, stats.getValue("song-a").lastPlayedAt)
+        assertEquals(0, stats.getValue("song-b").recentPlays)
     }
 }
