@@ -72,7 +72,10 @@ import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.harmonia.player.data.local.MediaFolderResolver
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -93,11 +96,16 @@ import org.harmonia.player.domain.model.Artist
 import org.harmonia.player.domain.model.LocalFileAvailability
 import org.harmonia.player.domain.model.Track
 import org.harmonia.player.domain.model.storage.permission.StoragePermissionState
+import org.harmonia.player.presentation.components.AlbumGridMinCellWidth
 import org.harmonia.player.presentation.components.HarmoniaArtwork
 import org.harmonia.player.presentation.components.TrackMenuButton
 import org.harmonia.player.presentation.personalization.FavoriteButton
 import org.harmonia.player.presentation.personalization.PersonalizationViewModel
 import org.harmonia.player.presentation.util.TrackDisplayUtils
+import org.harmonia.player.presentation.components.AlbumGridItem
+import org.harmonia.player.presentation.components.ArtistListRow
+import org.harmonia.player.presentation.components.CollectionListRow
+import org.harmonia.player.presentation.components.SongListRow
 import java.util.Locale
 
 enum class FavoriteSortOrder {
@@ -105,8 +113,6 @@ enum class FavoriteSortOrder {
     TITLE_ASC,
     ARTIST_ASC
 }
-
-private val SUPPORTED_FORMAT_FILTERS = listOf("ALL", "MP3", "FLAC", "M4A", "WAV")
 
 /**
  * Pure domain representation of a local music directory.
@@ -122,7 +128,7 @@ data class MusicFolder(
  *
  * Implements:
  * - Sub-tabs: Tracks, Albums, Artists, Folders, Favorites with smooth scrollable tab row.
- * - Real-time Audio Format selector pills (ALL, MP3, FLAC, M4A, WAV) with live track counts.
+ * - Format chips built from the formats actually in the library, with live counts.
  * - Discoverable inline search and multi-criteria sorting.
  * - High-density, information-rich track rows with verified 48dp touch targets.
  * - Folder browsing grouped by device storage directories.
@@ -151,7 +157,7 @@ fun LibraryScreen(
 
     var showSortMenu by remember { mutableStateOf(false) }
     var favoriteSortOrder by rememberSaveable { mutableStateOf(FavoriteSortOrder.RECENTLY_FAVORITED) }
-    var selectedFormatFilter by rememberSaveable { mutableStateOf("ALL") }
+    var selectedFormatFilter by rememberSaveable { mutableStateOf(ALL_FORMATS) }
     var isSearchExpanded by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
 
@@ -173,13 +179,15 @@ fun LibraryScreen(
         }
     }
 
+    // Format chips come from the songs on screen (all songs, or favorites).
+    val formatSource = if (activeTab == LibraryTab.FAVORITES) sortedFavoriteTracks else uiState.tracks
+    val formatOptions = remember(formatSource) { formatFilterOptions(formatSource) }
+    val activeFormat = effectiveFormatFilter(selectedFormatFilter, formatOptions)
+
     // Filtered track lists based on format pills & search query
-    val filteredTracks = remember(uiState.tracks, selectedFormatFilter, searchQuery) {
+    val filteredTracks = remember(uiState.tracks, activeFormat, searchQuery) {
         uiState.tracks.filter { track ->
-            val matchesFormat = when (selectedFormatFilter) {
-                "ALL" -> true
-                else -> track.localFile?.format?.equals(selectedFormatFilter, ignoreCase = true) == true
-            }
+            val matchesFormat = track.matchesFormat(activeFormat)
             val matchesSearch = if (searchQuery.isBlank()) true else {
                 val q = searchQuery.trim().lowercase(Locale.ROOT)
                 track.title.lowercase(Locale.ROOT).contains(q) ||
@@ -190,12 +198,9 @@ fun LibraryScreen(
         }
     }
 
-    val filteredFavoriteTracks = remember(sortedFavoriteTracks, selectedFormatFilter, searchQuery) {
+    val filteredFavoriteTracks = remember(sortedFavoriteTracks, activeFormat, searchQuery) {
         sortedFavoriteTracks.filter { track ->
-            val matchesFormat = when (selectedFormatFilter) {
-                "ALL" -> true
-                else -> track.localFile?.format?.equals(selectedFormatFilter, ignoreCase = true) == true
-            }
+            val matchesFormat = track.matchesFormat(activeFormat)
             val matchesSearch = if (searchQuery.isBlank()) true else {
                 val q = searchQuery.trim().lowercase(Locale.ROOT)
                 track.title.lowercase(Locale.ROOT).contains(q) ||
@@ -720,12 +725,11 @@ fun LibraryScreen(
             Spacer(modifier = Modifier.height(spacing.small))
 
             // ── 5. Audio Format Filter Pills (Active for Tracks & Favorites) ─
-            if (activeTab == LibraryTab.TRACKS || activeTab == LibraryTab.FAVORITES) {
-                val currentTrackSet = if (activeTab == LibraryTab.TRACKS) uiState.tracks else sortedFavoriteTracks
+            if ((activeTab == LibraryTab.TRACKS || activeTab == LibraryTab.FAVORITES) && formatOptions.isNotEmpty()) {
                 FormatFilterPillsRow(
-                    selectedFilter = selectedFormatFilter,
-                    allTracks = currentTrackSet,
-                    onSelectFilter = { selectedFormatFilter = it }
+                    options = formatOptions,
+                    selected = activeFormat,
+                    onSelect = { selectedFormatFilter = it }
                 )
                 Spacer(modifier = Modifier.height(spacing.small))
             }
@@ -768,14 +772,12 @@ fun LibraryScreen(
     }
 }
 
-/**
- * Audio Format Filter Pills Row (ALL, MP3, FLAC, M4A, WAV).
- */
+/** Format chips (All, MP3, FLAC...) built from the library; see [formatFilterOptions]. */
 @Composable
 private fun FormatFilterPillsRow(
-    selectedFilter: String,
-    allTracks: List<Track>,
-    onSelectFilter: (String) -> Unit
+    options: List<FormatFilterOption>,
+    selected: String,
+    onSelect: (String) -> Unit
 ) {
     val colors = HarmoniaThemeTokens.colors
 
@@ -784,37 +786,31 @@ private fun FormatFilterPillsRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(vertical = 4.dp)
     ) {
-        items(SUPPORTED_FORMAT_FILTERS) { format ->
-            val count = when (format) {
-                "ALL" -> allTracks.size
-                else -> allTracks.count { it.localFile?.format?.equals(format, ignoreCase = true) == true }
-            }
-            val isSelected = selectedFilter == format
-
-            Box(
+        items(options, key = { it.key }) { option ->
+            val isSelected = option.key == selected
+            Text(
+                text = "${option.label}  ${option.count}",
+                style = MaterialTheme.typography.labelMedium,
+                color = when {
+                    isSelected && colors.isDark -> colors.backgroundRoot
+                    isSelected -> colors.surfaceElevated
+                    else -> colors.textPrimary
+                },
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(50))
                     .background(if (isSelected) colors.primarySignal else colors.surfaceContainer)
-                    .hairlineBorder(
-                        color = if (isSelected) colors.primarySignal else colors.borderStructural,
-                        shape = RoundedCornerShape(8.dp),
-                        width = 1.dp
-                    )
-                    .clickable { onSelectFilter(format) }
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                    .touchTarget48()
-                    .semantics { contentDescription = "Filter by format $format, $count tracks available" },
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "$format ($count)",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        fontSize = 11.sp
-                    ),
-                    color = if (isSelected) colors.backgroundRoot else colors.textPrimary
-                )
-            }
+                    .clickable { onSelect(option.key) }
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
+                    .semantics {
+                        role = Role.Button
+                        contentDescription = if (option.key == ALL_FORMATS) {
+                            "Show all formats, ${option.count} songs"
+                        } else {
+                            "Show only ${option.label}, ${option.count} songs"
+                        }
+                        this.selected = isSelected
+                    }
+            )
         }
     }
 }
@@ -845,7 +841,7 @@ internal fun TracksTabContent(
     } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(spacing.small),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
             contentPadding = PaddingValues(bottom = 96.dp)
         ) {
             itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
@@ -891,7 +887,7 @@ internal fun FavoritesTabContent(
     } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(spacing.small),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
             contentPadding = PaddingValues(bottom = 96.dp)
         ) {
             itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
@@ -931,14 +927,14 @@ private fun AlbumsTabContent(
         EmptyLibraryState(message = "No albums found in library")
     } else {
         LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+            columns = GridCells.Adaptive(minSize = AlbumGridMinCellWidth),
             modifier = Modifier.fillMaxSize(),
             horizontalArrangement = Arrangement.spacedBy(spacing.medium),
             verticalArrangement = Arrangement.spacedBy(spacing.medium),
             contentPadding = PaddingValues(bottom = 96.dp)
         ) {
             items(albums, key = { it.id }) { album ->
-                AlbumGridCard(album = album, onClick = { onAlbumClick(album) })
+                AlbumGridItem(album = album, onClick = { onAlbumClick(album) })
             }
         }
     }
@@ -956,11 +952,11 @@ private fun ArtistsTabContent(
     } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(spacing.small),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
             contentPadding = PaddingValues(bottom = 96.dp)
         ) {
             items(artists, key = { it.id }) { artist ->
-                ArtistRowCard(artist = artist, onClick = { onArtistClick(artist) })
+                ArtistListRow(artist = artist, onClick = { onArtistClick(artist) })
             }
         }
     }
@@ -972,7 +968,6 @@ private fun FoldersTabContent(
     onTrackClick: (List<Track>, Int) -> Unit,
     onTrackMenu: ((Track) -> Unit)? = null
 ) {
-    val colors = HarmoniaThemeTokens.colors
     val spacing = HarmoniaThemeTokens.spacing
 
     if (folders.isEmpty()) {
@@ -980,114 +975,31 @@ private fun FoldersTabContent(
     } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(spacing.small),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
             contentPadding = PaddingValues(bottom = 96.dp)
         ) {
             items(folders, key = { it.fullPath }) { folder ->
                 var isFolderExpanded by remember { mutableStateOf(false) }
 
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .hairlineBorder(color = colors.borderStructural, shape = RoundedCornerShape(12.dp), width = 1.dp)
-                        .clickable { isFolderExpanded = !isFolderExpanded },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = colors.surfaceElevated)
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(colors.surfaceContainer),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = HarmoniaIcons.Library,
-                                    contentDescription = null,
-                                    tint = colors.primarySignal,
-                                    modifier = Modifier.size(22.dp)
+                Column {
+                    CollectionListRow(
+                        title = folder.folderName,
+                        subtitle = "${folder.tracks.size} ${if (folder.tracks.size == 1) "song" else "songs"} · ${folder.fullPath}",
+                        artworkHash = null,
+                        placeholderIcon = HarmoniaIcons.Folder,
+                        description = "Folder ${folder.folderName}, ${folder.tracks.size} songs. " +
+                            if (isFolderExpanded) "Tap to hide songs" else "Tap to show songs",
+                        onClick = { isFolderExpanded = !isFolderExpanded },
+                        showChevron = false
+                    )
+                    AnimatedVisibility(visible = isFolderExpanded) {
+                        Column(modifier = Modifier.padding(start = spacing.large)) {
+                            folder.tracks.forEachIndexed { idx, track ->
+                                SongListRow(
+                                    track = track,
+                                    onClick = { onTrackClick(folder.tracks, idx) },
+                                    onMenuClick = onTrackMenu?.let { menu -> { menu(track) } }
                                 )
-                            }
-                            Spacer(modifier = Modifier.width(spacing.medium))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = folder.folderName,
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = colors.textPrimary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = folder.fullPath,
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                                    color = colors.textSecondary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(colors.surfaceContainer)
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Text(
-                                    text = "${folder.tracks.size} tracks",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = colors.secondarySignal
-                                )
-                            }
-                        }
-
-                        // Expanded Folder Track List
-                        AnimatedVisibility(visible = isFolderExpanded) {
-                            Column(modifier = Modifier.padding(top = spacing.medium)) {
-                                folder.tracks.forEachIndexed { idx, track ->
-                                    val displayTitle = TrackDisplayUtils.formatDisplayTitle(track)
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .combinedClickable(
-                                                onClick = { onTrackClick(folder.tracks, idx) },
-                                                onLongClick = onTrackMenu?.let { menu -> { menu(track) } }
-                                            )
-                                            .padding(vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = "${idx + 1}.",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = colors.textSecondary,
-                                            modifier = Modifier.width(28.dp)
-                                        )
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = displayTitle,
-                                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                                                color = colors.textPrimary,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                            Text(
-                                                text = track.artistName ?: "Unknown Artist",
-                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                                                color = colors.textSecondary,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-                                        Text(
-                                            text = formatDuration(track.durationSec),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = colors.textSecondary
-                                        )
-                                    }
-                                }
                             }
                         }
                     }
@@ -1106,246 +1018,15 @@ internal fun TrackRowCard(
     onClick: () -> Unit,
     onMenuClick: (() -> Unit)? = null
 ) {
-    val colors = HarmoniaThemeTokens.colors
-    val spacing = HarmoniaThemeTokens.spacing
-    val cardShape = RoundedCornerShape(10.dp)
-    val isDimmed = badgeText != null
-    val displayTitle = TrackDisplayUtils.formatDisplayTitle(track)
-    val subtitle = listOfNotNull(track.artistName, track.albumTitle).joinToString(" • ")
-        .ifEmpty { "Local Audio" }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .hairlineBorder(color = colors.borderStructural, shape = cardShape, width = 1.dp)
-            .combinedClickable(onClick = onClick, onLongClick = onMenuClick)
-            .semantics {
-                contentDescription = if (badgeText != null) {
-                    "Play $displayTitle by ${track.artistName ?: "Unknown"} ($badgeText)"
-                } else {
-                    "Play $displayTitle by ${track.artistName ?: "Unknown"}"
-                }
-            },
-        shape = cardShape,
-        colors = CardDefaults.cardColors(containerColor = colors.surfaceElevated)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            HarmoniaArtwork(
-                artworkHash = track.artworkHash ?: track.localFile?.fileHash,
-                size = 44.dp,
-                cornerRadius = 8.dp,
-                contentDescription = "$displayTitle artwork",
-                modifier = if (isDimmed) Modifier.graphicsLayer(alpha = 0.5f) else Modifier
-            )
-
-            Spacer(modifier = Modifier.width(spacing.medium))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = displayTitle,
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = if (isDimmed) colors.textPrimary.copy(alpha = 0.5f) else colors.textPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    if (badgeText != null) {
-                        Spacer(modifier = Modifier.width(spacing.xSmall))
-                        val badgeColor = if (badgeText == "File Unavailable") colors.statusError else colors.statusWarning
-                        Box(
-                            modifier = Modifier
-                                .background(colors.surfaceContainer, RoundedCornerShape(4.dp))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = badgeText,
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                color = badgeColor
-                            )
-                        }
-                    }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    track.localFile?.format?.let { fmt ->
-                        Text(
-                            text = fmt.uppercase(Locale.ROOT),
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold
-                            ),
-                            color = colors.secondarySignal,
-                            modifier = Modifier.padding(end = 6.dp)
-                        )
-                    }
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                        color = if (isDimmed) colors.textSecondary.copy(alpha = 0.6f) else colors.textSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(spacing.small))
-
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = formatDuration(track.durationSec),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (isDimmed) colors.textPrimary.copy(alpha = 0.5f) else colors.textSecondary
-                )
-                track.trackNumber?.let { num ->
-                    Text(
-                        text = "#$num",
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                        color = colors.textDisabled
-                    )
-                }
-            }
-
-            if (onToggleFavorite != null) {
-                Spacer(modifier = Modifier.width(spacing.xSmall))
-                FavoriteButton(
-                    isFavorite = isFavorite ?: false,
-                    onToggleFavorite = onToggleFavorite,
-                    modifier = Modifier.touchTarget48()
-                )
-            }
-
-            if (onMenuClick != null) {
-                TrackMenuButton(trackTitle = displayTitle, onClick = onMenuClick)
-            }
-        }
-    }
-}
-
-@Composable
-private fun AlbumGridCard(
-    album: Album,
-    onClick: () -> Unit
-) {
-    val colors = HarmoniaThemeTokens.colors
-    val spacing = HarmoniaThemeTokens.spacing
-    val cardShape = RoundedCornerShape(12.dp)
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .hairlineBorder(color = colors.borderStructural, shape = cardShape, width = 1.dp)
-            .clickable(onClick = onClick)
-            .semantics { contentDescription = "Album ${album.title} by ${album.artistName ?: "Unknown"}" },
-        shape = cardShape,
-        colors = CardDefaults.cardColors(containerColor = colors.surfaceElevated)
-    ) {
-        Column(modifier = Modifier.padding(10.dp)) {
-            HarmoniaArtwork(
-                artworkHash = album.artworkHash,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f),
-                size = 140.dp,
-                cornerRadius = 8.dp,
-                placeholderIcon = HarmoniaIcons.Album,
-                contentDescription = "${album.title} cover"
-            )
-
-            Spacer(modifier = Modifier.height(spacing.small))
-
-            Text(
-                text = album.title,
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                color = colors.textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Text(
-                text = album.artistName ?: "Unknown Artist",
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.textSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            album.year?.let { yr ->
-                Text(
-                    text = yr.toString(),
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = colors.primarySignal
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ArtistRowCard(
-    artist: Artist,
-    onClick: () -> Unit
-) {
-    val colors = HarmoniaThemeTokens.colors
-    val spacing = HarmoniaThemeTokens.spacing
-    val cardShape = RoundedCornerShape(12.dp)
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .hairlineBorder(color = colors.borderStructural, shape = cardShape, width = 1.dp)
-            .clickable(onClick = onClick)
-            .semantics { contentDescription = "Artist ${artist.name}" },
-        shape = cardShape,
-        colors = CardDefaults.cardColors(containerColor = colors.surfaceElevated)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(spacing.medium),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(colors.surfaceContainer)
-                    .hairlineBorder(colors.borderStructural, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = HarmoniaIcons.Person,
-                    contentDescription = null,
-                    tint = colors.primarySignal,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(spacing.standard))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = artist.name,
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                    color = colors.textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "Local Artist",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.textSecondary
-                )
-            }
-        }
-    }
+    SongListRow(
+        track = track,
+        onClick = onClick,
+        statusText = badgeText,
+        isStatusError = badgeText == "File Unavailable",
+        isFavorite = isFavorite ?: false,
+        onToggleFavorite = onToggleFavorite,
+        onMenuClick = onMenuClick
+    )
 }
 
 @Composable
@@ -1747,13 +1428,6 @@ private fun PermissionWarningBanner(
             )
         }
     }
-}
-
-private fun formatDuration(durationSec: Double): String {
-    val totalSec = durationSec.toInt()
-    val minutes = totalSec / 60
-    val seconds = totalSec % 60
-    return String.format(Locale.US, "%d:%02d", minutes, seconds)
 }
 
 /** User-facing name of a library category (Apple Music says "Songs", not "Tracks"). */

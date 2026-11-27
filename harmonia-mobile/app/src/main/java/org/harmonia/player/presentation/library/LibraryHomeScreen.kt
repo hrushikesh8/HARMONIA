@@ -42,6 +42,7 @@ import org.harmonia.player.design.theme.HarmoniaIcons
 import org.harmonia.player.design.theme.HarmoniaThemeTokens
 import org.harmonia.player.domain.model.Album
 import org.harmonia.player.domain.model.Track
+import org.harmonia.player.presentation.components.AlbumGridMinCellWidth
 import org.harmonia.player.presentation.components.HarmoniaArtwork
 import org.harmonia.player.presentation.personalization.PersonalizationViewModel
 import org.harmonia.player.presentation.playlists.PlaylistsViewModel
@@ -113,7 +114,7 @@ fun LibraryHomeScreen(
     }
 
     LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
+        columns = GridCells.Adaptive(minSize = AlbumGridMinCellWidth),
         modifier = modifier
             .fillMaxSize()
             .background(colors.backgroundRoot),

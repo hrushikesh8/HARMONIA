@@ -1,5 +1,9 @@
 package org.harmonia.player.presentation.search
 
+import org.harmonia.player.presentation.components.AlbumListRow
+import org.harmonia.player.presentation.components.ArtistListRow
+import org.harmonia.player.presentation.components.CollectionListRow
+import org.harmonia.player.presentation.components.SongListRow
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.foundation.text.KeyboardOptions
@@ -413,7 +417,7 @@ private fun SearchResultsList(
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = spacing.bottomScaffold),
-        verticalArrangement = Arrangement.spacedBy(spacing.small)
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         // Tracks Category
         if (showTracks && uiState.matchingTracks.isNotEmpty()) {
@@ -421,7 +425,7 @@ private fun SearchResultsList(
                 CategoryHeader(title = "Songs", count = uiState.matchingTracks.size)
             }
             itemsIndexed(uiState.matchingTracks, key = { _, track -> "trk_${track.id}" }) { index, track ->
-                TrackResultRow(
+                SongListRow(
                     track = track,
                     onClick = { onTrackClick(uiState.matchingTracks, index) },
                     onMenuClick = onTrackMenu?.let { menu -> { menu(track) } }
@@ -435,7 +439,7 @@ private fun SearchResultsList(
                 CategoryHeader(title = "Albums", count = uiState.matchingAlbums.size)
             }
             items(uiState.matchingAlbums, key = { "alb_${it.id}" }) { album ->
-                AlbumResultRow(album = album, onClick = { onAlbumClick(album) })
+                AlbumListRow(album = album, onClick = { onAlbumClick(album) })
             }
         }
 
@@ -445,7 +449,7 @@ private fun SearchResultsList(
                 CategoryHeader(title = "Artists", count = uiState.matchingArtists.size)
             }
             items(uiState.matchingArtists, key = { "art_${it.id}" }) { artist ->
-                ArtistResultRow(artist = artist, onClick = { onArtistClick(artist) })
+                ArtistListRow(artist = artist, onClick = { onArtistClick(artist) }, subtitle = "Artist")
             }
         }
 
@@ -455,7 +459,14 @@ private fun SearchResultsList(
                 CategoryHeader(title = "Playlists", count = uiState.matchingPlaylists.size)
             }
             items(uiState.matchingPlaylists, key = { "pl_${it.id}" }) { playlist ->
-                PlaylistResultRow(playlist = playlist, onClick = { onPlaylistClick(playlist) })
+                CollectionListRow(
+                    title = playlist.name,
+                    subtitle = "Playlist · ${playlist.trackCount} ${if (playlist.trackCount == 1) "song" else "songs"}",
+                    artworkHash = playlist.artworkHash,
+                    placeholderIcon = HarmoniaIcons.Playlists,
+                    description = "Playlist ${playlist.name}",
+                    onClick = { onPlaylistClick(playlist) }
+                )
             }
         }
     }
@@ -485,248 +496,4 @@ private fun CategoryHeader(title: String, count: Int) {
             color = colors.textSecondary
         )
     }
-}
-
-@Composable
-private fun TrackResultRow(
-    track: Track,
-    onClick: () -> Unit,
-    onMenuClick: (() -> Unit)? = null
-) {
-    val colors = HarmoniaThemeTokens.colors
-    val spacing = HarmoniaThemeTokens.spacing
-    val cardShape = RoundedCornerShape(10.dp)
-    val displayTitle = TrackDisplayUtils.formatDisplayTitle(track)
-    val subtitle = listOfNotNull(track.artistName, track.albumTitle).joinToString(" • ")
-        .ifEmpty { "Local Audio" }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .hairlineBorder(colors.borderStructural, cardShape)
-            .combinedClickable(onClick = onClick, onLongClick = onMenuClick)
-            .semantics { contentDescription = "Play $displayTitle by ${track.artistName ?: "Unknown"}" },
-        shape = cardShape,
-        colors = CardDefaults.cardColors(containerColor = colors.surfaceElevated)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            HarmoniaArtwork(
-                artworkHash = track.artworkHash ?: track.localFile?.fileHash,
-                size = 42.dp,
-                cornerRadius = 8.dp,
-                contentDescription = "$displayTitle artwork"
-            )
-            Spacer(modifier = Modifier.width(spacing.medium))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = displayTitle,
-                    color = colors.textPrimary,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    track.localFile?.format?.let { fmt ->
-                        Text(
-                            text = fmt.uppercase(Locale.ROOT),
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold
-                            ),
-                            color = colors.secondarySignal,
-                            modifier = Modifier.padding(end = 6.dp)
-                        )
-                    }
-                    Text(
-                        text = subtitle,
-                        color = colors.textSecondary,
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.width(spacing.small))
-            Text(
-                text = formatDuration(track.durationSec),
-                color = colors.textSecondary,
-                style = MaterialTheme.typography.labelSmall
-            )
-            if (onMenuClick != null) {
-                TrackMenuButton(trackTitle = displayTitle, onClick = onMenuClick)
-            }
-        }
-    }
-}
-
-@Composable
-private fun AlbumResultRow(
-    album: Album,
-    onClick: () -> Unit
-) {
-    val colors = HarmoniaThemeTokens.colors
-    val spacing = HarmoniaThemeTokens.spacing
-    val cardShape = RoundedCornerShape(10.dp)
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .hairlineBorder(colors.borderStructural, cardShape)
-            .clickable(onClick = onClick)
-            .semantics { contentDescription = "Album ${album.title} by ${album.artistName ?: "Unknown"}" },
-        shape = cardShape,
-        colors = CardDefaults.cardColors(containerColor = colors.surfaceElevated)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            HarmoniaArtwork(
-                artworkHash = album.artworkHash,
-                size = 42.dp,
-                cornerRadius = 8.dp,
-                placeholderIcon = HarmoniaIcons.Album,
-                contentDescription = "${album.title} artwork"
-            )
-            Spacer(modifier = Modifier.width(spacing.medium))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = album.title,
-                    color = colors.textPrimary,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                val subtitle = listOfNotNull(album.artistName, album.year?.toString()).joinToString(" • ")
-                Text(
-                    text = subtitle.ifEmpty { "Album" },
-                    color = colors.textSecondary,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ArtistResultRow(
-    artist: Artist,
-    onClick: () -> Unit
-) {
-    val colors = HarmoniaThemeTokens.colors
-    val spacing = HarmoniaThemeTokens.spacing
-    val cardShape = RoundedCornerShape(10.dp)
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .hairlineBorder(colors.borderStructural, cardShape)
-            .clickable(onClick = onClick)
-            .semantics { contentDescription = "Artist ${artist.name}" },
-        shape = cardShape,
-        colors = CardDefaults.cardColors(containerColor = colors.surfaceElevated)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(CircleShape)
-                    .background(colors.surfaceContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = HarmoniaIcons.Person,
-                    contentDescription = null,
-                    tint = colors.primarySignal,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(spacing.medium))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = artist.name,
-                    color = colors.textPrimary,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "Artist",
-                    color = colors.textSecondary,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PlaylistResultRow(
-    playlist: Playlist,
-    onClick: () -> Unit
-) {
-    val colors = HarmoniaThemeTokens.colors
-    val spacing = HarmoniaThemeTokens.spacing
-    val cardShape = RoundedCornerShape(10.dp)
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .hairlineBorder(colors.borderStructural, cardShape)
-            .clickable(onClick = onClick)
-            .semantics { contentDescription = "Playlist ${playlist.name}" },
-        shape = cardShape,
-        colors = CardDefaults.cardColors(containerColor = colors.surfaceElevated)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            HarmoniaArtwork(
-                artworkHash = playlist.artworkHash,
-                size = 42.dp,
-                cornerRadius = 8.dp,
-                placeholderIcon = HarmoniaIcons.Playlists,
-                contentDescription = "${playlist.name} artwork"
-            )
-            Spacer(modifier = Modifier.width(spacing.medium))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = playlist.name,
-                    color = colors.textPrimary,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "${playlist.trackCount} songs",
-                    color = colors.secondarySignal,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp)
-                )
-            }
-        }
-    }
-}
-
-private fun formatDuration(durationSec: Double): String {
-    val totalSec = durationSec.toInt()
-    val minutes = totalSec / 60
-    val seconds = totalSec % 60
-    return String.format(Locale.US, "%d:%02d", minutes, seconds)
 }
