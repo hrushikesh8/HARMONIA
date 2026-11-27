@@ -4,8 +4,11 @@ import androidx.compose.foundation.background
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.systemBars
@@ -60,6 +63,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
@@ -182,11 +186,19 @@ fun NowPlayingSheet(
     }
     val formatPillText = remember(currentTrack) { currentTrack?.let { formatBadgeText(it) } }
 
+    // Background tinted from the album art, fading into the normal background (task 4.1).
+    val artworkTint by rememberArtworkTint(
+        artworkHash = currentTrack?.artworkHash,
+        isDark = colors.isDark,
+        fallback = colors.backgroundRoot
+    )
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .graphicsLayer { translationY = dragOffset.value.coerceAtLeast(0f) }
             .background(colors.backgroundRoot)
+            .background(Brush.verticalGradient(0f to artworkTint, 0.75f to colors.backgroundRoot))
             .pointerInput(Unit) {
                 detectVerticalDragGestures(
                     onDragEnd = {
@@ -596,7 +608,8 @@ fun NowPlayingSheet(
                         contentDescription = "Volume",
                         modifier = Modifier
                             .weight(1f)
-                            .padding(horizontal = spacing.small)
+                            .padding(horizontal = spacing.small),
+                        secondary = true
                     )
                     Icon(
                         imageVector = HarmoniaIcons.VolumeUp,
@@ -706,7 +719,12 @@ internal fun formatBadgeText(track: Track): String? {
     }
 }
 
-/** Slim Apple-style slider: 4dp track, small thumb, full 48dp touch height. */
+/**
+ * Slim Apple-style slider with a full touch height.
+ * - [secondary] = false (song progress): 4dp lavender track that thickens to 8dp while dragged.
+ * - [secondary] = true (volume): quieter 3dp grey track and a smaller thumb, so the eye goes to the
+ *   song progress first.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HarmoniaThinSlider(
@@ -714,13 +732,33 @@ private fun HarmoniaThinSlider(
     onValueChange: (Float) -> Unit,
     contentDescription: String,
     modifier: Modifier = Modifier.fillMaxWidth(),
-    onValueChangeFinished: (() -> Unit)? = null
+    onValueChangeFinished: (() -> Unit)? = null,
+    secondary: Boolean = false
 ) {
     val colors = HarmoniaThemeTokens.colors
     val interactionSource = remember { MutableInteractionSource() }
+    val isDragged by interactionSource.collectIsDraggedAsState()
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val active = isDragged || isPressed
+    val trackHeight by animateDpAsState(
+        targetValue = when {
+            secondary -> if (active) 5.dp else 3.dp
+            else -> if (active) 8.dp else 4.dp
+        },
+        label = "sliderTrack"
+    )
+    val thumbSize by animateDpAsState(
+        targetValue = when {
+            secondary -> if (active) 14.dp else 10.dp
+            else -> if (active) 18.dp else 14.dp
+        },
+        label = "sliderThumb"
+    )
+    val fill = if (secondary) colors.textSecondary else colors.primarySignal
+    val thumbColor = if (secondary) colors.textSecondary else colors.textPrimary
     val sliderColors = SliderDefaults.colors(
-        thumbColor = colors.textPrimary,
-        activeTrackColor = colors.primarySignal,
+        thumbColor = thumbColor,
+        activeTrackColor = fill,
         inactiveTrackColor = colors.surfaceContainer
     )
     Slider(
@@ -735,16 +773,16 @@ private fun HarmoniaThinSlider(
         thumb = {
             Box(
                 modifier = Modifier
-                    .size(14.dp)
+                    .size(thumbSize)
                     .clip(CircleShape)
-                    .background(colors.textPrimary)
+                    .background(thumbColor)
             )
         },
         track = { state ->
             SliderDefaults.Track(
                 sliderState = state,
                 colors = sliderColors,
-                modifier = Modifier.height(4.dp),
+                modifier = Modifier.height(trackHeight),
                 thumbTrackGapSize = 0.dp,
                 drawStopIndicator = null
             )

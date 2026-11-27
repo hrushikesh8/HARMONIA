@@ -64,9 +64,11 @@ Status: `Done` · `In progress` · `Planned`
 
 ## Phase 4: New features
 
+Build order chosen by Sagar: **4.1 → 4.4 → 4.5 → 4.2 → 4.3**, then the rest.
+
 | # | Task | Area | Status |
 |---|------|------|--------|
-| 4.1 | Now Playing background tinted from album art | UI, BE | Planned |
+| 4.1 | Now Playing background tinted from album art | UI, BE | Done |
 | 4.2 | Browse by genre and year | UI, UX, BE | Planned |
 | 4.3 | Lyrics (embedded tags or `.lrc` files, synced scrolling; LRCLIB as an optional online source) | UI, UX, BE | Planned |
 | 4.4 | A-Z fast scroll, multi-select, undo after removing | UX, BE | Planned |
@@ -390,6 +392,19 @@ Status: `Done` · `In progress` · `Planned`
   The plugin adds `nonMinifiedRelease` and `benchmarkRelease` build types; only those two are
   signed with the debug key so they can be installed for profiling. The real release build's
   signing is unchanged.
+
+### 4.1 Now Playing tinted from the album art
+- **What:** Now Playing's background now takes its colour from the cover: a gradient from the
+  cover's colour at the top fading into the normal background by the controls, cross-fading when
+  the song changes. Dark mode gets a deep, muted version of the colour; light mode a pale one, so
+  text contrast stays the same as before. Covers with no real colour (black-and-white, grey) and
+  songs without art keep the plain background.
+- **How:** `presentation/playback/ArtworkTint.kt`. The cover is loaded at 64px, pixels are grouped
+  by hue, grey / near-black / near-white pixels are ignored (so a white border or black background
+  doesn't pick the colour), and the most common vivid hue wins. Results are cached per cover. No
+  new library (we didn't add AndroidX Palette). Unit tested.
+- **Why:** It's the most recognisable touch of Apple Music and Spotify's player and makes each
+  song feel different, for very little code.
 
 ## Decisions and ideas checked
 
