@@ -3,6 +3,7 @@ package org.harmonia.player.presentation.playback
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,18 +32,25 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -50,6 +59,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import org.harmonia.player.design.theme.HarmoniaIcons
 import org.harmonia.player.design.theme.HarmoniaThemeTokens
 import org.harmonia.player.design.theme.hairlineBorder
@@ -92,7 +102,10 @@ fun NowPlayingSheet(
     onSetRating: (Int) -> Unit = {},
     onClearRating: () -> Unit = {},
     onAlbumClick: ((String) -> Unit)? = null,
-    onArtistClick: ((String) -> Unit)? = null
+    onArtistClick: ((String) -> Unit)? = null,
+    onMoveQueueItem: (fromIndex: Int, toIndex: Int) -> Unit = { _, _ -> },
+    onRemoveQueueItem: (index: Int) -> Unit = {},
+    onOpenTrackMenu: (() -> Unit)? = null
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showQueue by remember { mutableStateOf(false) }
@@ -193,6 +206,20 @@ fun NowPlayingSheet(
                             modifier = Modifier.padding(end = 4.dp)
                         )
                     }
+                    if (onOpenTrackMenu != null) {
+                        IconButton(
+                            onClick = onOpenTrackMenu,
+                            modifier = Modifier
+                                .touchTarget48()
+                                .semantics { contentDescription = "More options for current track" }
+                        ) {
+                            Icon(
+                                imageVector = HarmoniaIcons.MoreVert,
+                                contentDescription = null,
+                                tint = colors.textSecondary
+                            )
+                        }
+                    }
                     IconButton(
                         onClick = { showQueue = !showQueue },
                         modifier = Modifier
@@ -214,14 +241,19 @@ fun NowPlayingSheet(
 
             if (showQueue) {
                 // Queue View
+                val activeIndex = playbackState.activeQueueIndex
+                    .takeIf { it in queue.indices }
+                    ?: queue.indexOfFirst { it.trackId == playbackState.currentTrackId }
                 QueueView(
                     queue = queue,
-                    activeTrackId = playbackState.currentTrackId,
+                    activeIndex = activeIndex,
                     isPlaying = playbackState.isPlaying,
                     onItemClick = onQueueItemClick,
+                    onMove = onMoveQueueItem,
+                    onRemove = onRemoveQueueItem,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(320.dp)
+                        .height(420.dp)
                 )
 
                 Spacer(modifier = Modifier.height(spacing.medium))
@@ -622,12 +654,21 @@ fun NowPlayingSheet(
     }
 }
 
+private data class QueueEntry(val key: String, val item: QueueItem)
+
+/**
+ * Editable play queue: tap to jump, drag the handle to reorder, swipe to remove.
+ * Reordering happens locally while dragging and is committed once on release.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun QueueView(
     queue: List<QueueItem>,
-    activeTrackId: String?,
+    activeIndex: Int,
     isPlaying: Boolean,
     onItemClick: (Int) -> Unit,
+    onMove: (Int, Int) -> Unit,
+    onRemove: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colors = HarmoniaThemeTokens.colors
@@ -653,89 +694,238 @@ private fun QueueView(
                 )
             }
         }
-    } else {
+        return
+    }
+
+    val entries = remember(queue) { queue.mapIndexed { idx, item -> QueueEntry("${item.trackId}#$idx", item) } }
+    var workingEntries by remember(entries) { mutableStateOf(entries) }
+    val activeKey = entries.getOrNull(activeIndex)?.key
+    var draggingKey by remember { mutableStateOf<String?>(null) }
+    var dragStartIndex by remember { mutableIntStateOf(-1) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(Unit) {
+        if (activeIndex > 0) listState.scrollToItem(activeIndex)
+    }
+
+    fun dragBy(deltaY: Float) {
+        val key = draggingKey ?: return
+        dragOffset += deltaY
+        val visible = listState.layoutInfo.visibleItemsInfo
+        val dragged = visible.firstOrNull { it.key == key } ?: return
+        val draggedCenter = dragged.offset + dragOffset + dragged.size / 2f
+        val target = visible.firstOrNull { other ->
+            other.key != key && draggedCenter >= other.offset && draggedCenter <= other.offset + other.size
+        } ?: return
+        val from = workingEntries.indexOfFirst { it.key == key }
+        if (from < 0 || target.index !in workingEntries.indices) return
+        workingEntries = workingEntries.toMutableList().apply { add(target.index, removeAt(from)) }
+        dragOffset += (dragged.offset - target.offset)
+    }
+
+    fun endDrag() {
+        val key = draggingKey ?: return
+        val to = workingEntries.indexOfFirst { it.key == key }
+        if (dragStartIndex >= 0 && to >= 0 && to != dragStartIndex) {
+            onMove(dragStartIndex, to)
+        }
+        draggingKey = null
+        dragStartIndex = -1
+        dragOffset = 0f
+    }
+
+    val upNextCount = (queue.size - activeIndex - 1).coerceAtLeast(0)
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = "$upNextCount up next \u2022 drag \u2261 to reorder, swipe to remove",
+            style = MaterialTheme.typography.labelSmall,
+            color = colors.textSecondary,
+            modifier = Modifier.padding(bottom = spacing.small)
+        )
         LazyColumn(
-            modifier = modifier.fillMaxWidth(),
+            state = listState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            itemsIndexed(queue, key = { idx, item -> "${item.trackId}_$idx" }) { idx, item ->
-                val isCurrent = item.trackId == activeTrackId
-                val track = item.track
-                val title = track?.let { org.harmonia.player.presentation.util.TrackDisplayUtils.formatDisplayTitle(it) } ?: item.trackId
-                val artist = track?.artistName ?: "Unknown Artist"
-                val durationSec = track?.durationSec ?: 0.0
-                val durationMs = (durationSec * 1000).toLong()
+            itemsIndexed(workingEntries, key = { _, entry -> entry.key }) { idx, entry ->
+                val isCurrent = entry.key == activeKey
+                val isDragging = entry.key == draggingKey
+                val dismissState = rememberSwipeToDismissBoxState()
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (isCurrent) colors.primarySignal.copy(alpha = 0.12f) else colors.surfaceElevated)
-                        .hairlineBorder(if (isCurrent) colors.primarySignal.copy(alpha = 0.5f) else colors.borderStructural, RoundedCornerShape(8.dp))
-                        .clickable { onItemClick(idx) }
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Box(
+                    modifier = if (isDragging) {
+                        Modifier
+                            .zIndex(1f)
+                            .graphicsLayer { translationY = dragOffset }
+                    } else {
+                        Modifier.animateItem()
+                    }
                 ) {
-                    Box(
-                        modifier = Modifier.width(28.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (isCurrent && isPlaying) {
-                            Icon(
-                                imageVector = HarmoniaIcons.Play,
-                                contentDescription = "Playing",
-                                modifier = Modifier.size(16.dp),
-                                tint = colors.primarySignal
-                            )
-                        } else {
-                            Text(
-                                text = "${idx + 1}",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = if (isCurrent) colors.primarySignal else colors.textSecondary
-                            )
+                    SwipeToDismissBox(
+                        state = dismissState,
+                        gesturesEnabled = !isCurrent && draggingKey == null,
+                        onDismiss = {
+                            val index = queue.indexOf(entry.item)
+                            if (index >= 0) onRemove(index)
+                        },
+                        backgroundContent = {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(colors.statusError.copy(alpha = 0.2f))
+                                    .padding(horizontal = spacing.medium),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Icon(HarmoniaIcons.Delete, contentDescription = null, tint = colors.statusError)
+                                Icon(HarmoniaIcons.Delete, contentDescription = null, tint = colors.statusError)
+                            }
                         }
-                    }
-
-                    Spacer(modifier = Modifier.width(6.dp))
-
-                    HarmoniaArtwork(
-                        artworkHash = track?.artworkHash,
-                        size = 38.dp,
-                        cornerRadius = 6.dp,
-                        contentDescription = title
-                    )
-
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = title,
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium
-                            ),
-                            color = if (isCurrent) colors.primarySignal else colors.textPrimary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = artist,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colors.textSecondary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    if (durationMs > 0) {
-                        Spacer(modifier = Modifier.width(spacing.small))
-                        Text(
-                            text = formatTime(durationMs),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = colors.textSecondary
+                    ) {
+                        QueueRow(
+                            item = entry.item,
+                            position = idx,
+                            isCurrent = isCurrent,
+                            isPlaying = isPlaying,
+                            isDragging = isDragging,
+                            onClick = {
+                                val index = queue.indexOf(entry.item)
+                                if (index >= 0) onItemClick(index)
+                            },
+                            dragHandleModifier = Modifier.pointerInput(entry.key) {
+                                detectDragGestures(
+                                    onDragStart = {
+                                        draggingKey = entry.key
+                                        dragStartIndex = workingEntries.indexOfFirst { it.key == entry.key }
+                                        dragOffset = 0f
+                                    },
+                                    onDrag = { change, amount ->
+                                        change.consume()
+                                        dragBy(amount.y)
+                                    },
+                                    onDragEnd = { endDrag() },
+                                    onDragCancel = { endDrag() }
+                                )
+                            }
                         )
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun QueueRow(
+    item: QueueItem,
+    position: Int,
+    isCurrent: Boolean,
+    isPlaying: Boolean,
+    isDragging: Boolean,
+    onClick: () -> Unit,
+    dragHandleModifier: Modifier
+) {
+    val colors = HarmoniaThemeTokens.colors
+    val spacing = HarmoniaThemeTokens.spacing
+    val track = item.track
+    val title = track?.let { org.harmonia.player.presentation.util.TrackDisplayUtils.formatDisplayTitle(it) } ?: item.trackId
+    val artist = track?.artistName ?: "Unknown Artist"
+    val durationMs = ((track?.durationSec ?: 0.0) * 1000).toLong()
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            // Opaque base so the swipe-to-remove background never shows through tinted rows
+            .background(colors.surfaceElevated)
+            .background(
+                when {
+                    isDragging -> colors.surfaceContainer
+                    isCurrent -> colors.primarySignal.copy(alpha = 0.12f)
+                    else -> colors.surfaceElevated
+                }
+            )
+            .hairlineBorder(if (isCurrent) colors.primarySignal.copy(alpha = 0.5f) else colors.borderStructural, RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = if (isCurrent) "Now playing: $title" else "Play $title from queue" }
+            .padding(start = 12.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier.width(28.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isCurrent && isPlaying) {
+                Icon(
+                    imageVector = HarmoniaIcons.Play,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = colors.primarySignal
+                )
+            } else {
+                Text(
+                    text = "${position + 1}",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = if (isCurrent) colors.primarySignal else colors.textSecondary
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(6.dp))
+
+        HarmoniaArtwork(
+            artworkHash = track?.artworkHash ?: track?.localFile?.fileHash,
+            size = 38.dp,
+            cornerRadius = 6.dp,
+            contentDescription = null
+        )
+
+        Spacer(modifier = Modifier.width(10.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium
+                ),
+                color = if (isCurrent) colors.primarySignal else colors.textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = artist,
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        if (durationMs > 0) {
+            Spacer(modifier = Modifier.width(spacing.small))
+            Text(
+                text = formatTime(durationMs),
+                style = MaterialTheme.typography.labelSmall,
+                color = colors.textSecondary
+            )
+        }
+
+        Box(
+            modifier = dragHandleModifier
+                .size(48.dp)
+                .semantics { contentDescription = "Drag to reorder $title" },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = HarmoniaIcons.DragHandle,
+                contentDescription = null,
+                tint = colors.textSecondary
+            )
         }
     }
 }

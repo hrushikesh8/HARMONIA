@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -50,17 +51,18 @@ fun HarmoniaArtwork(
     contentDescription: String? = null
 ) {
     val context = LocalContext.current
-    val artworkProvider = remember(context) { ArtworkProvider(context) }
+    val artworkProvider = remember(context) { ArtworkProvider.getInstance(context) }
+    val targetSizePx = with(LocalDensity.current) { size.roundToPx() }
 
-    // Instant check from LRU memory cache
-    var bitmap by remember(artworkHash) {
-        mutableStateOf<Bitmap?>(artworkProvider.getCachedBitmap(artworkHash))
+    // Instant check from the shared LRU memory cache
+    var bitmap by remember(artworkHash, targetSizePx) {
+        mutableStateOf<Bitmap?>(artworkProvider.getCachedBitmap(artworkHash, targetSizePx))
     }
 
-    LaunchedEffect(artworkHash) {
+    LaunchedEffect(artworkHash, targetSizePx) {
         if (bitmap == null && !artworkHash.isNullOrBlank()) {
             val loaded = withContext(Dispatchers.IO) {
-                artworkProvider.loadBitmap(artworkHash)
+                artworkProvider.loadBitmap(artworkHash, targetSizePx)
             }
             bitmap = loaded
         }

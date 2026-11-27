@@ -105,4 +105,16 @@ class SearchViewModelTest {
         assertTrue(state.isEmpty)
         assertEquals(0, state.totalCount)
     }
+
+    @Test
+    fun `typing reports searching instead of no results until debounced results arrive`() = runBlocking {
+        viewModel.onQueryChanged("NonExistentTermXYZ")
+
+        val pending = viewModel.uiState.first { it.isSearching }
+        assertTrue(pending.isEmpty)
+
+        val settled = viewModel.uiState.first { it.query == "NonExistentTermXYZ" }
+        assertFalse(settled.isSearching)
+        assertTrue(settled.isEmpty)
+    }
 }

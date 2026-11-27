@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
@@ -91,7 +92,7 @@ fun HarmoniaTheme(
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
-            typography = HarmoniaTypography,
+            typography = remember(semanticColors) { harmoniaTypography(semanticColors) },
             shapes = HarmoniaShapes,
             content = content
         )

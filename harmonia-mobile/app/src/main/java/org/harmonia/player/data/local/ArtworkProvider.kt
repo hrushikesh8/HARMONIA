@@ -26,12 +26,13 @@ class ArtworkProvider(
 ) {
     private val artworkDir: File = File(context.filesDir, "artwork").apply { mkdirs() }
 
-    // Cache up to 60 bitmaps in memory (approximately 10-15MB depending on dimensions)
-    private val memoryCache: LruCache<String, Bitmap> = object : LruCache<String, Bitmap>(60) {
-        override fun sizeOf(key: String, value: Bitmap): Int {
-            return 1
+    // Bounded by decoded size (KB): one eighth of the app heap, so long lists of thumbnails stay cached.
+    private val memoryCache: LruCache<String, Bitmap> =
+        object : LruCache<String, Bitmap>((Runtime.getRuntime().maxMemory() / 1024 / 8).toInt()) {
+            override fun sizeOf(key: String, value: Bitmap): Int {
+                return (value.byteCount / 1024).coerceAtLeast(1)
+            }
         }
-    }
 
     /**
      * Sanitizes and validates SHA-256 hex string to strictly prevent path traversal.
@@ -90,6 +91,43 @@ class ArtworkProvider(
     }
 
     /**
+     * Fast in-memory lookup for a bitmap previously decoded for a [targetSizePx] display slot.
+     */
+    fun getCachedBitmap(artworkHash: String?, targetSizePx: Int): Bitmap? {
+        val validHash = sanitizeHash(artworkHash) ?: return null
+        return memoryCache.get(sizedCacheKey(validHash, targetSizePx))?.takeIf { !it.isRecycled }
+    }
+
+    /**
+     * Decodes artwork downsampled for a square display slot of [targetSizePx] pixels,
+     * so list thumbnails never hold full-resolution embedded covers in memory.
+     */
+    fun loadBitmap(artworkHash: String?, targetSizePx: Int): Bitmap? {
+        val validHash = sanitizeHash(artworkHash) ?: return null
+        if (targetSizePx <= 0) return loadBitmap(validHash)
+
+        val key = sizedCacheKey(validHash, targetSizePx)
+        memoryCache.get(key)?.takeIf { !it.isRecycled }?.let { return it }
+
+        val file = getArtworkFile(validHash) ?: return null
+        return try {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(file.absolutePath, bounds)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+            val options = BitmapFactory.Options().apply {
+                inSampleSize = calculateInSampleSize(bounds.outWidth, bounds.outHeight, sizeBucket(targetSizePx))
+            }
+            BitmapFactory.decodeFile(file.absolutePath, options)?.also { memoryCache.put(key, it) }
+        } catch (e: Throwable) {
+            null
+        }
+    }
+
+    private fun sizedCacheKey(validHash: String, targetSizePx: Int): String =
+        "$validHash@${sizeBucket(targetSizePx)}"
+
+    /**
      * Checks if the artwork file is available in the local application sandbox.
      */
     fun isArtworkAvailable(artworkHash: String?): Boolean {
@@ -142,6 +180,26 @@ class ArtworkProvider(
     companion object {
         @Volatile
         private var INSTANCE: ArtworkProvider? = null
+
+        /**
+         * Rounds a requested display size up to a power of two so nearby sizes share one cached decode.
+         */
+        fun sizeBucket(targetSizePx: Int): Int {
+            var bucket = 64
+            while (bucket < targetSizePx) bucket *= 2
+            return bucket
+        }
+
+        /**
+         * Largest power-of-two sample size that keeps both dimensions at or above [targetSizePx].
+         */
+        fun calculateInSampleSize(width: Int, height: Int, targetSizePx: Int): Int {
+            var sampleSize = 1
+            while (width / (sampleSize * 2) >= targetSizePx && height / (sampleSize * 2) >= targetSizePx) {
+                sampleSize *= 2
+            }
+            return sampleSize
+        }
 
         fun getInstance(context: Context): ArtworkProvider {
             return INSTANCE ?: synchronized(this) {

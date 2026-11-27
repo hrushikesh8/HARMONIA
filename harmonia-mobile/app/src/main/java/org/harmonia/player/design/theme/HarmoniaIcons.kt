@@ -3,6 +3,7 @@ package org.harmonia.player.design.theme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 
@@ -1019,5 +1020,32 @@ object HarmoniaIcons {
             close()
         }
     }.build()
-}
 
+    val DragHandle: ImageVector = pathIcon("DragHandle", "M20,9H4v2h16V9zM4,15h16v-2H4v2z")
+
+    val PlaylistAdd: ImageVector = pathIcon(
+        "PlaylistAdd",
+        "M14,10H3v2h11V10zM14,6H3v2h11V6zM18,14v-4h-2v4h-4v2h4v4h2v-4h4v-2H18zM3,16h7v-2H3V16z"
+    )
+
+    val PlayNext: ImageVector = pathIcon(
+        "PlayNext",
+        "M3,10h11v2H3V10zM3,6h11v2H3V6zM3,14h7v2H3V14zM16,13v8l6,-4L16,13z"
+    )
+
+    val AddToQueue: ImageVector = pathIcon(
+        "AddToQueue",
+        "M4,6H2v14c0,1.1 0.9,2 2,2h14v-2H4V6zM20,2H8C6.9,2 6,2.9 6,4v12c0,1.1 0.9,2 2,2h12c1.1,0 2,-0.9 2,-2V4C22,2.9 21.1,2 20,2zM19,11h-4v4h-2v-4H9V9h4V5h2v4h4V11z"
+    )
+
+    private fun pathIcon(name: String, pathData: String): ImageVector = ImageVector.Builder(
+        name = name,
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f
+    ).addPath(
+        pathData = addPathNodes(pathData),
+        fill = SolidColor(Color.White)
+    ).build()
+}

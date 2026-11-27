@@ -2,6 +2,7 @@ package org.harmonia.player.presentation.home
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -43,10 +45,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import org.harmonia.player.design.theme.AnalogWarmGold
 import org.harmonia.player.design.theme.HarmoniaIcons
 import org.harmonia.player.design.theme.HarmoniaThemeTokens
-import org.harmonia.player.design.theme.SonicAmber
 import org.harmonia.player.design.theme.touchTarget48
 import org.harmonia.player.domain.model.Album
 import org.harmonia.player.domain.model.Artist
@@ -76,7 +76,12 @@ fun HomeScreen(
     currentTrack: Track? = null,
     onNavigateToLibrary: () -> Unit = {},
     onNavigateToPlaylists: () -> Unit = {},
-    onTrackClick: (Track) -> Unit = {},
+    onViewAllAlbums: () -> Unit = onNavigateToLibrary,
+    onViewAllArtists: () -> Unit = onNavigateToLibrary,
+    onPlaylistClick: (Playlist) -> Unit = { onNavigateToPlaylists() },
+    onTrackClick: (List<Track>, Int) -> Unit = { _, _ -> },
+    onTrackMenu: ((Track) -> Unit)? = null,
+    onOpenNowPlaying: () -> Unit = {},
     onAlbumClick: (Album) -> Unit = {},
     onArtistClick: (Artist) -> Unit = {},
     onResumeClick: () -> Unit = {},
@@ -131,7 +136,13 @@ fun HomeScreen(
                             track = activeResumeTrack,
                             playbackState = activePlaybackState,
                             onResume = onResumeClick,
-                            onCardClick = { onTrackClick(activeResumeTrack) }
+                            onCardClick = {
+                                if (currentTrack != null) {
+                                    onOpenNowPlaying()
+                                } else {
+                                    onTrackClick(listOf(activeResumeTrack), 0)
+                                }
+                            }
                         )
                     } else {
                         NoResumeListeningCard(
@@ -172,13 +183,14 @@ fun HomeScreen(
                     contentPadding = PaddingValues(horizontal = spacing.standard),
                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    items(uiState.recentlyPlayed, key = { "recent_${it.id}" }) { track ->
+                    itemsIndexed(uiState.recentlyPlayed, key = { _, track -> "recent_${track.id}" }) { index, track ->
                         val isPlaying = activePlaybackState?.currentTrackId == track.id &&
                                 activePlaybackState.isPlaying
                         ArtworkTrackCard(
                             track = track,
                             isPlaying = isPlaying,
-                            onClick = { onTrackClick(track) }
+                            onClick = { onTrackClick(uiState.recentlyPlayed, index) },
+                            onLongClick = onTrackMenu?.let { menu -> { menu(track) } }
                         )
                     }
                 }
@@ -202,13 +214,14 @@ fun HomeScreen(
                     contentPadding = PaddingValues(horizontal = spacing.standard),
                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    items(uiState.recentlyAdded, key = { "added_${it.id}" }) { track ->
+                    itemsIndexed(uiState.recentlyAdded, key = { _, track -> "added_${track.id}" }) { index, track ->
                         val isPlaying = activePlaybackState?.currentTrackId == track.id &&
                                 activePlaybackState.isPlaying
                         ArtworkTrackCard(
                             track = track,
                             isPlaying = isPlaying,
-                            onClick = { onTrackClick(track) }
+                            onClick = { onTrackClick(uiState.recentlyAdded, index) },
+                            onLongClick = onTrackMenu?.let { menu -> { menu(track) } }
                         )
                     }
                 }
@@ -224,7 +237,7 @@ fun HomeScreen(
                         title = "Albums",
                         subtitle = "${uiState.albums.size} albums in collection",
                         actionLabel = "View All",
-                        onAction = onNavigateToLibrary
+                        onAction = onViewAllAlbums
                     )
                 }
                 Spacer(modifier = Modifier.height(spacing.small))
@@ -248,7 +261,7 @@ fun HomeScreen(
                         title = "Artists",
                         subtitle = "${uiState.artists.size} artists in collection",
                         actionLabel = "View All",
-                        onAction = onNavigateToLibrary
+                        onAction = onViewAllArtists
                     )
                 }
                 Spacer(modifier = Modifier.height(spacing.small))
@@ -281,7 +294,7 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     items(uiState.playlists, key = { "pl_${it.id}" }) { playlist ->
-                        ArtworkPlaylistCard(playlist = playlist, onClick = onNavigateToPlaylists)
+                        ArtworkPlaylistCard(playlist = playlist, onClick = { onPlaylistClick(playlist) })
                     }
                 }
                 Spacer(modifier = Modifier.height(28.dp))
@@ -335,7 +348,7 @@ private fun HeaderSection(
                 Icon(
                     imageVector = HarmoniaIcons.Logo,
                     contentDescription = "Harmonia Monogram",
-                    tint = SonicAmber,
+                    tint = colors.primarySignal,
                     modifier = Modifier
                         .size(30.dp)
                         .padding(end = spacing.small)
@@ -471,7 +484,7 @@ private fun HeroListeningCard(
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 0.5.sp
                         ),
-                        color = SonicAmber
+                        color = colors.primarySignal
                     )
                     if (formatStr != null) {
                         Box(
@@ -486,7 +499,7 @@ private fun HeroListeningCard(
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.SemiBold
                                 ),
-                                color = AnalogWarmGold
+                                color = colors.technicalAccent
                             )
                         }
                     }
@@ -527,7 +540,7 @@ private fun HeroListeningCard(
                 modifier = Modifier
                     .size(48.dp)
                     .clip(CircleShape)
-                    .background(SonicAmber)
+                    .background(colors.primarySignal)
                     .clickable(onClick = {
                         if (playbackState?.currentTrackId == track.id) {
                             onResume()
@@ -586,7 +599,7 @@ private fun NoResumeListeningCard(
                 Icon(
                     imageVector = HarmoniaIcons.MusicNote,
                     contentDescription = null,
-                    tint = SonicAmber,
+                    tint = colors.primarySignal,
                     modifier = Modifier.size(28.dp)
                 )
             }
@@ -611,7 +624,7 @@ private fun NoResumeListeningCard(
                 modifier = Modifier
                     .size(44.dp)
                     .clip(CircleShape)
-                    .background(SonicAmber)
+                    .background(colors.primarySignal)
                     .touchTarget48(),
                 contentAlignment = Alignment.Center
             ) {
@@ -651,7 +664,7 @@ private fun QuickActionsBar(
                 .touchTarget48()
                 .semantics { contentDescription = "Shuffle all library tracks" },
             colors = ButtonDefaults.buttonColors(
-                containerColor = SonicAmber,
+                containerColor = colors.primarySignal,
                 contentColor = colors.backgroundRoot
             ),
             shape = RoundedCornerShape(12.dp)
@@ -755,7 +768,7 @@ private fun EditorialSectionHeader(
                 text = actionLabel,
                 style = MaterialTheme.typography.bodySmall.copy(
                     fontWeight = FontWeight.Bold,
-                    color = SonicAmber,
+                    color = colors.primarySignal,
                     fontSize = 13.sp
                 ),
                 modifier = Modifier
@@ -775,7 +788,8 @@ private fun EditorialSectionHeader(
 private fun ArtworkTrackCard(
     track: Track,
     isPlaying: Boolean = false,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null
 ) {
     val colors = HarmoniaThemeTokens.colors
     val spacing = HarmoniaThemeTokens.spacing
@@ -789,7 +803,7 @@ private fun ArtworkTrackCard(
         modifier = Modifier
             .width(136.dp)
             .clip(cardShape)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .semantics { contentDescription = "Play $displayTitle by $artistSubtitle" }
     ) {
         // Artwork Presentation
@@ -807,7 +821,7 @@ private fun ArtworkTrackCard(
                         .padding(8.dp)
                         .size(28.dp)
                         .clip(CircleShape)
-                        .background(SonicAmber),
+                        .background(colors.primarySignal),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -826,7 +840,7 @@ private fun ArtworkTrackCard(
                 fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.SemiBold,
                 fontSize = 13.sp
             ),
-            color = if (isPlaying) SonicAmber else colors.textPrimary,
+            color = if (isPlaying) colors.primarySignal else colors.textPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -1021,7 +1035,7 @@ private fun EmptyHomeCard(onNavigateToLibrary: () -> Unit) {
                 Icon(
                     imageVector = HarmoniaIcons.MusicNote,
                     contentDescription = null,
-                    tint = SonicAmber,
+                    tint = colors.primarySignal,
                     modifier = Modifier.size(32.dp)
                 )
             }
@@ -1042,7 +1056,7 @@ private fun EmptyHomeCard(onNavigateToLibrary: () -> Unit) {
             Button(
                 onClick = onNavigateToLibrary,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = SonicAmber,
+                    containerColor = colors.primarySignal,
                     contentColor = colors.backgroundRoot
                 ),
                 shape = RoundedCornerShape(12.dp),

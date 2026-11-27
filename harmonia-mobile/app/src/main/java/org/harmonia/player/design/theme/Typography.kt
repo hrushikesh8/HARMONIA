@@ -13,9 +13,10 @@ import androidx.compose.ui.unit.sp
  * - Natural, legible Sans-Serif hierarchy for content and navigation.
  * - Monospace strictly reserved for numerical values, timers, bitrates, and technical formats (FLAC/WAV).
  * - Calibrated optical letter spacing and line heights for maximum legibility.
- * - Primary text uses WarmSignalWhite (reduced eye fatigue), secondary uses MutedStone.
+ * - Text colors come from the active theme's semantic colors, so styles stay legible in light mode
+ *   (dark: WarmSignalWhite primary, MutedStone secondary, AnalogWarmGold technical labels).
  */
-val HarmoniaTypography = Typography(
+fun harmoniaTypography(colors: HarmoniaSemanticColors) = Typography(
     // Large ambient headings, greeting titles
     displayLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
@@ -23,7 +24,7 @@ val HarmoniaTypography = Typography(
         fontSize = 28.sp,
         lineHeight = 34.sp,
         letterSpacing = (-0.5).sp,
-        color = WarmSignalWhite
+        color = colors.textPrimary
     ),
     // Screen titles (Home, Library, Now Playing)
     titleLarge = TextStyle(
@@ -32,7 +33,7 @@ val HarmoniaTypography = Typography(
         fontSize = 20.sp,
         lineHeight = 26.sp,
         letterSpacing = (-0.2).sp,
-        color = WarmSignalWhite
+        color = colors.textPrimary
     ),
     // Section headers, card titles, track titles in lists
     titleMedium = TextStyle(
@@ -41,7 +42,7 @@ val HarmoniaTypography = Typography(
         fontSize = 16.sp,
         lineHeight = 22.sp,
         letterSpacing = 0.sp,
-        color = WarmSignalWhite
+        color = colors.textPrimary
     ),
     // Primary body content, descriptive text
     bodyLarge = TextStyle(
@@ -50,7 +51,7 @@ val HarmoniaTypography = Typography(
         fontSize = 15.sp,
         lineHeight = 22.sp,
         letterSpacing = 0.15.sp,
-        color = WarmSignalWhite
+        color = colors.textPrimary
     ),
     // Artist names, secondary metadata
     bodyMedium = TextStyle(
@@ -59,7 +60,7 @@ val HarmoniaTypography = Typography(
         fontSize = 13.sp,
         lineHeight = 18.sp,
         letterSpacing = 0.15.sp,
-        color = MutedStone
+        color = colors.textSecondary
     ),
     // Album years, track counts, duration labels
     bodySmall = TextStyle(
@@ -68,7 +69,7 @@ val HarmoniaTypography = Typography(
         fontSize = 12.sp,
         lineHeight = 16.sp,
         letterSpacing = 0.2.sp,
-        color = MutedStone
+        color = colors.textSecondary
     ),
     // Interactive buttons, tabs, category action pills
     labelMedium = TextStyle(
@@ -77,7 +78,7 @@ val HarmoniaTypography = Typography(
         fontSize = 12.sp,
         lineHeight = 16.sp,
         letterSpacing = 0.25.sp,
-        color = WarmSignalWhite
+        color = colors.textPrimary
     ),
     // STRICTLY for technical audio parameters, timestamps, bitrates, sample rates, format pills
     labelSmall = TextStyle(
@@ -86,6 +87,6 @@ val HarmoniaTypography = Typography(
         fontSize = 11.sp,
         lineHeight = 14.sp,
         letterSpacing = 0.5.sp,
-        color = AnalogWarmGold
+        color = colors.technicalAccent
     )
 )

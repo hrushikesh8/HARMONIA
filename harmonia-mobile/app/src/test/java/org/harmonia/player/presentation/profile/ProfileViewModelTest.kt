@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -146,6 +147,20 @@ class ProfileViewModelTest {
         assertEquals(1, viewModel.uiState.value.totalTracks)
         assertEquals(1, viewModel.uiState.value.favoritesCount)
     }
+
+    @Test
+    fun listeningEventTotalIsNotCappedByRecentEventsWindow() = runTest(testDispatcher) {
+        listeningRepo.eventsFlow.value = List(75) { idx ->
+            ListeningEvent(eventType = ListeningEventType.STARTED, trackId = "trk$idx")
+        }
+
+        val viewModel = createViewModel()
+        subscribeUiState(viewModel)
+        advanceUntilIdle()
+
+        assertEquals(75, viewModel.uiState.value.totalListeningEvents)
+        assertEquals(50, viewModel.uiState.value.recentListeningEvents.size)
+    }
 }
 
 private class FakeProfileTrackRepository : TrackRepository {
@@ -191,6 +206,6 @@ private class FakeProfileListeningEventRepository : ListeningEventRepository {
     val eventsFlow = MutableStateFlow<List<ListeningEvent>>(emptyList())
 
     override suspend fun recordEvent(event: ListeningEvent) {}
-    override fun observeRecentEvents(limit: Int): Flow<List<ListeningEvent>> = eventsFlow
+    override fun observeRecentEvents(limit: Int): Flow<List<ListeningEvent>> = eventsFlow.map { it.take(limit) }
     override suspend fun getEventCount(): Int = eventsFlow.value.size
 }

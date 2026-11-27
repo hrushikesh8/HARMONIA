@@ -102,6 +102,27 @@ class FakePlaybackPort : PlaybackPort {
         _queue.value = current + appended
     }
 
+    var lastPlayNextTracks: List<Track>? = null
+
+    override fun playNext(tracks: List<Track>) {
+        lastPlayNextTracks = tracks
+        val current = _queue.value
+        val insertAt = (_playbackState.value.activeQueueIndex + 1).coerceIn(0, current.size)
+        val inserted = tracks.map { trk -> QueueItem(position = 0, trackId = trk.id, track = trk) }
+        _queue.value = (current.take(insertAt) + inserted + current.drop(insertAt))
+            .mapIndexed { idx, item -> item.copy(position = idx) }
+    }
+
+    override fun moveQueueItem(fromIndex: Int, toIndex: Int) {
+        val updated = _queue.value.toMutableList().apply { add(toIndex, removeAt(fromIndex)) }
+        _queue.value = updated.mapIndexed { idx, item -> item.copy(position = idx) }
+    }
+
+    override fun removeQueueItem(index: Int) {
+        val updated = _queue.value.toMutableList().apply { removeAt(index) }
+        _queue.value = updated.mapIndexed { idx, item -> item.copy(position = idx) }
+    }
+
     override fun jumpToQueueIndex(index: Int) {
         lastJumpIndex = index
         val item = _queue.value.getOrNull(index)
@@ -369,5 +390,51 @@ class PlaybackViewModelTest {
         advanceUntilIdle()
         assertTrue(fakePlaybackPort.cancelSleepTimerCalled)
         assertFalse(viewModel.uiState.value.sleepTimerState.isActive)
+    }
+
+    @Test
+    fun `addToQueue on an empty queue starts playing the track`() = runTest(testDispatcher) {
+        viewModel.addToQueue(trackA)
+        advanceUntilIdle()
+
+        assertEquals(listOf(trackA), fakePlaybackPort.lastQueueTracks)
+        assertTrue(fakePlaybackPort.playCalled)
+    }
+
+    @Test
+    fun `addToQueue appends to an existing queue without restarting playback`() = runTest(testDispatcher) {
+        fakePlaybackPort.setQueue(listOf(trackA), startIndex = 0)
+        fakePlaybackPort.lastQueueTracks = null
+
+        viewModel.addToQueue(trackB)
+        advanceUntilIdle()
+
+        assertNull(fakePlaybackPort.lastQueueTracks)
+        assertEquals(listOf(trackA.id, trackB.id), fakePlaybackPort.queue.value.map { it.trackId })
+    }
+
+    @Test
+    fun `playNext inserts directly after the active item`() = runTest(testDispatcher) {
+        val trackC = trackB.copy(id = "trk-c", title = "Optimistic")
+        fakePlaybackPort.setQueue(listOf(trackA, trackB), startIndex = 0)
+
+        viewModel.playNext(trackC)
+        advanceUntilIdle()
+
+        assertEquals(listOf(trackC), fakePlaybackPort.lastPlayNextTracks)
+        assertEquals(listOf(trackA.id, trackC.id, trackB.id), fakePlaybackPort.queue.value.map { it.trackId })
+        assertEquals(listOf(0, 1, 2), fakePlaybackPort.queue.value.map { it.position })
+    }
+
+    @Test
+    fun `move and remove queue items delegate to playback port`() = runTest(testDispatcher) {
+        val trackC = trackB.copy(id = "trk-c", title = "Optimistic")
+        fakePlaybackPort.setQueue(listOf(trackA, trackB, trackC), startIndex = 0)
+
+        viewModel.moveQueueItem(2, 1)
+        assertEquals(listOf(trackA.id, trackC.id, trackB.id), fakePlaybackPort.queue.value.map { it.trackId })
+
+        viewModel.removeQueueItem(1)
+        assertEquals(listOf(trackA.id, trackB.id), fakePlaybackPort.queue.value.map { it.trackId })
     }
 }

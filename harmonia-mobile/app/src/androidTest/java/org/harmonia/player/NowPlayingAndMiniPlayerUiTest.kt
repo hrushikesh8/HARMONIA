@@ -97,6 +97,10 @@ class TestPort : PlaybackPort {
         _queue.value = current + appended
     }
 
+    override fun playNext(tracks: List<Track>) {}
+    override fun moveQueueItem(fromIndex: Int, toIndex: Int) {}
+    override fun removeQueueItem(index: Int) {}
+
     override fun jumpToQueueIndex(index: Int) {
         lastJumpIndex = index
         val item = _queue.value.getOrNull(index)

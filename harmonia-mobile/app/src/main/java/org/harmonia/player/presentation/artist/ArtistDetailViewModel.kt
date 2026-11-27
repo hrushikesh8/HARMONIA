@@ -49,11 +49,8 @@ class ArtistDetailViewModel(
                     val allLocal = trackRepository.observeAllTracks().firstOrNull() ?: emptyList()
                     val artistNameLower = artist.name.lowercase().trim()
                     val collabTracks = allLocal.filter { track ->
-                        val trackArtistLower = track.artistName?.lowercase() ?: ""
-                        track.artistId != artistId && (
-                            trackArtistLower.contains(artistNameLower) ||
-                            trackArtistLower.split(",", ";", "&", "feat.", "ft.", "/").any { it.trim() == artistNameLower }
-                        )
+                        track.artistId != artistId &&
+                            creditedArtistNames(track.artistName).any { it == artistNameLower }
                     }
                     (primaryTracks + collabTracks).distinctBy { it.id }
                 } else {
@@ -77,3 +74,17 @@ class ArtistDetailViewModel(
         }
     }
 }
+
+private val ARTIST_CREDIT_SEPARATORS =
+    Regex("""\s*(?:,|;|&|/|\bfeat\.?(?=\s)|\bft\.?(?=\s)|\bfeaturing\b)\s*""", RegexOption.IGNORE_CASE)
+
+/**
+ * Splits a track's artist field into individual lower-cased credits, e.g.
+ * "Daft Punk feat. Pharrell Williams" -> ["daft punk", "pharrell williams"].
+ * Names must match a whole credit, so "Yes" does not match "Yesterday's Band".
+ */
+internal fun creditedArtistNames(artistField: String?): List<String> =
+    artistField.orEmpty()
+        .split(ARTIST_CREDIT_SEPARATORS)
+        .map { it.trim().lowercase() }
+        .filter { it.isNotEmpty() }

@@ -9,6 +9,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -18,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -25,6 +28,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import androidx.lifecycle.viewmodel.compose.viewModel
 import org.harmonia.player.design.theme.HarmoniaIcons
 import org.harmonia.player.design.theme.HarmoniaTheme
@@ -32,8 +37,13 @@ import org.harmonia.player.design.theme.HarmoniaThemeTokens
 import org.harmonia.player.presentation.album.AlbumDetailScreen
 import org.harmonia.player.presentation.artist.ArtistDetailScreen
 import org.harmonia.player.presentation.carmode.CarModeScreen
+import org.harmonia.player.domain.model.Track
+import org.harmonia.player.presentation.components.AddToPlaylistDialog
+import org.harmonia.player.presentation.components.TrackActionsSheet
 import org.harmonia.player.presentation.home.HomeScreen
 import org.harmonia.player.presentation.library.LibraryScreen
+import org.harmonia.player.presentation.library.LibraryTab
+import org.harmonia.player.presentation.library.LibraryViewModel
 import org.harmonia.player.presentation.navigation.HarmoniaNavDestination
 import org.harmonia.player.presentation.playback.MiniPlayer
 import org.harmonia.player.presentation.playback.NowPlayingSheet
@@ -41,6 +51,7 @@ import org.harmonia.player.presentation.playback.PlaybackViewModel
 import org.harmonia.player.presentation.personalization.PersonalizationViewModel
 import org.harmonia.player.presentation.playlists.PlaylistDetailScreen
 import org.harmonia.player.presentation.playlists.PlaylistsScreen
+import org.harmonia.player.presentation.playlists.PlaylistsViewModel
 import org.harmonia.player.presentation.profile.ProfileHubScreen
 import androidx.compose.runtime.DisposableEffect
 import org.harmonia.player.core.di.ServiceLocator
@@ -98,7 +109,9 @@ enum class NavigationTab(
 @Composable
 fun MainAppContainer(
     playbackViewModel: PlaybackViewModel = viewModel(),
-    personalizationViewModel: PersonalizationViewModel = viewModel()
+    personalizationViewModel: PersonalizationViewModel = viewModel(),
+    playlistsViewModel: PlaylistsViewModel = viewModel(),
+    libraryViewModel: LibraryViewModel = viewModel()
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(NavigationTab.HOME) }
     var selectedPlaylistId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -106,7 +119,33 @@ fun MainAppContainer(
     var showProfileHub by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showCarMode by rememberSaveable { mutableStateOf(false) }
-    var showNowPlayingSheet by remember { mutableStateOf(false) }
+    var showNowPlayingSheet by rememberSaveable { mutableStateOf(false) }
+    var menuTrack by remember { mutableStateOf<Track?>(null) }
+    var playlistPickerTrack by remember { mutableStateOf<Track?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+
+    fun showMessage(message: String) {
+        coroutineScope.launch {
+            snackbarHostState.currentSnackbarData?.dismiss()
+            snackbarHostState.showSnackbar(message)
+        }
+    }
+
+    fun openLibraryTab(tab: LibraryTab) {
+        libraryViewModel.selectTab(tab)
+        detailStack = emptyList()
+        selectedPlaylistId = null
+        selectedTab = NavigationTab.LIBRARY
+    }
+
+    fun openPlaylist(playlistId: String) {
+        detailStack = emptyList()
+        selectedPlaylistId = playlistId
+        selectedTab = NavigationTab.PLAYLISTS
+    }
+
+    val onTrackMenu: (Track) -> Unit = { track -> menuTrack = track }
 
     val currentDetail = detailStack.lastOrNull()
     val selectedAlbumId = if (currentDetail?.startsWith("album:") == true) currentDetail.removePrefix("album:") else null
@@ -134,6 +173,7 @@ fun MainAppContainer(
 
     val playerUiState by playbackViewModel.uiState.collectAsState()
     val personalizationUiState by personalizationViewModel.uiState.collectAsState()
+    val playlistsUiState by playlistsViewModel.uiState.collectAsState()
 
     val colors = HarmoniaThemeTokens.colors
 
@@ -222,9 +262,7 @@ fun MainAppContainer(
                         onBack = { showProfileHub = false },
                         onOpenLikes = {
                             showProfileHub = false
-                            detailStack = emptyList()
-                            selectedPlaylistId = null
-                            selectedTab = NavigationTab.LIBRARY
+                            openLibraryTab(LibraryTab.FAVORITES)
                         },
                         onOpenCarMode = {
                             showCarMode = true
@@ -248,7 +286,8 @@ fun MainAppContainer(
                         },
                         onArtistClick = { artistId ->
                             navigateToArtist(artistId)
-                        }
+                        },
+                        onTrackMenu = onTrackMenu
                     )
                 }
                 selectedArtistId != null -> {
@@ -265,7 +304,8 @@ fun MainAppContainer(
                         },
                         onAlbumClick = { albumId ->
                             navigateToAlbum(albumId)
-                        }
+                        },
+                        onTrackMenu = onTrackMenu
                     )
                 }
                 else -> {
@@ -278,9 +318,14 @@ fun MainAppContainer(
                                 selectedPlaylistId = null
                                 selectedTab = NavigationTab.PLAYLISTS
                             },
-                            onTrackClick = { track ->
-                                playbackViewModel.playTrackList(listOf(track), 0)
+                            onViewAllAlbums = { openLibraryTab(LibraryTab.ALBUMS) },
+                            onViewAllArtists = { openLibraryTab(LibraryTab.ARTISTS) },
+                            onPlaylistClick = { playlist -> openPlaylist(playlist.id) },
+                            onTrackClick = { tracks, clickedIndex ->
+                                playbackViewModel.playTrackList(tracks, clickedIndex)
                             },
+                            onTrackMenu = onTrackMenu,
+                            onOpenNowPlaying = { showNowPlayingSheet = true },
                             onAlbumClick = { album -> navigateToAlbum(album.id) },
                             onArtistClick = { artist -> navigateToArtist(artist.id) },
                             onResumeClick = {
@@ -301,20 +346,20 @@ fun MainAppContainer(
                             onSearchClick = { selectedTab = NavigationTab.SEARCH }
                         )
                         NavigationTab.SEARCH -> SearchScreen(
-                            onTrackClick = { track ->
-                                playbackViewModel.playTrackList(listOf(track), 0)
+                            onTrackClick = { tracks, clickedIndex ->
+                                playbackViewModel.playTrackList(tracks, clickedIndex)
                             },
+                            onTrackMenu = onTrackMenu,
                             onAlbumClick = { album -> navigateToAlbum(album.id) },
                             onArtistClick = { artist -> navigateToArtist(artist.id) },
-                            onPlaylistClick = { playlist ->
-                                selectedPlaylistId = playlist.id
-                            }
+                            onPlaylistClick = { playlist -> openPlaylist(playlist.id) }
                         )
                         NavigationTab.LIBRARY -> LibraryScreen(
                             personalizationViewModel = personalizationViewModel,
                             onTrackClick = { tracks, clickedIndex ->
                                 playbackViewModel.playTrackList(tracks, clickedIndex)
                             },
+                            onTrackMenu = onTrackMenu,
                             onAlbumClick = { album -> navigateToAlbum(album.id) },
                             onArtistClick = { artist -> navigateToArtist(artist.id) },
                             onProfileClick = { showProfileHub = true }
@@ -329,7 +374,8 @@ fun MainAppContainer(
                                     },
                                     onShuffle = { tracks ->
                                         playbackViewModel.playTrackList(tracks.shuffled(), 0)
-                                    }
+                                    },
+                                    onTrackMenu = onTrackMenu
                                 )
                             } else {
                                 PlaylistsScreen(
@@ -357,6 +403,7 @@ fun MainAppContainer(
                     },
                     onNext = { playbackViewModel.next() },
                     onClick = { showNowPlayingSheet = true },
+                    onPrevious = { playbackViewModel.previous() },
                     isFavorite = personalizationUiState.isFavorite,
                     onToggleFavorite = { personalizationViewModel.toggleFavorite() },
                     modifier = Modifier.align(Alignment.BottomCenter)
@@ -398,9 +445,65 @@ fun MainAppContainer(
                     onArtistClick = { artistId ->
                         showNowPlayingSheet = false
                         navigateToArtist(artistId)
+                    },
+                    onMoveQueueItem = { from, to -> playbackViewModel.moveQueueItem(from, to) },
+                    onRemoveQueueItem = { idx -> playbackViewModel.removeQueueItem(idx) },
+                    onOpenTrackMenu = playerUiState.currentTrack?.let { track -> { menuTrack = track } }
+                )
+            }
+
+            menuTrack?.let { track ->
+                TrackActionsSheet(
+                    track = track,
+                    onDismiss = { menuTrack = null },
+                    onPlayNext = {
+                        playbackViewModel.playNext(track)
+                        showMessage("Playing next")
+                    },
+                    onAddToQueue = {
+                        playbackViewModel.addToQueue(track)
+                        showMessage("Added to queue")
+                    },
+                    onAddToPlaylist = { playlistPickerTrack = track },
+                    onGoToAlbum = track.albumId?.let { albumId ->
+                        {
+                            showNowPlayingSheet = false
+                            navigateToAlbum(albumId)
+                        }
+                    },
+                    onGoToArtist = track.artistId?.let { artistId ->
+                        {
+                            showNowPlayingSheet = false
+                            navigateToArtist(artistId)
+                        }
                     }
                 )
             }
+
+            playlistPickerTrack?.let { track ->
+                AddToPlaylistDialog(
+                    track = track,
+                    playlists = playlistsUiState.playlists,
+                    onSelectPlaylist = { playlist ->
+                        playlistsViewModel.addTrackToPlaylist(playlist.id, track.id)
+                        playlistPickerTrack = null
+                        showMessage("Added to ${playlist.name}")
+                    },
+                    onCreatePlaylist = { name ->
+                        playlistsViewModel.createPlaylistWithTrack(name, track.id)
+                        playlistPickerTrack = null
+                        showMessage("Added to ${name.trim()}")
+                    },
+                    onDismiss = { playlistPickerTrack = null }
+                )
+            }
+
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = if (playerUiState.currentTrack != null && !showCarMode) 80.dp else 8.dp)
+            )
         }
     }
 }
