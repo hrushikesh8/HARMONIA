@@ -31,7 +31,7 @@ Status: `Done` · `In progress` · `Planned`
 | 1.3 | Replace developer jargon in screen copy with plain language | UI, UX | Done (Settings spec rows and Profile activity list finish in 3.1 / 3.2) |
 | 1.4 | New font family: Figtree (bundled), no more monospace labels | UI | Done |
 | 1.5 | Move to Compose Navigation, Apple-style bottom tabs, back keeps scroll position | UX, BE | Done |
-| 1.6 | App icon and splash refreshed to the lavender identity (still old green/blue) | UI | Planned |
+| 1.6 | App icon and splash refreshed to the lavender identity | UI | Done |
 
 ## Phase 2: Signature screens
 
@@ -120,6 +120,16 @@ Status: `Done` · `In progress` · `Planned`
   a screen meant touching a long chain of flags. Now every tab remembers where you were (open an
   album in Library, switch to Search, come back: the album is still open), which is the Apple
   Music behaviour, and new screens are one `composable<Route>` entry.
+
+### 1.6 App icon
+- **What:** Kept Hrushikesh's "H" resonance mark (`assets/brand/harmonia-mark.svg`) and recoloured it:
+  lavender pillars and nodes, deeper lavender inner bars, white bridge, on an ink (`#121212`)
+  tile. The mark is scaled into the adaptive-icon safe zone so no launcher shape clips it.
+  Added a single-colour `ic_launcher_monochrome` for Android 13+ themed icons, and deleted
+  the old pre-rendered `mipmap-*dpi/*.webp` icons, which are never used with `minSdk 26`.
+  The launch splash picks the new icon up automatically.
+- **Why:** The old background was Android Studio's default green grid template, and the mark
+  was still in the pre-lavender blues. An ink tile matches the dark app and Spotify-style look.
 
 ## Decisions and ideas checked
 
