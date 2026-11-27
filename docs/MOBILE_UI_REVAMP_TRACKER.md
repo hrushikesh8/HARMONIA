@@ -37,8 +37,8 @@ Status: `Done` · `In progress` · `Planned`
 
 | # | Task | Area | Status |
 |---|------|------|--------|
-| 2.1 | Now Playing redesign: big artwork, swipe down to close, lyrics/queue toggles, volume slider | UI, UX | Planned |
-| 2.2 | Mini player restyle to match | UI | Planned |
+| 2.1 | Now Playing redesign: big artwork, swipe down to close, queue toggle, volume slider (lyrics toggle arrives with 4.3) | UI, UX | Done |
+| 2.2 | Mini player restyle to match | UI | Done |
 | 2.3 | Library landing list (Playlists, Artists, Albums, Songs, Genres, Folders, Favorites); sort is remembered and visible | UI, UX, BE | Planned |
 | 2.4 | Home sections: Recently played, Recently added, Rediscover, Top this month | UI, UX, BE | Planned |
 | 2.5 | Album page: hero artwork, Play / Shuffle buttons, Disc 1 / Disc 2 headers | UI, UX | Planned |
@@ -130,6 +130,30 @@ Status: `Done` · `In progress` · `Planned`
   The launch splash picks the new icon up automatically.
 - **Why:** The old background was Android Studio's default green grid template, and the mark
   was still in the pre-lavender blues. An ink tile matches the dark app and Spotify-style look.
+
+### 2.1 Now Playing
+- **What:** Replaced the bottom sheet with a full-screen Now Playing that slides up over the tab
+  bar (`presentation/playback/NowPlayingSheet.kt`). Layout follows Apple Music: grabber and
+  "Playing from <album>" header, artwork as large as the screen allows (eases back slightly while
+  paused), title/artist with a heart, slim scrubber with elapsed / quality badge / remaining time,
+  big lavender play button between previous/next with shuffle and repeat at the edges, a volume
+  slider, and sleep timer / rating / queue along the bottom. The queue swaps in place of the
+  artwork with a compact "now playing" header. Close with the chevron, Back, or a swipe down.
+- **Volume:** New `MediaVolume.kt` drives the phone's media volume (the same one the hardware
+  keys change) and listens for volume changes so the slider stays in sync. Unit tested.
+- **Why:** The old sheet looked like a settings panel: medium artwork, all-caps labels, and
+  rating/format crammed next to the title. Music apps make this screen the hero; this gives
+  the artwork room and keeps the controls in the places people already know from Apple/Spotify.
+- **Not yet:** lyrics (task 4.3) and artwork-tinted background (task 4.1).
+
+### 2.2 Mini player
+- **What:** The mini player (`presentation/playback/MiniPlayer.kt`) is now a floating rounded card
+  with a small gap above the tab bar, instead of a full-width bar glued to it. Slightly bigger
+  artwork, Figtree title, plain white play/pause (no lavender circle), and the progress shown as a
+  thin lavender line along the card's bottom edge. Heart, previous, play/pause, next and the swipe
+  gestures (left/right to skip, up to open Now Playing) are unchanged. Light mode gets a soft shadow.
+- **Why:** Matches the new Now Playing and the floating mini players in Apple Music and Spotify.
+  Keeping play/pause neutral leaves the lavender for progress, so the accent isn't overused.
 
 ## Decisions and ideas checked
 

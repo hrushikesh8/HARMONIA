@@ -1,6 +1,22 @@
 package org.harmonia.player.presentation.playback
 
 import androidx.compose.foundation.background
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.paneTitle
+import androidx.compose.ui.text.style.TextAlign
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -15,28 +31,23 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -77,7 +88,9 @@ import org.harmonia.player.presentation.personalization.RatingDialog
 import java.util.Locale
 
 /**
- * Now Playing Modal Bottom Sheet featuring full transport controls, seek bar, queue view, and sleep timer.
+ * Full-screen Now Playing (Apple Music layout, Harmonia theme): big artwork, title and favorite,
+ * slim scrubber with quality badge, transport controls, phone volume, and sleep timer / rating /
+ * queue actions. Swipe down or tap the chevron to close; the queue replaces the artwork in place.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,7 +120,6 @@ fun NowPlayingSheet(
     onRemoveQueueItem: (index: Int) -> Unit = {},
     onOpenTrackMenu: (() -> Unit)? = null
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showQueue by remember { mutableStateOf(false) }
     var showSleepTimerDialog by remember { mutableStateOf(false) }
     var showRatingDialog by remember { mutableStateOf(false) }
@@ -149,35 +161,457 @@ fun NowPlayingSheet(
 
     val colors = HarmoniaThemeTokens.colors
     val spacing = HarmoniaThemeTokens.spacing
+    val volume = rememberMediaVolume()
+    val density = LocalDensity.current
+    val coroutineScope = rememberCoroutineScope()
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = colors.backgroundRoot,
-        contentColor = colors.textPrimary
+    // Swipe down anywhere outside a scrolling list to close (Apple Music style).
+    val dragOffset = remember { Animatable(0f) }
+    val dismissThresholdPx = with(density) { 140.dp.toPx() }
+
+    // Artwork eases back slightly while paused.
+    val artworkScale by animateFloatAsState(
+        targetValue = if (playbackState.isPlaying || currentTrack == null) 1f else 0.88f,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = 300f),
+        label = "artworkScale"
+    )
+
+    val displayTitle = remember(currentTrack) {
+        currentTrack?.let { org.harmonia.player.presentation.util.TrackDisplayUtils.formatDisplayTitle(it) } ?: "Nothing playing"
+    }
+    val formatPillText = remember(currentTrack) { currentTrack?.let { formatBadgeText(it) } }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer { translationY = dragOffset.value.coerceAtLeast(0f) }
+            .background(colors.backgroundRoot)
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragEnd = {
+                        coroutineScope.launch {
+                            if (dragOffset.value > dismissThresholdPx) {
+                                onDismiss()
+                            } else {
+                                dragOffset.animateTo(0f, spring(stiffness = 500f))
+                            }
+                        }
+                    },
+                    onDragCancel = {
+                        coroutineScope.launch { dragOffset.animateTo(0f) }
+                    },
+                    onVerticalDrag = { change, dragAmount ->
+                        change.consume()
+                        coroutineScope.launch {
+                            dragOffset.snapTo((dragOffset.value + dragAmount).coerceAtLeast(0f))
+                        }
+                    }
+                )
+            }
+            .semantics { paneTitle = "Now Playing" }
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.systemBars)
                 .padding(horizontal = spacing.large)
-                .padding(bottom = spacing.xLarge),
+                .padding(bottom = spacing.standard),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Header Bar
+            // Grabber
+            Box(
+                modifier = Modifier
+                    .padding(top = spacing.small)
+                    .size(width = 36.dp, height = 5.dp)
+                    .clip(CircleShape)
+                    .background(colors.textDisabled)
+            )
+
+            // Header: close, "Playing from", more
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .touchTarget48()
+                        .semantics { contentDescription = "Close Now Playing" }
+                ) {
+                    Icon(
+                        imageVector = HarmoniaIcons.KeyboardArrowDown,
+                        contentDescription = null,
+                        tint = colors.textPrimary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+                Column(
+                    modifier = Modifier.weight(1f),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = if (showQueue) "Up next" else "Playing from",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.textSecondary
+                    )
+                    Text(
+                        text = if (showQueue) {
+                            "${queue.size} ${if (queue.size == 1) "song" else "songs"} in queue"
+                        } else {
+                            currentTrack?.albumTitle?.takeIf { it.isNotBlank() } ?: "Your library"
+                        },
+                        style = MaterialTheme.typography.titleSmall,
+                        color = colors.textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (onOpenTrackMenu != null) {
+                    IconButton(
+                        onClick = onOpenTrackMenu,
+                        modifier = Modifier
+                            .touchTarget48()
+                            .semantics { contentDescription = "More options for current track" }
+                    ) {
+                        Icon(
+                            imageVector = HarmoniaIcons.MoreVert,
+                            contentDescription = null,
+                            tint = colors.textPrimary
+                        )
+                    }
+                } else {
+                    Spacer(modifier = Modifier.size(48.dp))
+                }
+            }
+
+            Spacer(modifier = Modifier.height(spacing.medium))
+
+            if (showQueue) {
+                // Compact header for the song that's playing
+                if (currentTrack != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        HarmoniaArtwork(
+                            artworkHash = currentTrack.artworkHash,
+                            modifier = Modifier.size(56.dp),
+                            size = 56.dp,
+                            cornerRadius = 8.dp,
+                            contentDescription = "${currentTrack.title} artwork"
+                        )
+                        Spacer(modifier = Modifier.width(spacing.medium))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = displayTitle,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = colors.textPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = currentTrack.artistName ?: "Unknown artist",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = colors.textSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        FavoriteButton(
+                            isFavorite = isFavorite,
+                            onToggleFavorite = onToggleFavorite,
+                            enabled = true
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(spacing.medium))
+                }
+                val activeIndex = playbackState.activeQueueIndex
+                    .takeIf { it in queue.indices }
+                    ?: queue.indexOfFirst { it.trackId == playbackState.currentTrackId }
+                QueueView(
+                    queue = queue,
+                    activeIndex = activeIndex,
+                    isPlaying = playbackState.isPlaying,
+                    onItemClick = onQueueItemClick,
+                    onMove = onMoveQueueItem,
+                    onRemove = onRemoveQueueItem,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                )
+            } else {
+                // Big artwork, sized to whatever space the controls leave
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val side = minOf(maxWidth, maxHeight)
+                    Box(
+                        modifier = Modifier
+                            .size(side)
+                            .graphicsLayer {
+                                scaleX = artworkScale
+                                scaleY = artworkScale
+                            }
+                            .shadow(24.dp, RoundedCornerShape(14.dp), clip = false)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(colors.surfaceElevated)
+                    ) {
+                        HarmoniaArtwork(
+                            artworkHash = currentTrack?.artworkHash,
+                            modifier = Modifier.fillMaxSize(),
+                            size = side,
+                            cornerRadius = 14.dp,
+                            contentDescription = currentTrack?.let { "${it.title} Artwork" } ?: "Album Artwork"
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(spacing.large))
+
+                // Title, artist and favorite
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = displayTitle,
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = colors.textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        val artistClickable = onArtistClick != null && currentTrack?.artistId != null
+                        Text(
+                            text = currentTrack?.artistName?.takeIf { it.isNotBlank() } ?: "Unknown artist",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = colors.textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.clickable(enabled = artistClickable) {
+                                currentTrack?.artistId?.let { onArtistClick?.invoke(it) }
+                            }
+                        )
+                    }
+                    FavoriteButton(
+                        isFavorite = isFavorite,
+                        onToggleFavorite = onToggleFavorite,
+                        enabled = currentTrack != null
+                    )
+                }
+
+                // Storage disconnected / playback error
+                if (playbackState.errorMessage != null) {
+                    val errorMsg = playbackState.errorMessage
+                    val isStorageDisconnected = errorMsg == PlaybackState.STORAGE_DISCONNECTED_MESSAGE
+                    Spacer(modifier = Modifier.height(spacing.small))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(colors.surfaceContainer)
+                            .semantics {
+                                contentDescription = if (isStorageDisconnected) PlaybackState.STORAGE_DISCONNECTED_MESSAGE else errorMsg
+                            }
+                            .padding(horizontal = spacing.medium, vertical = spacing.small),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = HarmoniaIcons.Info,
+                            contentDescription = null,
+                            tint = if (isStorageDisconnected) colors.statusWarning else colors.statusError,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(spacing.small))
+                        Text(
+                            text = if (isStorageDisconnected) {
+                                "This song's storage isn't connected. Reconnect it to keep listening."
+                            } else {
+                                "This song couldn't be played."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.textPrimary
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(spacing.medium))
+
+            // Scrubber
+            val sliderValue = if (totalDurationMs > 0) {
+                if (isUserSeeking) seekSliderPosition else (playbackState.currentPositionMs.toFloat() / totalDurationMs.toFloat()).coerceIn(0f, 1f)
+            } else {
+                0f
+            }
+            HarmoniaThinSlider(
+                value = sliderValue,
+                onValueChange = {
+                    isUserSeeking = true
+                    seekSliderPosition = it
+                },
+                onValueChangeFinished = {
+                    isUserSeeking = false
+                    onSeekTo((seekSliderPosition * totalDurationMs).toLong())
+                },
+                contentDescription = "Playback seek slider"
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = formatTime(currentPositionMs),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.textSecondary,
+                    modifier = Modifier.weight(1f)
+                )
+                if (formatPillText != null) {
+                    Text(
+                        text = formatPillText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.technicalAccent,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(colors.surfaceContainer)
+                            .padding(horizontal = 6.dp, vertical = 1.dp)
+                    )
+                }
+                Text(
+                    text = "-" + formatTime((totalDurationMs - currentPositionMs).coerceAtLeast(0L)),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = colors.textSecondary,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(spacing.medium))
+
+            // Transport controls
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = if (showQueue) "PLAYING QUEUE (${queue.size})" else "NOW PLAYING",
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        letterSpacing = 2.sp,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    color = colors.primarySignal
-                )
+                IconButton(
+                    onClick = onToggleShuffle,
+                    modifier = Modifier
+                        .touchTarget48()
+                        .semantics {
+                            role = Role.Button
+                            contentDescription = getShuffleAccessibilityLabel(playbackState.shuffleMode)
+                        }
+                ) {
+                    Icon(
+                        imageVector = HarmoniaIcons.Shuffle,
+                        contentDescription = null,
+                        tint = if (playbackState.shuffleMode) colors.primarySignal else colors.textSecondary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                IconButton(
+                    onClick = onPrevious,
+                    modifier = Modifier.size(64.dp)
+                ) {
+                    Icon(
+                        imageVector = HarmoniaIcons.SkipPrevious,
+                        contentDescription = "Previous Track",
+                        tint = colors.textPrimary,
+                        modifier = Modifier.size(40.dp)
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(CircleShape)
+                        .background(colors.primarySignal)
+                        .clickable(onClick = onPlayPause)
+                        .semantics {
+                            role = Role.Button
+                            contentDescription = if (playbackState.isPlaying) "Pause" else "Play"
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (playbackState.isPlaying) HarmoniaIcons.Pause else HarmoniaIcons.Play,
+                        contentDescription = null,
+                        tint = if (colors.isDark) colors.backgroundRoot else colors.surfaceElevated,
+                        modifier = Modifier.size(40.dp)
+                    )
+                }
+                IconButton(
+                    onClick = onNext,
+                    modifier = Modifier.size(64.dp)
+                ) {
+                    Icon(
+                        imageVector = HarmoniaIcons.SkipNext,
+                        contentDescription = "Next Track",
+                        tint = colors.textPrimary,
+                        modifier = Modifier.size(40.dp)
+                    )
+                }
+                IconButton(
+                    onClick = onCycleRepeat,
+                    modifier = Modifier
+                        .touchTarget48()
+                        .semantics {
+                            role = Role.Button
+                            contentDescription = getRepeatAccessibilityLabel(playbackState.repeatMode)
+                        }
+                ) {
+                    Icon(
+                        imageVector = when (playbackState.repeatMode) {
+                            RepeatMode.ONE -> HarmoniaIcons.RepeatOne
+                            else -> HarmoniaIcons.Repeat
+                        },
+                        contentDescription = null,
+                        tint = if (playbackState.repeatMode != RepeatMode.OFF) colors.primarySignal else colors.textSecondary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+
+            // Volume (phone media volume, in sync with the hardware keys)
+            if (volume.isAvailable) {
+                Spacer(modifier = Modifier.height(spacing.small))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = HarmoniaIcons.VolumeDown,
+                        contentDescription = null,
+                        tint = colors.textSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    HarmoniaThinSlider(
+                        value = volume.fraction,
+                        onValueChange = { volume.setFraction(it) },
+                        contentDescription = "Volume",
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = spacing.small)
+                    )
+                    Icon(
+                        imageVector = HarmoniaIcons.VolumeUp,
+                        contentDescription = null,
+                        tint = colors.textSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            // Bottom actions: sleep timer, rating, queue
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = { showSleepTimerDialog = true },
@@ -200,458 +634,121 @@ fun NowPlayingSheet(
                     }
                     if (sleepTimerState.isActive) {
                         Text(
-                            text = if (sleepTimerState.mode == SleepTimerMode.END_OF_TRACK) "End" else formatRemainingTimer(sleepTimerState.remainingDurationMs),
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            color = colors.primarySignal,
-                            modifier = Modifier.padding(end = 4.dp)
-                        )
-                    }
-                    if (onOpenTrackMenu != null) {
-                        IconButton(
-                            onClick = onOpenTrackMenu,
-                            modifier = Modifier
-                                .touchTarget48()
-                                .semantics { contentDescription = "More options for current track" }
-                        ) {
-                            Icon(
-                                imageVector = HarmoniaIcons.MoreVert,
-                                contentDescription = null,
-                                tint = colors.textSecondary
-                            )
-                        }
-                    }
-                    IconButton(
-                        onClick = { showQueue = !showQueue },
-                        modifier = Modifier
-                            .touchTarget48()
-                            .semantics {
-                                contentDescription = if (showQueue) "Show Now Playing" else "Show Queue"
-                            }
-                    ) {
-                        Icon(
-                            imageVector = HarmoniaIcons.QueueMusic,
-                            contentDescription = null,
-                            tint = if (showQueue) colors.primarySignal else colors.textSecondary
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(spacing.standard))
-
-            if (showQueue) {
-                // Queue View
-                val activeIndex = playbackState.activeQueueIndex
-                    .takeIf { it in queue.indices }
-                    ?: queue.indexOfFirst { it.trackId == playbackState.currentTrackId }
-                QueueView(
-                    queue = queue,
-                    activeIndex = activeIndex,
-                    isPlaying = playbackState.isPlaying,
-                    onItemClick = onQueueItemClick,
-                    onMove = onMoveQueueItem,
-                    onRemove = onRemoveQueueItem,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(420.dp)
-                )
-
-                Spacer(modifier = Modifier.height(spacing.medium))
-
-                // Compact current track info row
-                if (currentTrack != null) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(colors.surfaceElevated)
-                            .padding(horizontal = spacing.medium, vertical = spacing.small),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Now Playing: ",
+                            text = if (sleepTimerState.mode == SleepTimerMode.END_OF_TRACK) "End of song" else formatRemainingTimer(sleepTimerState.remainingDurationMs),
                             style = MaterialTheme.typography.labelSmall,
                             color = colors.primarySignal
                         )
-                        Text(
-                            text = currentTrack.title,
-                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                            color = colors.textPrimary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
-                        )
                     }
                 }
-            } else {
-                // Large Responsive Artwork with Hairline Border
-                Box(
+                IconButton(
+                    onClick = { showRatingDialog = true },
+                    enabled = currentTrack != null,
                     modifier = Modifier
-                        .fillMaxWidth(0.85f)
-                        .sizeIn(maxWidth = 300.dp, maxHeight = 300.dp)
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(16.dp))
-                        .hairlineBorder(colors.borderStructural, RoundedCornerShape(16.dp))
-                        .background(colors.surfaceElevated),
-                    contentAlignment = Alignment.Center
+                        .touchTarget48()
+                        .semantics {
+                            contentDescription = if (rating != null) "Rating: $rating of 5 stars" else "Rate track"
+                        }
                 ) {
-                    HarmoniaArtwork(
-                        artworkHash = currentTrack?.artworkHash,
-                        modifier = Modifier.fillMaxSize(),
-                        size = 280.dp,
-                        cornerRadius = 16.dp,
-                        contentDescription = currentTrack?.let { "${it.title} Artwork" } ?: "Album Artwork"
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(spacing.large))
-
-                // Track Title, Artist, and Personalization Actions (Favorite & Rating)
-                val displayTitle = remember(currentTrack) {
-                    currentTrack?.let { org.harmonia.player.presentation.util.TrackDisplayUtils.formatDisplayTitle(it) } ?: "No Track Playing"
-                }
-                val formatPillText = remember(currentTrack) {
-                    currentTrack?.localFile?.let { file ->
-                        val fmt = file.format.ifBlank {
-                            file.fileUri.substringAfterLast('.', "")
-                        }.uppercase(Locale.ROOT)
-                        when {
-                            file.bitDepth != null && file.sampleRate != null -> {
-                                val khz = file.sampleRate / 1000.0
-                                val khzStr = if (khz % 1.0 == 0.0) "${khz.toInt()} kHz" else String.format(Locale.US, "%.1f kHz", khz)
-                                "$fmt • ${file.bitDepth}-BIT / $khzStr"
-                            }
-                            file.isLossless -> "$fmt • LOSSLESS"
-                            file.bitrate != null -> "$fmt • ${file.bitrate} KBPS"
-                            fmt.isNotEmpty() -> fmt
-                            else -> null
-                        }
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(
-                            text = displayTitle,
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 22.sp
-                            ),
-                            color = colors.textPrimary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (!currentTrack?.artistName.isNullOrBlank()) {
-                                Text(
-                                    text = currentTrack.artistName!!,
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                                    color = if (onArtistClick != null && currentTrack.artistId != null) colors.secondarySignal else colors.textSecondary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.clickable(enabled = onArtistClick != null && currentTrack.artistId != null) {
-                                        currentTrack.artistId?.let { onArtistClick?.invoke(it) }
-                                    }
-                                )
-                            }
-                            if (!currentTrack?.artistName.isNullOrBlank() && !currentTrack?.albumTitle.isNullOrBlank()) {
-                                Text(
-                                    text = " • ",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = colors.textSecondary
-                                )
-                            }
-                            if (!currentTrack?.albumTitle.isNullOrBlank()) {
-                                Text(
-                                    text = currentTrack.albumTitle!!,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = if (onAlbumClick != null && currentTrack.albumId != null) colors.secondarySignal else colors.textSecondary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.clickable(enabled = onAlbumClick != null && currentTrack.albumId != null) {
-                                        currentTrack.albumId?.let { onAlbumClick?.invoke(it) }
-                                    }
-                                )
-                            }
-                            if (currentTrack?.artistName.isNullOrBlank() && currentTrack?.albumTitle.isNullOrBlank()) {
-                                Text(
-                                    text = "Harmonia Local Audio",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = colors.textSecondary
-                                )
-                            }
-                        }
-                        if (formatPillText != null) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(colors.surfaceContainer)
-                                    .hairlineBorder(colors.borderStructural, RoundedCornerShape(4.dp))
-                                    .padding(horizontal = 8.dp, vertical = 2.dp)
-                            ) {
-                                Text(
-                                    text = formatPillText,
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        letterSpacing = 0.5.sp
-                                    ),
-                                    color = colors.primarySignal
-                                )
-                            }
-                        }
-                    }
-
-                    // Personalization Controls: Star Rating trigger & Favorite Button
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        IconButton(
-                            onClick = { showRatingDialog = true },
-                            enabled = currentTrack != null,
-                            modifier = Modifier
-                                .touchTarget48()
-                                .semantics {
-                                    contentDescription = if (rating != null) {
-                                        "Rating: $rating of 5 stars"
-                                    } else {
-                                        "Rate track"
-                                    }
-                                }
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (rating != null) HarmoniaIcons.Star else HarmoniaIcons.StarBorder,
-                                    contentDescription = null,
-                                    tint = if (rating != null) colors.statusWarning else colors.textSecondary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                if (rating != null) {
-                                    Text(
-                                        text = "$rating",
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                        color = colors.statusWarning
-                                    )
-                                }
-                            }
-                        }
-
-                        FavoriteButton(
-                            isFavorite = isFavorite,
-                            onToggleFavorite = onToggleFavorite,
-                            enabled = currentTrack != null
-                        )
-                    }
-                }
-
-                // Storage Disconnection / Playback Error Banner
-                if (playbackState.errorMessage != null) {
-                    val errorMsg = playbackState.errorMessage
-                    val isStorageDisconnected = errorMsg == PlaybackState.STORAGE_DISCONNECTED_MESSAGE
-                    val errorCardShape = RoundedCornerShape(8.dp)
-                    Spacer(modifier = Modifier.height(spacing.medium))
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(errorCardShape)
-                            .background(colors.surfaceContainer)
-                            .hairlineBorder(color = if (isStorageDisconnected) colors.statusWarning else colors.statusError, shape = errorCardShape)
-                            .semantics {
-                                contentDescription = if (isStorageDisconnected) {
-                                    PlaybackState.STORAGE_DISCONNECTED_MESSAGE
-                                } else {
-                                    errorMsg
-                                }
-                            }
-                            .padding(horizontal = spacing.medium, vertical = spacing.small),
-                        verticalAlignment = Alignment.CenterVertically
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         Icon(
-                            imageVector = HarmoniaIcons.Settings,
+                            imageVector = if (rating != null) HarmoniaIcons.Star else HarmoniaIcons.StarBorder,
                             contentDescription = null,
-                            tint = if (isStorageDisconnected) colors.statusWarning else colors.statusError,
-                            modifier = Modifier.size(20.dp)
+                            tint = if (rating != null) colors.primarySignal else colors.textSecondary
                         )
-                        Spacer(modifier = Modifier.width(spacing.small))
-                        Column(modifier = Modifier.weight(1f)) {
+                        if (rating != null) {
                             Text(
-                                text = if (isStorageDisconnected) "Storage Disconnected" else "Playback Error",
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                color = colors.textPrimary
-                            )
-                            Text(
-                                text = if (isStorageDisconnected) {
-                                    "The storage volume for this track is unavailable. Reconnect storage to resume playback."
-                                } else {
-                                    errorMsg
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = colors.textSecondary
+                                text = "$rating",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = colors.primarySignal
                             )
                         }
                     }
                 }
-            }
-
-            Spacer(modifier = Modifier.height(spacing.standard))
-
-            // Seek Progress Bar (always accessible)
-            val sliderValue = if (totalDurationMs > 0) {
-                if (isUserSeeking) seekSliderPosition else (playbackState.currentPositionMs.toFloat() / totalDurationMs.toFloat()).coerceIn(0f, 1f)
-            } else {
-                0f
-            }
-
-            Slider(
-                value = sliderValue,
-                onValueChange = {
-                    isUserSeeking = true
-                    seekSliderPosition = it
-                },
-                onValueChangeFinished = {
-                    isUserSeeking = false
-                    onSeekTo((seekSliderPosition * totalDurationMs).toLong())
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .touchTarget48()
-                    .semantics {
-                        contentDescription = "Playback seek slider"
-                    },
-                colors = SliderDefaults.colors(
-                    thumbColor = colors.primarySignal,
-                    activeTrackColor = colors.primarySignal,
-                    inactiveTrackColor = colors.surfaceContainer
-                )
-            )
-
-            // Time indicators (Tabular alignment)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = formatTime(currentPositionMs),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = colors.textSecondary
-                )
-                Text(
-                    text = formatTime(totalDurationMs),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = colors.textSecondary
-                )
-            }
-
-            Spacer(modifier = Modifier.height(spacing.large))
-
-            // Full Transport Controls (all with strict 48dp minimum bounds)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Shuffle Toggle
                 IconButton(
-                    onClick = onToggleShuffle,
+                    onClick = { showQueue = !showQueue },
                     modifier = Modifier
                         .touchTarget48()
-                        .semantics {
-                            role = Role.Button
-                            contentDescription = getShuffleAccessibilityLabel(playbackState.shuffleMode)
-                        }
-                ) {
-                    Icon(
-                        imageVector = HarmoniaIcons.Shuffle,
-                        contentDescription = null,
-                        tint = if (playbackState.shuffleMode) colors.primarySignal else colors.textSecondary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-
-                // Previous Track
-                IconButton(
-                    onClick = onPrevious,
-                    modifier = Modifier.touchTarget48()
-                ) {
-                    Icon(
-                        imageVector = HarmoniaIcons.SkipPrevious,
-                        contentDescription = "Previous Track",
-                        tint = colors.textPrimary,
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
-
-                // Play/Pause Big Button (64dp circular focal point in electric blue)
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
                         .clip(CircleShape)
-                        .background(colors.primarySignal)
-                        .clickable(onClick = onPlayPause)
+                        .background(if (showQueue) colors.surfaceContainer else Color.Transparent)
                         .semantics {
-                            role = Role.Button
-                            contentDescription = if (playbackState.isPlaying) "Pause" else "Play"
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (playbackState.isPlaying) HarmoniaIcons.Pause else HarmoniaIcons.Play,
-                        contentDescription = null,
-                        tint = colors.backgroundRoot,
-                        modifier = Modifier.size(36.dp)
-                    )
-                }
-
-                // Next Track
-                IconButton(
-                    onClick = onNext,
-                    modifier = Modifier.touchTarget48()
-                ) {
-                    Icon(
-                        imageVector = HarmoniaIcons.SkipNext,
-                        contentDescription = "Next Track",
-                        tint = colors.textPrimary,
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
-
-                // Repeat Mode Toggle
-                IconButton(
-                    onClick = onCycleRepeat,
-                    modifier = Modifier
-                        .touchTarget48()
-                        .semantics {
-                            role = Role.Button
-                            contentDescription = getRepeatAccessibilityLabel(playbackState.repeatMode)
+                            contentDescription = if (showQueue) "Show Now Playing" else "Show Queue"
                         }
                 ) {
                     Icon(
-                        imageVector = when (playbackState.repeatMode) {
-                            RepeatMode.ONE -> HarmoniaIcons.RepeatOne
-                            else -> HarmoniaIcons.Repeat
-                        },
+                        imageVector = HarmoniaIcons.QueueMusic,
                         contentDescription = null,
-                        tint = if (playbackState.repeatMode != RepeatMode.OFF) colors.primarySignal else colors.textSecondary,
-                        modifier = Modifier.size(24.dp)
+                        tint = if (showQueue) colors.primarySignal else colors.textSecondary
                     )
                 }
             }
         }
     }
+}
+
+/** Short quality badge under the scrubber, e.g. "FLAC 24-bit / 96 kHz", "MP3 320 kbps". */
+internal fun formatBadgeText(track: Track): String? {
+    val file = track.localFile ?: return null
+    val fmt = file.format.ifBlank { file.fileUri.substringAfterLast('.', "") }.uppercase(Locale.ROOT)
+    return when {
+        file.bitDepth != null && file.sampleRate != null -> {
+            val khz = file.sampleRate / 1000.0
+            val khzStr = if (khz % 1.0 == 0.0) "${khz.toInt()} kHz" else String.format(Locale.US, "%.1f kHz", khz)
+            "$fmt ${file.bitDepth}-bit / $khzStr"
+        }
+        file.isLossless -> "$fmt Lossless"
+        file.bitrate != null -> "$fmt ${file.bitrate} kbps"
+        fmt.isNotEmpty() -> fmt
+        else -> null
+    }
+}
+
+/** Slim Apple-style slider: 4dp track, small thumb, full 48dp touch height. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HarmoniaThinSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    contentDescription: String,
+    modifier: Modifier = Modifier.fillMaxWidth(),
+    onValueChangeFinished: (() -> Unit)? = null
+) {
+    val colors = HarmoniaThemeTokens.colors
+    val interactionSource = remember { MutableInteractionSource() }
+    val sliderColors = SliderDefaults.colors(
+        thumbColor = colors.textPrimary,
+        activeTrackColor = colors.primarySignal,
+        inactiveTrackColor = colors.surfaceContainer
+    )
+    Slider(
+        value = value,
+        onValueChange = onValueChange,
+        onValueChangeFinished = onValueChangeFinished,
+        interactionSource = interactionSource,
+        modifier = modifier
+            .height(36.dp)
+            .semantics { this.contentDescription = contentDescription },
+        colors = sliderColors,
+        thumb = {
+            Box(
+                modifier = Modifier
+                    .size(14.dp)
+                    .clip(CircleShape)
+                    .background(colors.textPrimary)
+            )
+        },
+        track = { state ->
+            SliderDefaults.Track(
+                sliderState = state,
+                colors = sliderColors,
+                modifier = Modifier.height(4.dp),
+                thumbTrackGapSize = 0.dp,
+                drawStopIndicator = null
+            )
+        }
+    )
 }
 
 private data class QueueEntry(val key: String, val item: QueueItem)

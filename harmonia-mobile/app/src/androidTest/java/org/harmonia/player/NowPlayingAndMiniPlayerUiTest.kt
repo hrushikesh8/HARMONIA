@@ -244,11 +244,11 @@ class NowPlayingAndMiniPlayerUiTest {
         composeTestRule.onNodeWithText("Pyramid Song").performClick()
 
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("NOW PLAYING").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Playing from").fetchSemanticsNodes().isNotEmpty()
         }
 
         // Verify Now Playing elements
-        composeTestRule.onNodeWithText("NOW PLAYING").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Playing from").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Previous Track").assertIsDisplayed()
         composeTestRule.onAllNodesWithContentDescription("Next Track").onFirst().assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Show Queue").assertIsDisplayed()
@@ -262,10 +262,10 @@ class NowPlayingAndMiniPlayerUiTest {
         composeTestRule.onNodeWithContentDescription("Show Queue").performClick()
 
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("PLAYING QUEUE (2)").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("2 songs in queue").fetchSemanticsNodes().isNotEmpty()
         }
 
-        composeTestRule.onNodeWithText("PLAYING QUEUE (2)").assertIsDisplayed()
+        composeTestRule.onNodeWithText("2 songs in queue").assertIsDisplayed()
         composeTestRule.onNodeWithText("You and Whose Army?").assertIsDisplayed()
 
         // Click second queue track to jump

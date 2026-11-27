@@ -6,6 +6,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -42,7 +43,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.harmonia.player.design.theme.HarmoniaIcons
 import org.harmonia.player.design.theme.HarmoniaThemeTokens
-import org.harmonia.player.design.theme.hairlineBorder
 import org.harmonia.player.design.theme.touchTarget48
 import org.harmonia.player.domain.model.PlaybackState
 import org.harmonia.player.domain.model.Track
@@ -51,8 +51,8 @@ import org.harmonia.player.presentation.personalization.FavoriteButton
 import kotlin.math.abs
 
 /**
- * Compact persistent mini-player docked above the bottom navigation bar.
- * Adheres to the Obsidian Acoustic Instrument design system (40dp artwork, 2dp progress, 48dp touch targets).
+ * Floating mini player above the tab bar: artwork, title/artist, favorite, previous,
+ * play/pause and next, with a thin lavender progress line along the bottom of the card.
  * Swipe left/right to skip tracks, swipe up to open Now Playing.
  */
 @Composable
@@ -86,7 +86,7 @@ fun MiniPlayer(
         0f
     }
 
-    val miniPlayerShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+    val miniPlayerShape = RoundedCornerShape(14.dp)
 
     val swipeThresholdPx = with(LocalDensity.current) { 72.dp.toPx() }
     var dragX by remember { mutableFloatStateOf(0f) }
@@ -101,12 +101,15 @@ fun MiniPlayer(
         label = "miniPlayerSwipe"
     )
 
+    // Floating card above the tab bar (Apple Music / Spotify style).
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .padding(horizontal = spacing.small)
+            .padding(bottom = spacing.small)
+            .shadow(if (colors.isDark) 0.dp else 10.dp, miniPlayerShape)
             .clip(miniPlayerShape)
-            .background(colors.surfaceElevated)
-            .hairlineBorder(color = colors.borderStructural, shape = miniPlayerShape, width = 1.dp)
+            .background(if (colors.isDark) colors.surfaceContainer else colors.surfaceElevated)
             .pointerInput(Unit) {
                 detectDragGestures(
                     onDragStart = {
@@ -139,26 +142,16 @@ fun MiniPlayer(
                 )
             }
     ) {
-        // Track Progress Hairline Indicator (2dp)
-        LinearProgressIndicator(
-            progress = { progress },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(2.dp),
-            color = colors.primarySignal,
-            trackColor = colors.surfaceContainer
-        )
-
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = spacing.standard, vertical = 6.dp),
+                .padding(start = spacing.small, end = 2.dp, top = spacing.small, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Track Art thumbnail (40dp) via sandboxed HarmoniaArtwork
             HarmoniaArtwork(
                 artworkHash = currentTrack?.artworkHash ?: currentTrack?.localFile?.fileHash,
-                size = 40.dp,
+                size = 44.dp,
                 cornerRadius = 8.dp,
                 contentDescription = "Artwork for $title"
             )
@@ -176,14 +169,14 @@ fun MiniPlayer(
             ) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    style = MaterialTheme.typography.titleSmall,
                     color = colors.textPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = subtitle,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                    style = MaterialTheme.typography.bodySmall,
                     color = colors.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -213,25 +206,17 @@ fun MiniPlayer(
                 }
             }
 
-            // Play/Pause button with primary accent
+            // Play/Pause: plain icon, the accent stays on the progress line
             IconButton(
                 onClick = onPlayPause,
                 modifier = Modifier.touchTarget48()
             ) {
-                androidx.compose.foundation.layout.Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(androidx.compose.foundation.shape.CircleShape)
-                        .background(colors.primarySignal),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (playbackState.isPlaying) HarmoniaIcons.Pause else HarmoniaIcons.Play,
-                        contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
-                        tint = colors.backgroundRoot,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                Icon(
+                    imageVector = if (playbackState.isPlaying) HarmoniaIcons.Pause else HarmoniaIcons.Play,
+                    contentDescription = if (playbackState.isPlaying) "Pause" else "Play",
+                    tint = colors.textPrimary,
+                    modifier = Modifier.size(30.dp)
+                )
             }
 
             IconButton(
@@ -245,6 +230,23 @@ fun MiniPlayer(
                     modifier = Modifier.size(24.dp)
                 )
             }
+        }
+
+        // Progress line along the bottom edge of the card
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = spacing.medium)
+                .height(2.dp)
+                .clip(RoundedCornerShape(1.dp))
+                .background(colors.textPrimary.copy(alpha = 0.12f))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(progress)
+                    .height(2.dp)
+                    .background(colors.primarySignal)
+            )
         }
     }
 }

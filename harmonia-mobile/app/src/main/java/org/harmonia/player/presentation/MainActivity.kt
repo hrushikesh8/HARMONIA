@@ -2,6 +2,10 @@ package org.harmonia.player.presentation
 
 import android.os.Bundle
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.ui.graphics.Color
@@ -215,6 +219,7 @@ fun MainAppContainer(
     val playTracks: (List<Track>, Int) -> Unit = { tracks, index -> playbackViewModel.playTrackList(tracks, index) }
     val shuffleTracks: (List<Track>) -> Unit = { tracks -> playbackViewModel.playTrackList(tracks.shuffled(), 0) }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
@@ -406,8 +411,15 @@ fun MainAppContainer(
                 )
             }
 
-            // Now Playing Sheet
-            if (showNowPlayingSheet) {
+        }
+    }
+
+            // Full-screen Now Playing, above the tab bar
+            AnimatedVisibility(
+                visible = showNowPlayingSheet && playerUiState.currentTrack != null,
+                enter = slideInVertically(tween(320)) { it },
+                exit = slideOutVertically(tween(260)) { it }
+            ) {
                 NowPlayingSheet(
                     playbackState = playerUiState.playbackState,
                     currentTrack = playerUiState.currentTrack,
@@ -498,8 +510,15 @@ fun MainAppContainer(
                 hostState = snackbarHostState,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = if (playerUiState.currentTrack != null && !isCarMode) 80.dp else 8.dp)
+                    .navigationBarsPadding()
+                    .padding(
+                        bottom = when {
+                            showNowPlayingSheet -> 24.dp
+                            isCarMode -> 8.dp
+                            playerUiState.currentTrack != null -> 164.dp
+                            else -> 88.dp
+                        }
+                    )
             )
-        }
     }
 }
