@@ -53,7 +53,7 @@ Status: `Done` · `In progress` · `Planned`
 | 3.1 | Settings regrouped into clear sections, plain language | UI, UX | Done |
 | 3.2 | Profile becomes "Your listening": readable stats, rated songs list | UI, UX, BE | Done |
 | 3.3 | Equalizer works without music playing; save your own presets | UI, UX, BE | Done |
-| 3.4 | Car Mode: progress/seek, favorite, landscape | UI, UX | Planned |
+| 3.4 | Car Mode: progress/seek, favorite, landscape | UI, UX | Done |
 | 3.5 | Format filter chips generated from your library (OGG, Opus, ALAC...) | UI, BE | Planned |
 | 3.6 | Album grid adapts to screen width / landscape / tablets | UI | Planned |
 | 3.7 | Queue: auto-scroll while dragging; strict "Play next" with shuffle on | UX, BE | Planned |
@@ -296,6 +296,22 @@ Status: `Done` · `In progress` · `Planned`
   if you prefer the old rule.
 - **Why:** An equalizer that forgets your settings, and can only be touched while music plays,
   isn't really usable; saved presets are standard in every music player.
+
+### 3.4 Car Mode
+- **What:** Rebuilt `presentation/carmode/CarModeScreen.kt` from the mockup we agreed on. Bigger
+  artwork, song title and artist with a large **favorite** button (56dp), a thick **progress bar
+  you can drag to seek** (8dp track, big thumb, elapsed and "-remaining" time), and the same large
+  previous / play / next buttons (play is 96dp). It now has a real **landscape layout** for phones
+  mounted sideways: artwork on the left, title, progress and controls on the right. A small "Exit"
+  pill replaces the old header.
+- **Fix found while testing:** after the app restarted, pressing play could do nothing. The last
+  song showed on screen, but the player service had connected before the saved queue finished
+  loading from the database, so the service had an empty queue. `HarmoniaPlayerController` now
+  loads the saved queue into the service when the restore finishes, and `play()` loads it first
+  if the service is still empty. This affected the mini player and Now Playing too, not just Car
+  Mode.
+- **Why:** In a car you need a glance-and-tap screen: big targets, the time left in the song, and
+  one tap to like a song. Most car mounts hold the phone sideways, so landscape matters.
 
 ## Decisions and ideas checked
 

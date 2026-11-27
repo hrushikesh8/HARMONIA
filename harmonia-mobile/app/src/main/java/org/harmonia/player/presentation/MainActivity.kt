@@ -436,7 +436,8 @@ fun MainAppContainer(
                 composable<HarmoniaNavDestination.CarMode> {
                     CarModeScreen(
                         playbackViewModel = playbackViewModel,
-                        onExit = { navController.popBackStack() }
+                        onExit = { navController.popBackStack() },
+                        personalizationViewModel = personalizationViewModel
                     )
                 }
             }

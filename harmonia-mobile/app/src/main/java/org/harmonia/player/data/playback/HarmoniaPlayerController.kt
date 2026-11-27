@@ -144,6 +144,8 @@ class HarmoniaPlayerController(
 
     // Declared before init {} because Kotlin initialises properties in file order.
     private var sessionConnectionRequested = false
+    private var queueSyncInFlight = false
+    private var pendingPlayAfterSync = false
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     private val fallbackConnect = Runnable { ensureConnected() }
 
@@ -468,6 +470,8 @@ class HarmoniaPlayerController(
                     currentSourceId = localFileRepository.getLocalFileById(fileId)?.sourceId
                 }
             }
+            // If the session connected before the restore finished, it is still empty.
+            mediaController?.let { syncControllerWithQueue(it) }
         }
     }
 
@@ -505,9 +509,11 @@ class HarmoniaPlayerController(
         }
     }
 
-    private fun syncControllerWithQueue(controller: Player) {
+    private fun syncControllerWithQueue(controller: Player, playWhenLoaded: Boolean = false) {
         val currentItems = _queue.value
-        if (currentItems.isNotEmpty() && controller.mediaItemCount == 0) {
+        if (playWhenLoaded) pendingPlayAfterSync = true
+        if (currentItems.isNotEmpty() && controller.mediaItemCount == 0 && !queueSyncInFlight) {
+            queueSyncInFlight = true
             scope.launch {
                 val mediaItems = currentItems.mapNotNull { item ->
                     val track = item.track ?: trackRepository.getTrackById(item.trackId) ?: return@mapNotNull null
@@ -521,7 +527,10 @@ class HarmoniaPlayerController(
                     val posMs = _playbackState.value.currentPositionMs
                     controller.seekTo(activeIdx, posMs)
                     controller.prepare()
+                    if (pendingPlayAfterSync) controller.play()
                 }
+                pendingPlayAfterSync = false
+                queueSyncInFlight = false
             }
         }
     }
@@ -541,6 +550,11 @@ class HarmoniaPlayerController(
         }
 
         mediaController?.let { controller ->
+            if (controller.mediaItemCount == 0 && _queue.value.isNotEmpty()) {
+                // The saved queue was restored after the session connected: load it, then play.
+                syncControllerWithQueue(controller, playWhenLoaded = true)
+                return
+            }
             if (controller.playbackState == Player.STATE_IDLE && controller.mediaItemCount > 0) {
                 controller.prepare()
             }
