@@ -361,16 +361,15 @@ class M3EndToEndIntegrationTest {
         composeTestRule.onNodeWithText("Solaris Echoes").performClick()
 
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("NOW PLAYING").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithContentDescription("Close Now Playing").fetchSemanticsNodes().isNotEmpty()
         }
-        composeTestRule.onNodeWithText("NOW PLAYING").assertIsDisplayed()
 
         // Toggle Queue view
         composeTestRule.onNodeWithContentDescription("Show Queue").performClick()
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("PLAYING QUEUE (2)").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("1 up next", substring = true).fetchSemanticsNodes().isNotEmpty()
         }
-        composeTestRule.onNodeWithText("PLAYING QUEUE (2)").assertIsDisplayed()
+        composeTestRule.onNodeWithText("1 up next", substring = true).assertIsDisplayed()
         composeTestRule.onNodeWithText("Breathe Deep").assertIsDisplayed()
 
         // Jump to second item

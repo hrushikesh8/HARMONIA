@@ -152,7 +152,7 @@ class NowPlayingAndMiniPlayerPersonalizationUiTest {
         composeTestRule.onNodeWithText("Pyramid Song").performClick()
 
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("NOW PLAYING").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithContentDescription("Close Now Playing").fetchSemanticsNodes().isNotEmpty()
         }
 
         // Verify FavoriteButton is displayed in unfavorited state with 48dp touch target
@@ -203,7 +203,7 @@ class NowPlayingAndMiniPlayerPersonalizationUiTest {
         composeTestRule.onNodeWithText("Pyramid Song").performClick()
 
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("NOW PLAYING").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithContentDescription("Close Now Playing").fetchSemanticsNodes().isNotEmpty()
         }
 
         // Check unrated trigger button
@@ -216,10 +216,10 @@ class NowPlayingAndMiniPlayerPersonalizationUiTest {
         rateTrigger.performClick()
 
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("TRACK RATING").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Rate this song").fetchSemanticsNodes().isNotEmpty()
         }
 
-        composeTestRule.onNodeWithText("TRACK RATING").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Rate this song").assertIsDisplayed()
         composeTestRule.onAllNodesWithText("Pyramid Song").onLast().assertIsDisplayed()
         composeTestRule.onNodeWithText("Not rated").assertIsDisplayed()
 
@@ -227,7 +227,7 @@ class NowPlayingAndMiniPlayerPersonalizationUiTest {
         composeTestRule.onNodeWithContentDescription("Rate 4 stars").performClick()
 
         // Done button to dismiss dialog
-        composeTestRule.onNodeWithText("DONE").performClick()
+        composeTestRule.onNodeWithText("Done").performClick()
 
         // Verify updated rating display in Now Playing
         composeTestRule.waitUntil(5000) {
@@ -245,8 +245,8 @@ class NowPlayingAndMiniPlayerPersonalizationUiTest {
         }
         composeTestRule.onNodeWithText("4 of 5 stars").assertIsDisplayed()
 
-        // Click CLEAR RATING
-        composeTestRule.onNodeWithText("CLEAR RATING").performClick()
+        // Click Clear rating
+        composeTestRule.onNodeWithText("Clear rating").performClick()
 
         // Verify Now Playing reverts to unrated state
         composeTestRule.waitUntil(5000) {
@@ -288,7 +288,7 @@ class NowPlayingAndMiniPlayerPersonalizationUiTest {
         composeTestRule.onNodeWithText("Pyramid Song").performClick()
 
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("NOW PLAYING").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithContentDescription("Close Now Playing").fetchSemanticsNodes().isNotEmpty()
         }
 
         // Both MiniPlayer and Now Playing show favorited (no contradiction)
@@ -324,7 +324,7 @@ class NowPlayingAndMiniPlayerPersonalizationUiTest {
         composeTestRule.onNodeWithText("Pyramid Song").performClick()
 
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("NOW PLAYING").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithContentDescription("Close Now Playing").fetchSemanticsNodes().isNotEmpty()
         }
 
         // Verify Track 1 personalization: favorited and 5 stars

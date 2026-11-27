@@ -2,6 +2,7 @@ package org.harmonia.player
 
 import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -161,22 +162,6 @@ class HarmoniaM4EEndToEndIntegrationTest {
 
     @Test
     fun settings_saf_folder_registration_deduplication_and_toggle_state() {
-        composeTestRule.setContent {
-            HarmoniaTheme {
-                MainAppContainer(playbackViewModel = playbackViewModel)
-            }
-        }
-
-        // Navigate to Settings tab
-        composeTestRule.onNodeWithText("Settings").performClick()
-        composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("STORAGE SOURCES").fetchSemanticsNodes().isNotEmpty()
-        }
-        composeTestRule.onNodeWithText("STORAGE SOURCES").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Add a music folder").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Scan for new music").assertIsDisplayed()
-
-        // Direct registration through SettingsViewModel logic
         val settingsVm = org.harmonia.player.presentation.settings.SettingsViewModel(
             storageSourceRepository = ServiceLocator.getStorageSourceRepository(),
             storageVolumeLifecycleCoordinator = fakeLifecycleCoordinator,
@@ -185,25 +170,41 @@ class HarmoniaM4EEndToEndIntegrationTest {
             safPermissionDelegate = fakeSafDelegate
         )
 
+        // Settings opens from Profile now; render the screen itself with the same view model.
+        composeTestRule.setContent {
+            HarmoniaTheme {
+                org.harmonia.player.presentation.settings.SettingsScreen(viewModel = settingsVm)
+            }
+        }
+
+        composeTestRule.waitUntil(5000) {
+            composeTestRule.onAllNodesWithText("Music library").fetchSemanticsNodes().isNotEmpty()
+        }
+        scrollTo("Add a music folder")
+        composeTestRule.onNodeWithText("Add a music folder").assertIsDisplayed()
+        scrollTo("Scan for new music")
+        composeTestRule.onNodeWithText("Scan for new music").assertIsDisplayed()
+
         val safUri = "content://com.android.externalstorage.documents/tree/1234-5678%3AMusic"
         settingsVm.registerSafFolder(safUri, "MicroSD Music")
 
-        // Wait for repository state emission in Settings UI
         composeTestRule.waitUntil(5000) {
             composeTestRule.onAllNodesWithText("MicroSD Music").fetchSemanticsNodes().isNotEmpty()
         }
+        scrollTo("MicroSD Music")
         composeTestRule.onNodeWithText("MicroSD Music").assertIsDisplayed()
         assertTrue(fakeSafDelegate.takenPermissions.isNotEmpty())
 
-        // Duplicate registration of the same folder must NOT duplicate source entries
+        // Registering the same folder again renames it instead of adding a second row.
         settingsVm.registerSafFolder(safUri, "MicroSD Music Renamed")
         composeTestRule.waitUntil(5000) {
             composeTestRule.onAllNodesWithText("MicroSD Music Renamed").fetchSemanticsNodes().isNotEmpty()
         }
-        composeTestRule.onNodeWithText("MicroSD Music Renamed").assertIsDisplayed()
+        assertEquals(0, composeTestRule.onAllNodesWithText("MicroSD Music").fetchSemanticsNodes().size)
 
-        // Verify Toggle action disables the source
-        composeTestRule.onNodeWithContentDescription("Toggle MicroSD Music Renamed").performClick()
+        // Turning the folder off disables the source.
+        scrollTo("MicroSD Music Renamed")
+        composeTestRule.onNodeWithContentDescription("Toggle MicroSD Music Renamed storage source").performClick()
         composeTestRule.waitUntil(5000) {
             runBlocking {
                 val source = ServiceLocator.getStorageSourceRepository().getSourceById(
@@ -212,6 +213,10 @@ class HarmoniaM4EEndToEndIntegrationTest {
                 source?.isAvailable == false
             }
         }
+    }
+
+    private fun scrollTo(text: String) {
+        composeTestRule.onNodeWithText(text).performScrollTo()
     }
 
     // -------------------------------------------------------------------------
@@ -239,8 +244,12 @@ class HarmoniaM4EEndToEndIntegrationTest {
             }
         }
 
-        // Navigate to Library
-        composeTestRule.onNodeWithText("Library").performClick()
+        // Library tab, then the Songs list
+        composeTestRule.onNodeWithContentDescription("Library", useUnmergedTree = true).performClick()
+        composeTestRule.waitUntil(5000) {
+            composeTestRule.onAllNodesWithText("Songs").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeTestRule.onAllNodesWithText("Songs").onFirst().performClick()
         composeTestRule.waitUntil(5000) {
             composeTestRule.onAllNodesWithText("Starlight Motion").fetchSemanticsNodes().isNotEmpty()
         }

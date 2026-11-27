@@ -1,6 +1,8 @@
 package org.harmonia.player
 
+import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -8,8 +10,8 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
-import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.runBlocking
@@ -29,6 +31,10 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
+/**
+ * Navigation (three tabs: Home, Search, Library; Playlists and Settings live inside Library and
+ * Profile) and the main screens' empty and seeded states.
+ */
 @RunWith(AndroidJUnit4::class)
 class HarmoniaNavigationAndLibraryUiTest {
 
@@ -51,107 +57,84 @@ class HarmoniaNavigationAndLibraryUiTest {
         db.playbackStateDao().clearQueue()
     }
 
+    private fun waitForText(text: String, timeoutMs: Long = 5000) {
+        composeTestRule.waitUntil(timeoutMs) {
+            composeTestRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    private fun clickTab(title: String) {
+        // Each tab's icon carries the tab title as its description.
+        composeTestRule.onNodeWithContentDescription(title, useUnmergedTree = true).performClick()
+    }
+
     @Test
-    fun main_navigation_displays_five_destinations_and_switches_screens() {
+    fun main_navigation_has_three_tabs_and_reaches_playlists_and_settings() {
+        // With no songs the Library tab shows the empty state, so seed one to get the landing list.
+        runBlocking {
+            val context = ApplicationProvider.getApplicationContext<Context>()
+            HarmoniaDatabase.getInstance(context).trackDao().upsertTrack(
+                TrackEntity(id = "nav-trk-1", title = "Nav Test Track", durationSec = 120.0, createdAt = 1000L, updatedAt = 1000L)
+            )
+        }
         composeTestRule.setContent {
             HarmoniaTheme {
                 MainAppContainer()
             }
         }
 
-        // Wait for initial Home state to emit from Flow
-        composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("HARMONIA").fetchSemanticsNodes().isNotEmpty()
-        }
+        waitForText("HARMONIA")
+        composeTestRule.onNodeWithContentDescription("Home", useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Search", useUnmergedTree = true).assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Library", useUnmergedTree = true).assertIsDisplayed()
 
-        // Verify bottom bar tabs exist
-        composeTestRule.onNodeWithText("Home").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Library").assertIsDisplayed()
-        composeTestRule.onAllNodesWithText("Playlists").onFirst().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Search").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Settings").assertIsDisplayed()
+        // Search tab
+        clickTab("Search")
+        waitForText("Browse your library")
+        composeTestRule.onNodeWithContentDescription("Search input field").assertIsDisplayed()
 
-        // 1. Initial Home Screen is active
-        composeTestRule.onNodeWithText("HARMONIA").assertIsDisplayed()
-        composeTestRule.onNodeWithText("USER-OWNED MUSIC PLAYER").assertIsDisplayed()
-
-        // 2. Navigate to Library
-        composeTestRule.onNodeWithText("Library").performClick()
-        composeTestRule.waitUntil(3000) {
-            composeTestRule.onAllNodesWithText("Your music").fetchSemanticsNodes().isNotEmpty()
-        }
-        composeTestRule.onNodeWithText("Your music").assertIsDisplayed()
-
-        // 3. Navigate to Playlists
+        // Library tab: landing list, then Playlists inside it
+        clickTab("Library")
+        waitForText("Favorites")
         composeTestRule.onAllNodesWithText("Playlists").onFirst().performClick()
-        composeTestRule.waitUntil(3000) {
-            composeTestRule.onAllNodesWithText("Made by you").fetchSemanticsNodes().isNotEmpty()
-        }
-        composeTestRule.onNodeWithText("Made by you").assertIsDisplayed()
+        waitForText("Made by you")
         composeTestRule.onNodeWithContentDescription("Create new playlist").assertIsDisplayed()
 
-        // 4. Navigate to Search
-        composeTestRule.onNodeWithText("Search").performClick()
-        composeTestRule.waitUntil(3000) {
-            composeTestRule.onAllNodesWithText("Browse your library").fetchSemanticsNodes().isNotEmpty()
-        }
-        composeTestRule.onNodeWithText("Browse your library").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Browse your library").assertIsDisplayed()
-
-        // 5. Navigate to Settings
+        // Settings: Library -> Profile -> Settings
+        composeTestRule.onNodeWithContentDescription("Back to Library").performClick()
+        waitForText("Favorites")
+        composeTestRule.onNodeWithContentDescription("Open Profile and Settings").performClick()
+        waitForText("Your listening")
+        composeTestRule.onNode(hasScrollAction()).performScrollToNode(hasText("Settings"))
         composeTestRule.onNodeWithText("Settings").performClick()
-        composeTestRule.waitUntil(3000) {
-            composeTestRule.onAllNodesWithText("Appearance").fetchSemanticsNodes().isNotEmpty()
-        }
-        composeTestRule.onNodeWithText("Appearance").assertIsDisplayed()
+        waitForText("Appearance")
 
-        // Return to Home
-        composeTestRule.onNodeWithText("Home").performClick()
-        composeTestRule.waitUntil(3000) {
-            composeTestRule.onAllNodesWithText("HARMONIA").fetchSemanticsNodes().isNotEmpty()
-        }
-        composeTestRule.onNodeWithText("HARMONIA").assertIsDisplayed()
+        // Back to Home
+        clickTab("Home")
+        waitForText("HARMONIA")
     }
 
     @Test
-    fun home_screen_renders_shortcuts_and_empty_state() {
+    fun home_screen_shows_welcome_state_when_library_is_empty() {
         var navigatedToLibrary = false
         composeTestRule.setContent {
             HarmoniaTheme {
-                HomeScreen(
-                    onNavigateToLibrary = { navigatedToLibrary = true }
-                )
+                HomeScreen(onNavigateToLibrary = { navigatedToLibrary = true })
             }
         }
 
-        composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("HARMONIA").fetchSemanticsNodes().isNotEmpty()
-        }
-
+        waitForText("Welcome to Harmonia")
         composeTestRule.onNodeWithText("HARMONIA").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Artists").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Albums").assertIsDisplayed()
-        composeTestRule.onAllNodesWithText("Playlists").onFirst().assertIsDisplayed()
-        composeTestRule.onNodeWithText("Welcome to Harmonia").assertIsDisplayed()
-
-        // Click "Open Library" in empty state
         composeTestRule.onNodeWithText("Open Library").performClick()
         assertTrue(navigatedToLibrary)
     }
 
     @Test
-    fun library_screen_renders_tabs_and_sorting_dialog() {
+    fun library_screen_renders_tabs_and_sorting_menu() {
         runBlocking {
             val context = ApplicationProvider.getApplicationContext<Context>()
-            val db = HarmoniaDatabase.getInstance(context)
-            db.trackDao().upsertTrack(
-                TrackEntity(
-                    id = "lib-trk-1",
-                    title = "Library Test Track",
-                    durationSec = 180.0,
-                    createdAt = 1000L,
-                    updatedAt = 1000L
-                )
+            HarmoniaDatabase.getInstance(context).trackDao().upsertTrack(
+                TrackEntity(id = "lib-trk-1", title = "Library Test Track", durationSec = 180.0, createdAt = 1000L, updatedAt = 1000L)
             )
         }
 
@@ -161,19 +144,12 @@ class HarmoniaNavigationAndLibraryUiTest {
             }
         }
 
-        composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("Your music").fetchSemanticsNodes().isNotEmpty()
-        }
-
-        // Verify tabs
-        composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("Tracks (1)").fetchSemanticsNodes().isNotEmpty()
-        }
+        waitForText("Tracks (1)")
         composeTestRule.onNodeWithText("Tracks (1)").assertIsDisplayed()
         composeTestRule.onNodeWithText("Albums (0)").assertIsDisplayed()
         composeTestRule.onNodeWithText("Artists (0)").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Library Test Track").assertIsDisplayed()
 
-        // Verify sort button opens dropdown menu
         composeTestRule.onNodeWithContentDescription("Sort library items").performClick()
         composeTestRule.onNodeWithText("Title (A-Z)").assertIsDisplayed()
         composeTestRule.onNodeWithText("Title (Z-A)").assertIsDisplayed()
@@ -188,30 +164,20 @@ class HarmoniaNavigationAndLibraryUiTest {
             }
         }
 
-        composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("Made by you").fetchSemanticsNodes().isNotEmpty()
-        }
-
-        composeTestRule.onNodeWithText("Made by you").assertIsDisplayed()
+        waitForText("Made by you")
         composeTestRule.onNodeWithText("No playlists yet").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Create new playlist").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Create Playlist").assertIsDisplayed()
     }
 
     @Test
-    fun search_screen_renders_search_field_and_local_indicator() {
+    fun search_screen_renders_search_field_and_browse_tiles() {
         composeTestRule.setContent {
             HarmoniaTheme {
                 SearchScreen()
             }
         }
 
-        composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("Browse your library").fetchSemanticsNodes().isNotEmpty()
-        }
-
-        composeTestRule.onNodeWithText("Browse your library").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Browse your library").assertIsDisplayed()
+        waitForText("Browse your library")
         composeTestRule.onNodeWithContentDescription("Search input field").assertIsDisplayed()
         composeTestRule.onNodeWithText("Songs, artists, albums, playlists").assertIsDisplayed()
     }
@@ -224,18 +190,9 @@ class HarmoniaNavigationAndLibraryUiTest {
             }
         }
 
-        composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("Browse your library").fetchSemanticsNodes().isNotEmpty()
-        }
-
-        val searchField = composeTestRule.onNodeWithContentDescription("Search input field")
-        searchField.assertIsDisplayed()
-        searchField.performTextInput("Radiohead")
-
-        // Clear button should become visible
+        waitForText("Browse your library")
+        composeTestRule.onNodeWithContentDescription("Search input field").performTextInput("Radiohead")
         composeTestRule.onNodeWithContentDescription("Clear search query").assertIsDisplayed()
-
-        // Clicking clear button resets the search field
         composeTestRule.onNodeWithContentDescription("Clear search query").performClick()
         composeTestRule.onNodeWithText("Songs, artists, albums, playlists").assertIsDisplayed()
     }
@@ -248,43 +205,22 @@ class HarmoniaNavigationAndLibraryUiTest {
             }
         }
 
-        composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("Browse your library").fetchSemanticsNodes().isNotEmpty()
-        }
+        waitForText("Browse your library")
+        composeTestRule.onNodeWithContentDescription("Search input field").performTextInput("NonExistentItemXYZ")
 
-        val searchField = composeTestRule.onNodeWithContentDescription("Search input field")
-        searchField.performTextInput("NonExistentItemXYZ")
-
-        // Wait for debounce and state update
-        composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("No matches found for \"NonExistentItemXYZ\"").fetchSemanticsNodes().isNotEmpty()
-        }
-
-        composeTestRule.onNodeWithText("No matches found for \"NonExistentItemXYZ\"").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Check for typos or try searching by title, artist, or album name").assertIsDisplayed()
+        waitForText("No matches for \"NonExistentItemXYZ\"")
+        composeTestRule.onNodeWithText("Check the spelling or try another word").assertIsDisplayed()
     }
 
     @Test
-    fun home_screen_renders_quick_play_controls_and_shortcuts() = runBlocking {
+    fun home_screen_shows_jump_back_in_and_shuffle_all() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val db = HarmoniaDatabase.getInstance(context)
         db.trackDao().upsertTrack(
-            TrackEntity(
-                id = "home-trk-seed",
-                title = "Home Quick Track",
-                durationSec = 180.0,
-                createdAt = 1000L,
-                updatedAt = 1000L
-            )
+            TrackEntity(id = "home-trk-seed", title = "Home Quick Track", durationSec = 180.0, createdAt = 1000L, updatedAt = 1000L)
         )
         db.playbackStateDao().upsertPlaybackState(
-            PlaybackStateEntity(
-                singletonId = 1,
-                currentTrackId = "home-trk-seed",
-                currentPositionMs = 12000L,
-                isPlaying = false,
-                updatedAt = 1000L
-            )
+            PlaybackStateEntity(singletonId = 1, currentTrackId = "home-trk-seed", currentPositionMs = 12000L, isPlaying = false, updatedAt = 1000L)
         )
 
         var resumeClicked = false
@@ -300,20 +236,13 @@ class HarmoniaNavigationAndLibraryUiTest {
         }
 
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("HARMONIA").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("JUMP BACK IN").fetchSemanticsNodes().isNotEmpty()
         }
-
-        composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("Resume").fetchSemanticsNodes().isNotEmpty()
-        }
-
-        composeTestRule.onNodeWithText("Shuffle All").assertIsDisplayed()
-
-        // Verify clicking buttons calls callbacks
-        composeTestRule.onAllNodesWithText("Resume").onFirst().performClick()
+        // The round play button resumes; tapping the card itself opens the song.
+        composeTestRule.onNodeWithContentDescription("Play").performClick()
         assertTrue(resumeClicked)
 
-        composeTestRule.onNodeWithText("Shuffle All").performClick()
+        composeTestRule.onNodeWithContentDescription("Shuffle all library tracks").performClick()
         assertTrue(shuffleClicked)
     }
 }

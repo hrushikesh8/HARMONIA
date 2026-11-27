@@ -144,7 +144,7 @@ class PersonalizationPrimitivesUiTest {
         }
 
         // Assert Title and metadata
-        composeTestRule.onNodeWithText("TRACK RATING").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Rate this song").assertIsDisplayed()
         composeTestRule.onNodeWithText("Karma Police").assertIsDisplayed()
         composeTestRule.onNodeWithText("Radiohead").assertIsDisplayed()
         composeTestRule.onNodeWithText("3 of 5 stars").assertIsDisplayed()
@@ -186,7 +186,7 @@ class PersonalizationPrimitivesUiTest {
         composeTestRule.onNodeWithText("Not rated").assertIsDisplayed()
 
         // Clear Rating button must not be present when currentRating is null
-        composeTestRule.onNodeWithText("CLEAR RATING").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Clear rating").assertDoesNotExist()
 
         // Selecting a star emits the value
         composeTestRule.onNodeWithContentDescription("Rate 5 stars").performClick()

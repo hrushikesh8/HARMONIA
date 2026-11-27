@@ -498,7 +498,7 @@ internal fun StorageSourceRow(
             Spacer(modifier = Modifier.height(4.dp))
 
             Text(
-                text = "${source.indexedTrackCount} songs · ${source.typeDescription}",
+                text = "${source.indexedTrackCount} ${if (source.indexedTrackCount == 1) "song" else "songs"} · ${source.typeDescription}",
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.textSecondary
             )

@@ -151,7 +151,7 @@ class LibraryFavoritesUiTest {
 
         // Title and description verification
         composeTestRule.onNodeWithText("No favorites yet").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Tracks marked as favorites in your library or Now Playing will appear here.").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Tap the heart on any song and it will show up here.").assertIsDisplayed()
 
         // Action button verification with 48dp touch target
         val browseButton = composeTestRule.onNodeWithText("Browse Tracks")

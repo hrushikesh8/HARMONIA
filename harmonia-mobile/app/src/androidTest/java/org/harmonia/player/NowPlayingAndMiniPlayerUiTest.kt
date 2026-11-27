@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -249,23 +250,24 @@ class NowPlayingAndMiniPlayerUiTest {
 
         // Verify Now Playing elements
         composeTestRule.onNodeWithText("Playing from").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Previous Track").assertIsDisplayed()
+        // The mini player stays composed under Now Playing, so take the last (Now Playing) button.
+        composeTestRule.onAllNodesWithContentDescription("Previous Track").onLast().assertIsDisplayed()
         composeTestRule.onAllNodesWithContentDescription("Next Track").onFirst().assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Show Queue").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Playback seek slider").assertIsDisplayed()
 
         // Test previous track click
-        composeTestRule.onNodeWithContentDescription("Previous Track").performClick()
+        composeTestRule.onAllNodesWithContentDescription("Previous Track").onLast().performClick()
         assertTrue(testPort.previousCalled)
 
         // Toggle queue view
         composeTestRule.onNodeWithContentDescription("Show Queue").performClick()
 
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("2 songs in queue").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("1 up next", substring = true).fetchSemanticsNodes().isNotEmpty()
         }
 
-        composeTestRule.onNodeWithText("2 songs in queue").assertIsDisplayed()
+        composeTestRule.onNodeWithText("1 up next", substring = true).assertIsDisplayed()
         composeTestRule.onNodeWithText("You and Whose Army?").assertIsDisplayed()
 
         // Click second queue track to jump

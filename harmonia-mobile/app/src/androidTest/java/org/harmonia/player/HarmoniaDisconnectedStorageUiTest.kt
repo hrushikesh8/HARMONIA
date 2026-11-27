@@ -60,8 +60,7 @@ class HarmoniaDisconnectedStorageUiTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Storage Disconnected").assertIsDisplayed()
-        composeTestRule.onNodeWithText("The storage volume for this track is unavailable. Reconnect storage to resume playback.").assertIsDisplayed()
+        composeTestRule.onNodeWithText("This song's storage isn't connected. Reconnect it to keep listening.").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription(PlaybackState.STORAGE_DISCONNECTED_MESSAGE).assertIsDisplayed()
     }
 
@@ -99,8 +98,9 @@ class HarmoniaDisconnectedStorageUiTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Playback Error").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Corrupt media stream").assertIsDisplayed()
+        composeTestRule.onNodeWithText("This song couldn't be played.").assertIsDisplayed()
+        // The technical reason stays available to screen readers.
+        composeTestRule.onNodeWithContentDescription("Corrupt media stream").assertIsDisplayed()
     }
 
     @Test
@@ -137,8 +137,8 @@ class HarmoniaDisconnectedStorageUiTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Storage Disconnected").assertDoesNotExist()
-        composeTestRule.onNodeWithText("Playback Error").assertDoesNotExist()
+        composeTestRule.onNodeWithText("This song's storage isn't connected. Reconnect it to keep listening.").assertDoesNotExist()
+        composeTestRule.onNodeWithText("This song couldn't be played.").assertDoesNotExist()
     }
 
     @Test
@@ -312,7 +312,7 @@ class HarmoniaDisconnectedStorageUiTest {
         }
 
         composeTestRule.onNodeWithText("Internal Storage").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Internal MediaStore • 42 tracks").assertIsDisplayed()
+        composeTestRule.onNodeWithText("42 songs · Internal MediaStore").assertIsDisplayed()
         composeTestRule.onNodeWithText("Ready").assertIsDisplayed()
     }
 
@@ -336,7 +336,7 @@ class HarmoniaDisconnectedStorageUiTest {
         }
 
         composeTestRule.onNodeWithText("Music Folder").assertIsDisplayed()
-        composeTestRule.onNodeWithText("SAF Folder Tree • 1 track").assertIsDisplayed()
+        composeTestRule.onNodeWithText("1 song · SAF Folder Tree").assertIsDisplayed()
         composeTestRule.onNodeWithText("Accessible").assertIsDisplayed()
     }
 
@@ -360,7 +360,7 @@ class HarmoniaDisconnectedStorageUiTest {
         }
 
         composeTestRule.onNodeWithText("SanDisk SD").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Removable Volume • 0 tracks").assertIsDisplayed()
+        composeTestRule.onNodeWithText("0 songs · Removable Volume").assertIsDisplayed()
         composeTestRule.onNodeWithText("Disconnected").assertIsDisplayed()
     }
 }
