@@ -173,8 +173,8 @@ class HarmoniaM4EEndToEndIntegrationTest {
             composeTestRule.onAllNodesWithText("STORAGE SOURCES").fetchSemanticsNodes().isNotEmpty()
         }
         composeTestRule.onNodeWithText("STORAGE SOURCES").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Add Folder").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Scan Library").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Add a music folder").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Scan for new music").assertIsDisplayed()
 
         // Direct registration through SettingsViewModel logic
         val settingsVm = org.harmonia.player.presentation.settings.SettingsViewModel(

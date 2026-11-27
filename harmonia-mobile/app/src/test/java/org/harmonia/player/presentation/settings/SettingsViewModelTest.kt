@@ -718,17 +718,17 @@ class SettingsViewModelTest {
         assertEquals(3, items.size)
 
         val primaryUi = items.first { it.id == primary.id }
-        assertEquals("Internal MediaStore", primaryUi.typeDescription)
+        assertEquals("Phone music library", primaryUi.typeDescription)
         assertEquals("Ready", primaryUi.runtimeStatusDescription)
         assertTrue(primaryUi.isRuntimeAvailable)
 
         val volumeUi = items.first { it.id == volume.id }
-        assertEquals("Removable Volume", volumeUi.typeDescription)
+        assertEquals("SD card or USB drive", volumeUi.typeDescription)
         assertEquals("Disconnected", volumeUi.runtimeStatusDescription)
         assertFalse(volumeUi.isRuntimeAvailable)
 
         val safUi = items.first { it.id == saf.id }
-        assertEquals("SAF Folder Tree", safUi.typeDescription)
+        assertEquals("Folder you added", safUi.typeDescription)
         assertEquals("Access revoked", safUi.runtimeStatusDescription)
         assertFalse(safUi.isRuntimeAvailable)
     }

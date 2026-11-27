@@ -101,9 +101,9 @@ class HarmoniaNavigationAndLibraryUiTest {
         // 5. Navigate to Settings
         composeTestRule.onNodeWithText("Settings").performClick()
         composeTestRule.waitUntil(3000) {
-            composeTestRule.onAllNodesWithText("Make Harmonia yours").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Appearance").fetchSemanticsNodes().isNotEmpty()
         }
-        composeTestRule.onNodeWithText("Make Harmonia yours").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Appearance").assertIsDisplayed()
 
         // Return to Home
         composeTestRule.onNodeWithText("Home").performClick()

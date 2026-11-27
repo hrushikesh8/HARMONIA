@@ -28,7 +28,7 @@ Status: `Done` · `In progress` · `Planned`
 |---|------|------|--------|
 | 1.1 | Soft Lavender accent, Spotify-style dark neutrals, properly designed light theme | UI | Done |
 | 1.2 | Theme choice: Follow system / Dark / Light | UX, BE | Done |
-| 1.3 | Replace developer jargon in screen copy with plain language | UI, UX | Done (Settings spec rows and Profile activity list finish in 3.1 / 3.2) |
+| 1.3 | Replace developer jargon in screen copy with plain language | UI, UX | Done (Profile activity list finishes in 3.2) |
 | 1.4 | New font family: Figtree (bundled), no more monospace labels | UI | Done |
 | 1.5 | Move to Compose Navigation, Apple-style bottom tabs, back keeps scroll position | UX, BE | Done |
 | 1.6 | App icon and splash refreshed to the lavender identity | UI | Done |
@@ -50,7 +50,7 @@ Status: `Done` · `In progress` · `Planned`
 
 | # | Task | Area | Status |
 |---|------|------|--------|
-| 3.1 | Settings regrouped into clear sections, plain language | UI, UX | Planned |
+| 3.1 | Settings regrouped into clear sections, plain language | UI, UX | Done |
 | 3.2 | Profile becomes "Your listening": readable stats, rated songs list | UI, UX, BE | Planned |
 | 3.3 | Equalizer works without music playing; save your own presets | UI, UX, BE | Planned |
 | 3.4 | Car Mode: progress/seek, favorite, landscape | UI, UX | Planned |
@@ -249,6 +249,19 @@ Status: `Done` · `In progress` · `Planned`
   (`PlaylistDao.searchPlaylistsWithCount`).
 - **Why:** Apple Music's Search starts with your recent searches and browse categories instead of
   an empty page, which makes it useful even before you type.
+
+### 3.1 Settings
+- **What:** Rebuilt `presentation/settings/SettingsScreen.kt` as Apple-style grouped lists:
+  **Appearance** (theme, keep screen on), **Playback** (shuffle and repeat defaults as
+  Off / All / One song, sleep timer, Car Mode), **Sound** (equalizer), **Music library**
+  (song count and size, add a folder, scan for new music, your sources, rescan everything) and
+  **About** (version, privacy note). Each group has a short grey title and, where useful, a
+  footnote. The developer spec rows (database, Media3, SDK levels) are kept but folded under
+  "Technical details". Source types now read "Phone music library", "SD card or USB drive",
+  "Folder you added" instead of "Internal MediaStore" / "SAF Folder Tree".
+- **Why:** The old screen was five tall cards with all-caps titles and engineering terms; people
+  scan settings by section and want short labels with a one-line explanation.
+- **Still to do:** the equalizer block's inner styling (task 3.3).
 
 ## Decisions and ideas checked
 

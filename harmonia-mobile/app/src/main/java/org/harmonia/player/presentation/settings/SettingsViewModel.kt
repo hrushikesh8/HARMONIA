@@ -311,10 +311,10 @@ class SettingsViewModel(
             val runtime = runtimeStates[source.id]
             val trackCount = catalogStats.trackCountsBySourceId[source.id] ?: 0
             val typeDesc = when (source) {
-                is StorageSource.MediaStorePrimary -> "Internal MediaStore"
-                is StorageSource.MediaStoreVolume -> "Removable Volume"
-                is StorageSource.SafDocumentTree -> "SAF Folder Tree"
-                is StorageSource.InternalSyncStorage -> "App Synced Storage"
+                is StorageSource.MediaStorePrimary -> "Phone music library"
+                is StorageSource.MediaStoreVolume -> "SD card or USB drive"
+                is StorageSource.SafDocumentTree -> "Folder you added"
+                is StorageSource.InternalSyncStorage -> "Harmonia storage"
             }
 
             val (runtimeDesc, isAvailable) = when (source) {
