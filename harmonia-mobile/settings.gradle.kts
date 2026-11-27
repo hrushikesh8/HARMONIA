@@ -31,3 +31,4 @@ plugins {
 
 rootProject.name = "Harmonia Mobile"
 include(":app")
+include(":baselineprofile")

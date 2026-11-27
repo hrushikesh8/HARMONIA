@@ -58,9 +58,9 @@ Status: `Done` · `In progress` · `Planned`
 | 3.6 | Album grid adapts to screen width / landscape / tablets | UI | Done |
 | 3.7 | Queue: auto-scroll while dragging; strict "Play next" with shuffle on | UX, BE | Done |
 | 3.10 | Restyle song / album / artist rows in category lists (still the older bordered cards) | UI | Done |
-| 3.9 | Instrumented UI tests (`androidTest`) were already out of date before the revamp (expect a Settings tab, old copy); refresh them | BE | Planned |
+| 3.9 | Instrumented UI tests (`androidTest`) were already out of date before the revamp (expect a Settings tab, old copy); refresh them | BE | Done |
 | 3.8 | Fix "not responding" on cold start (playback service started during app launch) | BE | Done |
-| 3.11 | Faster first launch: Baseline Profile so the first screen appears quicker | BE | Planned |
+| 3.11 | Faster first launch: Baseline Profile so the first screen appears quicker | BE | Done |
 
 ## Phase 4: New features
 
@@ -360,6 +360,36 @@ Status: `Done` · `In progress` · `Planned`
   fit on one screen and end too fast to show either change.
 - **Known gap:** with shuffle on, the queue list still shows songs in queue order, not play order.
   Showing the real shuffled order is a bigger change; worth doing as its own task.
+
+### 3.9 Instrumented UI tests refreshed
+- **What:** Ran all 117 instrumented tests (`app/src/androidTest`) on the emulator: 19 failed.
+  Every failure was the test still expecting the old app: a Settings tab, "NOW PLAYING" /
+  "TRACK RATING" headings, "PLAYING QUEUE (2)", the old error banner text, "Tracks (N)" counts
+  written as "N tracks". Updated 8 test files to the current screens. Tests now reach Settings
+  through Library → Profile → Settings, find tabs by their icon description, and open Now
+  Playing by its close button. One test file was rewritten to test three tabs instead of five.
+- **Real bug found:** the Settings folder rows said "1 songs". Fixed (`SettingsScreen.kt`).
+- **Heads-up for whoever runs them:** several tests wipe the app's real database in their setup
+  (`deleteAllTracks`), so run them on an emulator, not your own phone, and rescan afterwards.
+  Run them with `adb shell am instrument` (or `connectedDebugAndroidTest`, which also uninstalls
+  the app at the end).
+
+### 3.11 Faster first launch: Baseline Profile
+- **What:** New `:baselineprofile` module. `BaselineProfileGenerator` launches the app and walks
+  Home → Search → Library → Songs; the plugin turns the code that ran into
+  `app/src/release/generated/baselineProfiles/baseline-prof.txt` (about 26,500 rules, 2,500 of them for Harmonia code) plus `startup-prof.txt`, which ship inside the release APK.
+  `androidx.profileinstaller` (added to `:app`) installs it on first launch, so Android runs
+  that code pre-compiled instead of interpreting it while it warms up.
+- **Regenerate** after big UI changes: `./gradlew :app:generateBaselineProfile` with a device or
+  emulator (API 28+) connected. It is not regenerated on every build.
+- **Measure:** `StartupBenchmark` compares cold start with no pre-compiled code against the
+  profile. Run `./gradlew :baselineprofile:connectedBenchmarkReleaseAndroidTest` on a real phone
+  (emulator timings are not trustworthy, so no numbers are recorded here yet). Google reports
+  typical gains of around 30% on first launch.
+- **Build notes:** Benchmark / Baseline Profile 1.5.0, profileinstaller 1.4.1, UiAutomator 2.4.1.
+  The plugin adds `nonMinifiedRelease` and `benchmarkRelease` build types; only those two are
+  signed with the debug key so they can be installed for profiling. The real release build's
+  signing is unchanged.
 
 ## Decisions and ideas checked
 

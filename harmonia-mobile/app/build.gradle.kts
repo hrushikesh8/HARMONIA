@@ -6,6 +6,7 @@ plugins {
   alias(libs.plugins.compose.compiler)
   alias(libs.plugins.kotlin.serialization)
   alias(libs.plugins.legacy.kapt)
+  alias(libs.plugins.baselineprofile)
 }
 
 android {
@@ -124,6 +125,14 @@ android {
             }
         }
     }
+    // The Baseline Profile plugin adds release-like build types to generate and measure the
+    // profile on a device. Sign only those with the debug key so they install; the real release
+    // build keeps its own signing rules above.
+    buildTypes.configureEach {
+        if (name == "nonMinifiedRelease" || name == "benchmarkRelease") {
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -194,6 +203,17 @@ dependencies {
   implementation(libs.androidx.media3.exoplayer)
   implementation(libs.androidx.media3.session)
   implementation(libs.androidx.media3.common)
+
+  // Installs the bundled Baseline Profile so first launch runs pre-compiled code (task 3.11)
+  implementation(libs.androidx.profileinstaller)
+  baselineProfile(project(":baselineprofile"))
+}
+
+baselineProfile {
+  // Keep the generated profile in src/main so it is committed and shipped with every build.
+  saveInSrc = true
+  // Regenerate on purpose (./gradlew :app:generateBaselineProfile), not on every release build.
+  automaticGenerationDuringBuild = false
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.internal.KaptWithoutKotlincTask>().configureEach {
