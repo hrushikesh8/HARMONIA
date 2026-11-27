@@ -41,7 +41,7 @@ Status: `Done` · `In progress` · `Planned`
 | 2.2 | Mini player restyle to match | UI | Done |
 | 2.3 | Library landing list (Playlists, Artists, Albums, Songs, Folders, Favorites); sort is remembered and visible (Genres row arrives with 4.2) | UI, UX, BE | Done |
 | 2.4 | Home sections: Recently played, Recently added, Rediscover, Top this month | UI, UX, BE | Done |
-| 2.5 | Album page: hero artwork, Play / Shuffle buttons, Disc 1 / Disc 2 headers | UI, UX | Planned |
+| 2.5 | Album page: hero artwork, Play / Shuffle buttons, Disc 1 / Disc 2 headers | UI, UX | Done |
 | 2.6 | Artist page: hero header, top songs, albums | UI, BE | Planned |
 | 2.7 | Playlist page: artwork collage header, drag to reorder | UI, UX | Planned |
 | 2.8 | Search restyle and recent searches | UI, UX, BE | Planned |
@@ -197,6 +197,22 @@ Status: `Done` · `In progress` · `Planned`
 - **Why:** The listening history was already being recorded but only fed "Recently played".
   These are the sections people expect from Apple Music / Spotify Home, built purely from what
   you played on this phone (no recommendations, nothing leaves the device).
+
+### 2.5 Album page
+- **What:** Rebuilt `presentation/album/AlbumDetailScreen.kt` in the Apple Music layout: large
+  centred artwork with a soft shadow, title, artist (lavender, opens the artist page), year,
+  then Play (lavender) and Shuffle (grey) side by side. Songs are a clean numbered list
+  (artist shown under a title only when it differs from the album artist, e.g. features), with
+  "Disc 1 / Disc 2" headers for multi-disc albums and a summary at the end
+  ("12 songs, 48 min", formats, "Released 2014").
+- **Behaviour:** The page now follows the library live (`AlbumDetailViewModel`), so a rescan or
+  removed file updates it without leaving. A load failure now says "Couldn't load this album" with
+  Try again, instead of the misleading "Album not found".
+- **Also fixed (app-wide):** button labels ignored their button's colours because the `labelLarge`
+  text style had a fixed colour. Removed it, so every Material button gets the right label colour
+  (seen as white-on-lavender text in dark mode / dark-on-deep-lavender in light mode).
+- **Why:** The album page is where people start most listening; Apple Music's layout puts the
+  artwork and Play first and keeps the list quiet.
 
 ## Decisions and ideas checked
 

@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,17 +17,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,17 +34,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import org.harmonia.player.design.theme.HarmoniaIcons
 import org.harmonia.player.design.theme.HarmoniaThemeTokens
-import org.harmonia.player.design.theme.hairlineBorder
 import org.harmonia.player.design.theme.touchTarget48
+import org.harmonia.player.domain.model.Album
 import org.harmonia.player.domain.model.Track
 import org.harmonia.player.presentation.components.HarmoniaArtwork
 import org.harmonia.player.presentation.components.TrackMenuButton
@@ -55,6 +54,10 @@ import org.harmonia.player.presentation.personalization.PersonalizationViewModel
 import org.harmonia.player.presentation.util.TrackDisplayUtils
 import java.util.Locale
 
+/**
+ * Album page (Apple Music layout): centred artwork, title and artist, Play / Shuffle,
+ * then the songs grouped by disc, with a summary line at the end.
+ */
 @Composable
 fun AlbumDetailScreen(
     albumId: String,
@@ -80,395 +83,398 @@ fun AlbumDetailScreen(
     val colors = HarmoniaThemeTokens.colors
     val spacing = HarmoniaThemeTokens.spacing
 
-    if (uiState.isLoading) {
-        Box(
-            modifier = modifier
-                .fillMaxSize()
-                .background(colors.backgroundRoot),
-            contentAlignment = Alignment.Center
-        ) {
-            CircularProgressIndicator(color = colors.primarySignal)
-        }
-        return
-    }
-
-    val album = uiState.album
-    if (album == null) {
-        Box(
-            modifier = modifier
-                .fillMaxSize()
-                .background(colors.backgroundRoot)
-                .padding(spacing.standard),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    imageVector = HarmoniaIcons.Album,
-                    contentDescription = null,
-                    modifier = Modifier.size(64.dp),
-                    tint = colors.textSecondary.copy(alpha = 0.5f)
-                )
-                Spacer(modifier = Modifier.height(spacing.medium))
-                Text(
-                    text = "Album not found",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = colors.textPrimary
-                )
-                Spacer(modifier = Modifier.height(spacing.small))
-                Text(
-                    text = "This album may have been moved or removed from storage.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.textSecondary
-                )
-                Spacer(modifier = Modifier.height(spacing.large))
-                Button(
-                    onClick = onBack,
-                    colors = ButtonDefaults.buttonColors(containerColor = colors.primarySignal)
-                ) {
-                    Text("Go Back", color = colors.backgroundRoot, fontWeight = FontWeight.Bold)
-                }
+    when {
+        uiState.isLoading -> {
+            Box(
+                modifier = modifier.fillMaxSize().background(colors.backgroundRoot),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = colors.primarySignal)
             }
+            return
         }
-        return
+        uiState.errorMessage != null -> {
+            AlbumMessage(
+                title = "Couldn't load this album",
+                body = "Something went wrong reading your library. Try again in a moment.",
+                actionLabel = "Try again",
+                onAction = viewModel::retry,
+                onBack = onBack,
+                modifier = modifier
+            )
+            return
+        }
+        uiState.album == null -> {
+            AlbumMessage(
+                title = "Album not found",
+                body = "It may have been moved or removed from this phone.",
+                actionLabel = "Go back",
+                onAction = onBack,
+                onBack = onBack,
+                modifier = modifier
+            )
+            return
+        }
     }
+    val album: Album = uiState.album ?: return
 
     val tracks = uiState.tracks
-    val totalMinutes = (uiState.totalDurationSec / 60).toInt()
-    val totalSeconds = (uiState.totalDurationSec % 60).toInt()
-    val durationText = when {
-        totalMinutes >= 60 -> {
-            val hours = totalMinutes / 60
-            val remainingMins = totalMinutes % 60
-            "${hours} hr ${remainingMins} min"
-        }
-        totalMinutes > 0 -> "${totalMinutes} min ${totalSeconds} sec"
-        else -> "${totalSeconds} sec"
-    }
+    val discs = uiState.discs
 
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .background(colors.backgroundRoot)
-            .padding(horizontal = spacing.standard),
+            .background(colors.backgroundRoot),
         contentPadding = PaddingValues(bottom = spacing.bottomScaffold)
     ) {
-        // Navigation Back Bar
         item {
-            Spacer(modifier = Modifier.height(spacing.small))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier
+                    .padding(start = spacing.xSmall, top = spacing.xSmall)
+                    .touchTarget48()
+                    .semantics { contentDescription = "Navigate back" }
             ) {
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier
-                        .touchTarget48()
-                        .semantics { contentDescription = "Navigate back" }
-                ) {
-                    Icon(
-                        imageVector = HarmoniaIcons.ArrowBack,
-                        contentDescription = "Back",
-                        tint = colors.textPrimary
-                    )
-                }
-                Spacer(modifier = Modifier.width(spacing.small))
-                Column {
-                    Text(
-                        text = "Album",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
-                        color = colors.primarySignal
-                    )
-                    Text(
-                        text = album.title,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.textSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+                Icon(imageVector = HarmoniaIcons.ArrowBack, contentDescription = null, tint = colors.textPrimary)
             }
         }
 
-        // Hero Artwork & Metadata Header
+        item { AlbumHeader(album = album, onArtistClick = onArtistClick) }
+
         item {
-            Spacer(modifier = Modifier.height(spacing.medium))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Card(
-                    modifier = Modifier
-                        .size(136.dp)
-                        .hairlineBorder(colors.borderStructural, RoundedCornerShape(12.dp)),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = colors.surfaceElevated)
-                ) {
-                    HarmoniaArtwork(
-                        artworkHash = album.artworkHash,
-                        size = 136.dp,
-                        cornerRadius = 12.dp,
-                        contentDescription = album.title
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(spacing.medium))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = album.title,
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        color = colors.textPrimary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    val artistName = album.artistName ?: "Unknown Artist"
-                    Spacer(modifier = Modifier.height(spacing.xSmall))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .clickable(enabled = album.artistId != null) {
-                                album.artistId?.let { onArtistClick(it) }
-                            }
-                            .semantics { contentDescription = "Artist: $artistName" }
-                    ) {
-                        Text(
-                            text = artistName,
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = if (album.artistId != null) colors.secondarySignal else colors.textSecondary
-                        )
-                        if (album.artistId != null) {
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Icon(
-                                imageVector = HarmoniaIcons.ChevronRight,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                                tint = colors.secondarySignal
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(spacing.xSmall))
-                    val metaParts = mutableListOf<String>()
-                    album.year?.let { if (it > 0) metaParts.add(it.toString()) }
-                    metaParts.add("${tracks.size} ${if (tracks.size == 1) "track" else "tracks"}")
-                    if (uiState.totalDurationSec > 0) {
-                        metaParts.add(durationText)
-                    }
-
-                    Text(
-                        text = metaParts.joinToString(" • "),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.textSecondary
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(spacing.large))
-
-            // Action Buttons: Play and Shuffle
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(spacing.medium)
-            ) {
-                Button(
-                    onClick = {
-                        if (tracks.isNotEmpty()) {
-                            onPlayTrack(tracks, 0)
-                        }
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp)
-                        .semantics { contentDescription = "Play album" },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = colors.primarySignal,
-                        contentColor = colors.backgroundRoot
-                    ),
-                    shape = RoundedCornerShape(24.dp)
-                ) {
-                    Icon(
-                        imageVector = HarmoniaIcons.Play,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = colors.backgroundRoot
-                    )
-                    Spacer(modifier = Modifier.width(spacing.small))
-                    Text(
-                        text = "Play",
-                        fontWeight = FontWeight.Bold,
-                        color = colors.backgroundRoot
-                    )
-                }
-
-                OutlinedButton(
-                    onClick = {
-                        if (tracks.isNotEmpty()) {
-                            onShuffleAll(tracks.shuffled())
-                        }
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp)
-                        .hairlineBorder(colors.borderStructural, RoundedCornerShape(24.dp))
-                        .semantics { contentDescription = "Shuffle album tracks" },
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = colors.surfaceElevated,
-                        contentColor = colors.textPrimary
-                    ),
-                    shape = RoundedCornerShape(24.dp)
-                ) {
-                    Icon(
-                        imageVector = HarmoniaIcons.Shuffle,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = colors.primarySignal
-                    )
-                    Spacer(modifier = Modifier.width(spacing.small))
-                    Text(
-                        text = "Shuffle",
-                        fontWeight = FontWeight.Bold,
-                        color = colors.textPrimary
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(spacing.large))
-        }
-
-        // Empty Tracks State
-        if (tracks.isEmpty()) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = spacing.xLarge),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No tracks found in this album",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = colors.textSecondary
-                    )
-                }
-            }
-        }
-
-        // Ordered Track List
-        itemsIndexed(tracks) { index, track ->
-            val isFavorite = favoriteTrackIds.contains(track.id)
-            val isThisTrackActive = currentPlayingTrackId != null && currentPlayingTrackId == track.id
-            val trackNumberDisplay = track.trackNumber?.toString() ?: "${index + 1}"
-            val cleanTitle = TrackDisplayUtils.formatDisplayTitle(track)
-            val formatStr = track.localFile?.format?.uppercase(Locale.ROOT)
-
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (isThisTrackActive) colors.primarySignal.copy(alpha = 0.08f) else colors.backgroundRoot)
-                    .combinedClickable(
-                        onClick = { onPlayTrack(tracks, index) },
-                        onLongClick = onTrackMenu?.let { menu -> { menu(track) } }
-                    )
-                    .padding(vertical = spacing.small, horizontal = spacing.xSmall),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = spacing.standard, vertical = spacing.large),
+                horizontalArrangement = Arrangement.spacedBy(spacing.medium)
             ) {
-                // Track Number or Active Playing Indicator
-                Box(
-                    modifier = Modifier.width(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (isThisTrackActive && isPlaying) {
-                        Icon(
-                            imageVector = HarmoniaIcons.Play,
-                            contentDescription = "Playing",
-                            modifier = Modifier.size(16.dp),
-                            tint = colors.primarySignal
-                        )
-                    } else {
-                        Text(
-                            text = trackNumberDisplay,
-                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                            color = if (isThisTrackActive) colors.primarySignal else colors.textSecondary
-                        )
-                    }
-                }
+                AlbumActionButton(
+                    label = "Play",
+                    icon = HarmoniaIcons.Play,
+                    filled = true,
+                    enabled = tracks.isNotEmpty(),
+                    contentDescription = "Play album",
+                    onClick = { onPlayTrack(tracks, 0) },
+                    modifier = Modifier.weight(1f)
+                )
+                AlbumActionButton(
+                    label = "Shuffle",
+                    icon = HarmoniaIcons.Shuffle,
+                    filled = false,
+                    enabled = tracks.isNotEmpty(),
+                    contentDescription = "Shuffle album tracks",
+                    onClick = { onShuffleAll(tracks) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
 
-                Spacer(modifier = Modifier.width(spacing.small))
-
-                // Title + Subtitle Metadata
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = cleanTitle,
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontWeight = if (isThisTrackActive) FontWeight.Bold else FontWeight.Medium
-                        ),
-                        color = if (isThisTrackActive) colors.primarySignal else colors.textPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        track.artistName?.let { artist ->
-                            Text(
-                                text = artist,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = colors.textSecondary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        if (formatStr != null) {
-                            if (track.artistName != null) {
-                                Text(
-                                    text = " • ",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = colors.textSecondary
-                                )
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(3.dp))
-                                    .background(colors.surfaceElevated)
-                                    .padding(horizontal = 4.dp, vertical = 1.dp)
-                            ) {
-                                Text(
-                                    text = formatStr,
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontSize = 8.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    ),
-                                    color = colors.primarySignal
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(spacing.small))
-
-                // Duration Text
-                val trackMin = (track.durationSec / 60).toInt()
-                val trackSec = (track.durationSec % 60).toInt()
+        if (tracks.isEmpty()) {
+            item {
                 Text(
-                    text = String.format(Locale.US, "%d:%02d", trackMin, trackSec),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.textSecondary
+                    text = "No songs from this album are on this phone right now.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.textSecondary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(spacing.xLarge)
                 )
+            }
+        }
 
-                Spacer(modifier = Modifier.width(spacing.small))
-
-                // Favorite Toggle (48dp touch target)
-                FavoriteButton(
-                    isFavorite = isFavorite,
-                    onToggleFavorite = { personalizationViewModel.toggleFavorite(track.id) }
-                )
-
-                if (onTrackMenu != null) {
-                    TrackMenuButton(trackTitle = cleanTitle, onClick = { onTrackMenu(track) })
+        discs.forEach { disc ->
+            if (disc.discNumber != null) {
+                item(key = "disc_${disc.discNumber}") {
+                    Text(
+                        text = "Disc ${disc.discNumber}",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = colors.textSecondary,
+                        modifier = Modifier
+                            .padding(horizontal = spacing.standard)
+                            .padding(top = spacing.medium, bottom = spacing.xSmall)
+                            .semantics { heading() }
+                    )
                 }
+            }
+            items(disc.tracks, key = { it.id }) { track ->
+                val index = tracks.indexOf(track)
+                AlbumTrackRow(
+                    track = track,
+                    albumArtist = album.artistName,
+                    isActive = track.id == currentPlayingTrackId,
+                    isPlaying = isPlaying,
+                    isFavorite = track.id in favoriteTrackIds,
+                    onClick = { onPlayTrack(tracks, index) },
+                    onToggleFavorite = { personalizationViewModel.toggleFavorite(track.id) },
+                    onMenu = onTrackMenu?.let { menu -> { menu(track) } }
+                )
+            }
+        }
+
+        if (tracks.isNotEmpty()) {
+            item {
+                AlbumFooter(album = album, tracks = tracks, totalDurationSec = uiState.totalDurationSec)
             }
         }
     }
+}
+
+@Composable
+private fun AlbumHeader(album: Album, onArtistClick: (String) -> Unit) {
+    val colors = HarmoniaThemeTokens.colors
+    val spacing = HarmoniaThemeTokens.spacing
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = spacing.standard),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            val side = minOf(maxWidth * 0.68f, 300.dp)
+            Box(
+                modifier = Modifier
+                    .size(side)
+                    .shadow(20.dp, RoundedCornerShape(12.dp), clip = false)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(colors.surfaceElevated)
+            ) {
+                HarmoniaArtwork(
+                    artworkHash = album.artworkHash,
+                    modifier = Modifier.fillMaxSize(),
+                    size = side,
+                    cornerRadius = 12.dp,
+                    contentDescription = "${album.title} artwork"
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(spacing.large))
+        Text(
+            text = album.title,
+            style = MaterialTheme.typography.headlineSmall,
+            color = colors.textPrimary,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.semantics { heading() }
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        val artistName = album.artistName ?: "Unknown artist"
+        Text(
+            text = artistName,
+            style = MaterialTheme.typography.titleMedium,
+            color = if (album.artistId != null) colors.primarySignal else colors.textSecondary,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .clickable(enabled = album.artistId != null) { album.artistId?.let(onArtistClick) }
+                .padding(horizontal = 6.dp, vertical = 2.dp)
+                .semantics { contentDescription = "Artist: $artistName" }
+        )
+        album.year?.takeIf { it > 0 }?.let { year ->
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = year.toString(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.textSecondary
+            )
+        }
+    }
+}
+
+@Composable
+private fun AlbumActionButton(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    filled: Boolean,
+    enabled: Boolean,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = HarmoniaThemeTokens.colors
+    val onFilled = if (colors.isDark) colors.backgroundRoot else colors.surfaceElevated
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier
+            .height(48.dp)
+            .semantics { this.contentDescription = contentDescription },
+        shape = RoundedCornerShape(12.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (filled) colors.primarySignal else colors.surfaceContainer,
+            contentColor = if (filled) onFilled else colors.primarySignal
+        )
+    ) {
+        Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(20.dp))
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text = label, style = MaterialTheme.typography.labelLarge)
+    }
+}
+
+@Composable
+private fun AlbumTrackRow(
+    track: Track,
+    albumArtist: String?,
+    isActive: Boolean,
+    isPlaying: Boolean,
+    isFavorite: Boolean,
+    onClick: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onMenu: (() -> Unit)?
+) {
+    val colors = HarmoniaThemeTokens.colors
+    val spacing = HarmoniaThemeTokens.spacing
+    val title = TrackDisplayUtils.formatDisplayTitle(track)
+    // Only show the artist under the title when it differs from the album artist (features, compilations).
+    val trackArtist = track.artistName?.takeIf { it.isNotBlank() && !it.equals(albumArtist, ignoreCase = true) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(if (isActive) colors.primarySignal.copy(alpha = 0.08f) else colors.backgroundRoot)
+            .combinedClickable(onClick = onClick, onLongClick = onMenu)
+            .padding(start = spacing.standard, end = spacing.xSmall)
+            .height(56.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(modifier = Modifier.width(32.dp), contentAlignment = Alignment.CenterStart) {
+            if (isActive && isPlaying) {
+                Icon(
+                    imageVector = HarmoniaIcons.Play,
+                    contentDescription = "Playing",
+                    modifier = Modifier.size(16.dp),
+                    tint = colors.primarySignal
+                )
+            } else {
+                Text(
+                    text = track.trackNumber?.toString() ?: "–",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (isActive) colors.primarySignal else colors.textSecondary
+                )
+            }
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (isActive) colors.primarySignal else colors.textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (trackArtist != null) {
+                Text(
+                    text = trackArtist,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        Text(
+            text = formatTrackDuration(track.durationSec),
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.textSecondary
+        )
+        FavoriteButton(isFavorite = isFavorite, onToggleFavorite = onToggleFavorite)
+        if (onMenu != null) {
+            TrackMenuButton(trackTitle = title, onClick = onMenu)
+        }
+    }
+}
+
+@Composable
+private fun AlbumFooter(album: Album, tracks: List<Track>, totalDurationSec: Double) {
+    val colors = HarmoniaThemeTokens.colors
+    val spacing = HarmoniaThemeTokens.spacing
+    val songs = "${tracks.size} ${if (tracks.size == 1) "song" else "songs"}"
+    val formats = tracks.mapNotNull { it.localFile?.format?.uppercase(Locale.ROOT)?.takeIf(String::isNotBlank) }.distinct()
+    Column(modifier = Modifier.padding(horizontal = spacing.standard, vertical = spacing.large)) {
+        Text(
+            text = "$songs, ${formatAlbumDuration(totalDurationSec)}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.textSecondary
+        )
+        if (formats.isNotEmpty()) {
+            Text(
+                text = formats.joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.textSecondary
+            )
+        }
+        album.year?.takeIf { it > 0 }?.let { year ->
+            Text(
+                text = "Released $year",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.textSecondary
+            )
+        }
+    }
+}
+
+@Composable
+private fun AlbumMessage(
+    title: String,
+    body: String,
+    actionLabel: String,
+    onAction: () -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = HarmoniaThemeTokens.colors
+    val spacing = HarmoniaThemeTokens.spacing
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(colors.backgroundRoot)
+    ) {
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .padding(spacing.xSmall)
+                .semantics { contentDescription = "Navigate back" }
+        ) {
+            Icon(imageVector = HarmoniaIcons.ArrowBack, contentDescription = null, tint = colors.textPrimary)
+        }
+        Column(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(spacing.xLarge),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = HarmoniaIcons.Album,
+                contentDescription = null,
+                modifier = Modifier.size(56.dp),
+                tint = colors.textDisabled
+            )
+            Spacer(modifier = Modifier.height(spacing.medium))
+            Text(text = title, style = MaterialTheme.typography.titleLarge, color = colors.textPrimary)
+            Spacer(modifier = Modifier.height(spacing.small))
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.textSecondary,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(spacing.large))
+            Button(
+                onClick = onAction,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = colors.primarySignal,
+                    contentColor = if (colors.isDark) colors.backgroundRoot else colors.surfaceElevated
+                )
+            ) {
+                Text(text = actionLabel, style = MaterialTheme.typography.labelLarge)
+            }
+        }
+    }
+}
+
+private fun formatTrackDuration(durationSec: Double): String {
+    val total = durationSec.toInt()
+    return String.format(Locale.US, "%d:%02d", total / 60, total % 60)
 }

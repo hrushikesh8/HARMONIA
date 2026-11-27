@@ -72,8 +72,9 @@ fun harmoniaTypography(colors: HarmoniaSemanticColors) = Typography(
     bodyMedium = style(FontWeight.Normal, 13.sp, 18.sp, 0.1.sp, colors.textSecondary),
     // Years, track counts, durations
     bodySmall = style(FontWeight.Normal, 12.sp, 16.sp, 0.15.sp, colors.textSecondary),
-    // Buttons (Material buttons read labelLarge)
-    labelLarge = style(FontWeight.Bold, 14.sp, 20.sp, 0.1.sp, colors.textPrimary),
+    // Buttons (Material buttons read labelLarge). No fixed colour, so each button's own
+    // content colour wins (white on lavender, lavender on text buttons, and so on).
+    labelLarge = style(FontWeight.Bold, 14.sp, 20.sp, 0.1.sp, androidx.compose.ui.graphics.Color.Unspecified),
     // Tabs, pills, chips
     labelMedium = style(FontWeight.SemiBold, 12.sp, 16.sp, 0.2.sp, colors.textPrimary),
     // Small tags: formats (FLAC, MP3), timestamps, eyebrow labels
