@@ -42,7 +42,7 @@ Status: `Done` · `In progress` · `Planned`
 | 2.3 | Library landing list (Playlists, Artists, Albums, Songs, Folders, Favorites); sort is remembered and visible (Genres row arrives with 4.2) | UI, UX, BE | Done |
 | 2.4 | Home sections: Recently played, Recently added, Rediscover, Top this month | UI, UX, BE | Done |
 | 2.5 | Album page: hero artwork, Play / Shuffle buttons, Disc 1 / Disc 2 headers | UI, UX | Done |
-| 2.6 | Artist page: hero header, top songs, albums | UI, BE | Planned |
+| 2.6 | Artist page: hero header, top songs, albums | UI, BE | Done |
 | 2.7 | Playlist page: artwork collage header, drag to reorder | UI, UX | Planned |
 | 2.8 | Search restyle and recent searches | UI, UX, BE | Planned |
 
@@ -213,6 +213,18 @@ Status: `Done` · `In progress` · `Planned`
   (seen as white-on-lavender text in dark mode / dark-on-deep-lavender in light mode).
 - **Why:** The album page is where people start most listening; Apple Music's layout puts the
   artwork and Play first and keeps the list quiet.
+
+### 2.6 Artist page
+- **What:** Rebuilt `presentation/artist/ArtistDetailScreen.kt` in the Apple Music layout: a large
+  artwork header (artist image, or their newest album cover) that fades into the page, the name
+  over it and a round lavender Play button; then "1 album · 3 songs" with Shuffle, **Top songs**
+  (numbered, with "Show all N songs"), **Albums** (newest first) and **Appears on** (other
+  artists' albums where they're featured, e.g. "feat.").
+- **Backend:** Top songs reuse the play-count query from Home (`observeTrackPlayStats`), so they're
+  your most played songs by that artist; with no plays yet they fall back to album order.
+  `ArtistDetailViewModel` now follows the library live and shows a real error with Try again.
+- **Why:** The old page was a long flat list. Apple Music leads with the artist, then the songs
+  you actually play, then the discography, which makes big artists much easier to browse.
 
 ## Decisions and ideas checked
 
