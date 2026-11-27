@@ -174,7 +174,7 @@ fun AlbumDetailScreen(
                 Spacer(modifier = Modifier.width(spacing.small))
                 Column {
                     Text(
-                        text = "ALBUM",
+                        text = "Album",
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
                         color = colors.primarySignal
                     )

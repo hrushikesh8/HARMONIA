@@ -293,7 +293,7 @@ class NowPlayingAndMiniPlayerUiTest {
         // Switch to Library tab
         composeTestRule.onNodeWithText("Library").performClick()
         composeTestRule.waitUntil(3000) {
-            composeTestRule.onAllNodesWithText("LIBRARY").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Your music").fetchSemanticsNodes().isNotEmpty()
         }
 
         // MiniPlayer remains visible
@@ -302,7 +302,7 @@ class NowPlayingAndMiniPlayerUiTest {
         // Switch to Search tab
         composeTestRule.onNodeWithText("Search").performClick()
         composeTestRule.waitUntil(3000) {
-            composeTestRule.onAllNodesWithText("SEARCH").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Your library").fetchSemanticsNodes().isNotEmpty()
         }
 
         // MiniPlayer remains visible

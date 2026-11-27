@@ -175,7 +175,7 @@ fun HomeScreen(
                 Box(modifier = Modifier.padding(horizontal = spacing.standard)) {
                     EditorialSectionHeader(
                         title = "Recently Played",
-                        subtitle = "Local listening history"
+                        subtitle = "Pick up where you left off"
                     )
                 }
                 Spacer(modifier = Modifier.height(spacing.small))
@@ -204,7 +204,7 @@ fun HomeScreen(
                 Box(modifier = Modifier.padding(horizontal = spacing.standard)) {
                     EditorialSectionHeader(
                         title = "Recently Added",
-                        subtitle = "Newest local acquisitions",
+                        subtitle = "New on this phone",
                         actionLabel = "View Library",
                         onAction = onNavigateToLibrary
                     )
@@ -235,7 +235,7 @@ fun HomeScreen(
                 Box(modifier = Modifier.padding(horizontal = spacing.standard)) {
                     EditorialSectionHeader(
                         title = "Albums",
-                        subtitle = "${uiState.albums.size} albums in collection",
+                        subtitle = "${uiState.albums.size} albums",
                         actionLabel = "View All",
                         onAction = onViewAllAlbums
                     )
@@ -259,7 +259,7 @@ fun HomeScreen(
                 Box(modifier = Modifier.padding(horizontal = spacing.standard)) {
                     EditorialSectionHeader(
                         title = "Artists",
-                        subtitle = "${uiState.artists.size} artists in collection",
+                        subtitle = "${uiState.artists.size} artists",
                         actionLabel = "View All",
                         onAction = onViewAllArtists
                     )
@@ -283,7 +283,7 @@ fun HomeScreen(
                 Box(modifier = Modifier.padding(horizontal = spacing.standard)) {
                     EditorialSectionHeader(
                         title = "Playlists",
-                        subtitle = "${uiState.playlists.size} curated playlists",
+                        subtitle = "${uiState.playlists.size} playlists",
                         actionLabel = "View All",
                         onAction = onNavigateToPlaylists
                     )
@@ -420,7 +420,7 @@ private fun HeaderSection(
         )
         Spacer(modifier = Modifier.height(2.dp))
         Text(
-            text = if (totalTracks > 0) "$totalTracks offline tracks ready" else "Local audio sanctuary",
+            text = if (totalTracks > 0) "$totalTracks songs on this phone" else "Your music, on your phone",
             style = MaterialTheme.typography.bodyMedium,
             color = colors.textSecondary
         )
@@ -608,13 +608,13 @@ private fun NoResumeListeningCard(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Acoustic Library Ready",
+                    text = "Your library is ready",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = colors.textPrimary
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "$totalTracks tracks available • Tap to shuffle",
+                    text = "$totalTracks songs • Tap to shuffle",
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.textSecondary
                 )
@@ -1047,7 +1047,7 @@ private fun EmptyHomeCard(onNavigateToLibrary: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(spacing.xSmall))
             Text(
-                text = "Your local music catalog is empty. Scan an offline music directory to get started.",
+                text = "No music yet. Add a folder with your songs to get started.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = colors.textSecondary,
                 textAlign = TextAlign.Center

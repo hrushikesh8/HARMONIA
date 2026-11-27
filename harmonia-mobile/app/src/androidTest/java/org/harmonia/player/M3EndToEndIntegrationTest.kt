@@ -147,9 +147,9 @@ class M3EndToEndIntegrationTest {
         // 2. Switch to Library tab -> displays empty library state
         composeTestRule.onAllNodesWithText("Library").onFirst().performClick()
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("LIBRARY").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Your music").fetchSemanticsNodes().isNotEmpty()
         }
-        composeTestRule.onNodeWithText("LIBRARY").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Your music").assertIsDisplayed()
         composeTestRule.waitUntil(5000) {
             composeTestRule.onAllNodesWithText("No audio files found").fetchSemanticsNodes().isNotEmpty()
         }
@@ -158,18 +158,18 @@ class M3EndToEndIntegrationTest {
         // 3. Switch to Search tab
         composeTestRule.onAllNodesWithText("Search").onFirst().performClick()
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("SEARCH").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Your library").fetchSemanticsNodes().isNotEmpty()
         }
-        composeTestRule.onNodeWithText("SEARCH").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Your library").assertIsDisplayed()
         composeTestRule.onAllNodesWithText("Type to search local catalog", substring = true).onFirst().assertIsDisplayed()
 
         // 4. Switch to Playlists tab
         composeTestRule.onAllNodesWithText("Playlists").onFirst().performClick()
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("PLAYLISTS").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Made by you").fetchSemanticsNodes().isNotEmpty()
         }
-        composeTestRule.onNodeWithText("PLAYLISTS").assertIsDisplayed()
-        composeTestRule.onAllNodesWithText("No Playlists Yet", substring = true).onFirst().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Made by you").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("No playlists yet", substring = true).onFirst().assertIsDisplayed()
     }
 
     @Test
@@ -192,9 +192,9 @@ class M3EndToEndIntegrationTest {
         // 2. Switch to Library tab -> displays permission onboarding
         composeTestRule.onAllNodesWithText("Library").onFirst().performClick()
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("LIBRARY").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Your music").fetchSemanticsNodes().isNotEmpty()
         }
-        composeTestRule.onNodeWithText("LIBRARY").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Your music").assertIsDisplayed()
         composeTestRule.waitUntil(5000) {
             composeTestRule.onAllNodesWithText("Audio Permission Required").fetchSemanticsNodes().isNotEmpty()
         }
@@ -204,18 +204,18 @@ class M3EndToEndIntegrationTest {
         // 3. Switch to Search tab -> unaffected by storage permission
         composeTestRule.onAllNodesWithText("Search").onFirst().performClick()
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("SEARCH").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Your library").fetchSemanticsNodes().isNotEmpty()
         }
-        composeTestRule.onNodeWithText("SEARCH").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Your library").assertIsDisplayed()
         composeTestRule.onAllNodesWithText("Type to search local catalog", substring = true).onFirst().assertIsDisplayed()
 
         // 4. Switch to Playlists tab -> unaffected by storage permission
         composeTestRule.onAllNodesWithText("Playlists").onFirst().performClick()
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("PLAYLISTS").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Made by you").fetchSemanticsNodes().isNotEmpty()
         }
-        composeTestRule.onNodeWithText("PLAYLISTS").assertIsDisplayed()
-        composeTestRule.onAllNodesWithText("No Playlists Yet", substring = true).onFirst().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Made by you").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("No playlists yet", substring = true).onFirst().assertIsDisplayed()
     }
 
     @Test
@@ -235,7 +235,7 @@ class M3EndToEndIntegrationTest {
         // Navigate to Search tab
         composeTestRule.onAllNodesWithText("Search").onFirst().performClick()
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("SEARCH").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Your library").fetchSemanticsNodes().isNotEmpty()
         }
 
         // Enter search query into dedicated search field
@@ -275,7 +275,7 @@ class M3EndToEndIntegrationTest {
         // Navigate to Playlists tab
         composeTestRule.onAllNodesWithText("Playlists").onFirst().performClick()
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("PLAYLISTS").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Made by you").fetchSemanticsNodes().isNotEmpty()
         }
 
         // Create playlist

@@ -141,12 +141,12 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.width(spacing.small))
                 Column {
                     Text(
-                        text = "SETTINGS",
+                        text = "Settings",
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                         color = colors.textPrimary
                     )
                     Text(
-                        text = "PREFERENCES & SYSTEM ARCHITECTURE",
+                        text = "Make Harmonia yours",
                         style = MaterialTheme.typography.labelSmall,
                         color = colors.primarySignal
                     )
@@ -154,7 +154,7 @@ fun SettingsScreen(
             }
         } else {
             Text(
-                text = "SETTINGS",
+                text = "Settings",
                 style = MaterialTheme.typography.displayLarge.copy(
                     fontWeight = FontWeight.Black,
                     letterSpacing = 1.5.sp,
@@ -163,7 +163,7 @@ fun SettingsScreen(
                 color = colors.textPrimary
             )
             Text(
-                text = "PREFERENCES & SYSTEM ARCHITECTURE",
+                text = "Make Harmonia yours",
                 style = MaterialTheme.typography.labelSmall,
                 color = colors.primarySignal
             )
@@ -175,8 +175,8 @@ fun SettingsScreen(
         // SECTION 1: APPEARANCE & VISUAL IDENTITY
         // ==========================================
         SettingsCard(
-            title = "APPEARANCE & VISUAL IDENTITY",
-            subtitle = "Theme styling and active display preferences"
+            title = "Appearance",
+            subtitle = "Theme and display"
         ) {
             // Theme mode: follow system / dark / light
             Text(
@@ -216,7 +216,7 @@ fun SettingsScreen(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "Prevents display from sleeping during active listening sessions",
+                        text = "Stop the screen turning off while music plays",
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.textSecondary
                     )
@@ -244,7 +244,7 @@ fun SettingsScreen(
 
             SettingsRow(
                 label = "Design Standard",
-                value = "Harmonia Resonant Tokens (WCAG AAA >= 7.0:1)",
+                value = "Soft Lavender, WCAG AA contrast",
                 isHighlight = true
             )
         }
@@ -256,17 +256,17 @@ fun SettingsScreen(
         // ==========================================
         SettingsCard(
             title = "STORAGE SOURCES & MEDIA SCANNER",
-            subtitle = "Indexed storage directories and local reconciliation"
+            subtitle = "Where Harmonia looks for music"
         ) {
             // Storage Statistics Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(spacing.small)
             ) {
-                MetricChip(label = "CATALOGED", value = "${uiState.totalTracks}", modifier = Modifier.weight(1f))
-                MetricChip(label = "OFFLINE", value = "${uiState.offlineTracks}", modifier = Modifier.weight(1f))
+                MetricChip(label = "Songs", value = "${uiState.totalTracks}", modifier = Modifier.weight(1f))
+                MetricChip(label = "On device", value = "${uiState.offlineTracks}", modifier = Modifier.weight(1f))
                 MetricChip(
-                    label = "STORAGE",
+                    label = "Storage",
                     value = String.format(Locale.US, "%.1f MB", uiState.storageUsageEstimateMb),
                     modifier = Modifier.weight(1.2f)
                 )
@@ -360,7 +360,7 @@ fun SettingsScreen(
             // Storage Source Rows
             if (uiState.storageSources.isEmpty()) {
                 Text(
-                    text = "No storage sources registered. Tap 'Add Folder' to select an audio directory.",
+                    text = "No folders added yet. Tap 'Add Folder' to choose one.",
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.textSecondary
                 )
@@ -388,7 +388,7 @@ fun SettingsScreen(
                     .padding(spacing.medium)
             ) {
                 Text(
-                    text = "Harmonia reads audio files directly from the Android MediaStore and user-authorized folders via the Storage Access Framework (SAF). Files remain in their original directories on your device and are never uploaded or synced to external servers.",
+                    text = "Harmonia plays the music files already on your phone, from your music library and any folders you add. Your files stay where they are and are never uploaded anywhere.",
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                     color = colors.textSecondary
                 )
@@ -402,7 +402,7 @@ fun SettingsScreen(
         // ==========================================
         SettingsCard(
             title = "PLAYBACK & EQUALIZER DSP",
-            subtitle = "Audio processing and playback configuration"
+            subtitle = "How your music plays"
         ) {
             // Equalizer Master & Bands
             EqualizerSection(
@@ -422,13 +422,13 @@ fun SettingsScreen(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Default Shuffle",
+                        text = "Shuffle by default",
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                         color = colors.textPrimary
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "Automatically shuffle new playback queues on start",
+                        text = "Shuffle when you start an album or playlist",
                         style = MaterialTheme.typography.bodySmall,
                         color = colors.textSecondary
                     )
@@ -457,7 +457,7 @@ fun SettingsScreen(
             // Playback Defaults: Repeat Mode Selector
             Column {
                 Text(
-                    text = "Default Repeat Mode",
+                    text = "Repeat by default",
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                     color = colors.textPrimary
                 )
@@ -628,7 +628,7 @@ fun SettingsScreen(
             // ==========================================
             SettingsCard(
                 title = "METADATA & OPEN CATALOG ENRICHMENT",
-                subtitle = "Optional MusicBrainz integration (ADR-023)"
+                subtitle = "Optional song info from MusicBrainz"
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -688,7 +688,7 @@ fun SettingsScreen(
         // ==========================================
         SettingsCard(
             title = "DATA PRIVACY, DIAGNOSTICS & ABOUT",
-            subtitle = "Sovereign local-first guarantees and system specifications"
+            subtitle = "Privacy and app details"
         ) {
             Box(
                 modifier = Modifier
@@ -699,7 +699,7 @@ fun SettingsScreen(
             ) {
                 Column {
                     Text(
-                        text = "LOCAL-FIRST SOVEREIGN ARCHITECTURE",
+                        text = "Private by design",
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = colors.primarySignal
                     )
@@ -751,14 +751,14 @@ fun SettingsScreen(
             onDismissRequest = { showResetCheckpointDialog = false },
             title = {
                 Text(
-                    text = "Reset Scan Checkpoints?",
+                    text = "Rescan everything?",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = colors.textPrimary
                 )
             },
             text = {
                 Text(
-                    text = "This will clear stored reconciliation timestamps. The next manual scan will fully re-examine every audio file across all enabled sources.\n\nYour library tracks, playlists, and ratings will not be deleted.",
+                    text = "The next scan will check every music file again from scratch.\n\nYour songs, playlists and ratings won't be deleted.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = colors.textSecondary
                 )
@@ -997,7 +997,7 @@ internal fun EqualizerSection(
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "Equalizer Master",
+                        text = "Equalizer",
                         style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
                         color = colors.textPrimary
                     )
@@ -1057,7 +1057,7 @@ internal fun EqualizerSection(
         if (equalizer.presets.isNotEmpty()) {
             Column {
                 Text(
-                    text = "PRESETS",
+                    text = "Presets",
                     style = MaterialTheme.typography.labelSmall,
                     color = colors.textSecondary
                 )
@@ -1110,7 +1110,7 @@ internal fun EqualizerSection(
         if (equalizer.bands.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(spacing.small)) {
                 Text(
-                    text = "FREQUENCY BANDS",
+                    text = "Bands",
                     style = MaterialTheme.typography.labelSmall,
                     color = colors.textSecondary
                 )
@@ -1125,13 +1125,13 @@ internal fun EqualizerSection(
             }
         } else if (equalizer.status == EqualizerUiStatus.UNAVAILABLE_NO_SESSION) {
             Text(
-                text = "Device-reported bands and presets will appear when an active playback session is established.",
+                text = "Play a song to see the equalizer bands and presets.",
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.textSecondary
             )
         } else if (equalizer.status == EqualizerUiStatus.UNSUPPORTED) {
             Text(
-                text = "Hardware equalizer is unsupported on this device or active output route.",
+                text = "This phone or audio output doesn't support the equalizer.",
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.textSecondary
             )

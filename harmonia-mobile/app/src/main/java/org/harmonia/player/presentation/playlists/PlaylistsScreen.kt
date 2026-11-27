@@ -84,7 +84,7 @@ fun PlaylistsScreen(
         ) {
             Column {
                 Text(
-                    text = "PLAYLISTS",
+                    text = "Playlists",
                     style = MaterialTheme.typography.displayLarge.copy(
                         fontWeight = FontWeight.Black,
                         letterSpacing = 1.5.sp,
@@ -93,7 +93,7 @@ fun PlaylistsScreen(
                     color = colors.textPrimary
                 )
                 Text(
-                    text = "USER-CURATED COLLECTIONS",
+                    text = "Made by you",
                     style = MaterialTheme.typography.labelSmall,
                     color = colors.primarySignal
                 )
@@ -289,13 +289,13 @@ private fun EmptyPlaylistsState(onCreateClick: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "No Playlists Yet",
+                text = "No playlists yet",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 color = colors.textPrimary
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Create your first playlist to organize your local tracks.",
+                text = "Create a playlist to keep your favorite songs together.",
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.textSecondary
             )

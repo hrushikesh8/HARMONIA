@@ -95,10 +95,10 @@ class PlaylistsFlowUiTest {
         // Navigate to Playlists tab
         composeTestRule.onAllNodesWithText("Playlists").onFirst().performClick()
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("PLAYLISTS").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Made by you").fetchSemanticsNodes().isNotEmpty()
         }
 
-        composeTestRule.onNodeWithText("PLAYLISTS").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Made by you").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Create new playlist").assertIsDisplayed()
 
         // Click New to open create dialog
@@ -127,7 +127,7 @@ class PlaylistsFlowUiTest {
         // Navigate to Playlists tab
         composeTestRule.onAllNodesWithText("Playlists").onFirst().performClick()
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("PLAYLISTS").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Made by you").fetchSemanticsNodes().isNotEmpty()
         }
 
         // Create initial playlist
@@ -163,7 +163,7 @@ class PlaylistsFlowUiTest {
         // Navigate to Playlists tab
         composeTestRule.onAllNodesWithText("Playlists").onFirst().performClick()
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("PLAYLISTS").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Made by you").fetchSemanticsNodes().isNotEmpty()
         }
 
         // Create playlist
@@ -229,7 +229,7 @@ class PlaylistsFlowUiTest {
         // Navigate to Playlists tab
         composeTestRule.onAllNodesWithText("Playlists").onFirst().performClick()
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("PLAYLISTS").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Made by you").fetchSemanticsNodes().isNotEmpty()
         }
 
         // Create playlist

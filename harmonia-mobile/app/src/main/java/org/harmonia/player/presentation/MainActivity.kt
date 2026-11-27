@@ -1,6 +1,20 @@
 package org.harmonia.player.presentation
 
 import android.os.Bundle
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.ui.graphics.Color
+import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavDestination.Companion.hasRoute
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.navigation
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -93,19 +107,33 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
- * 4 primary music destinations per Blue Edition profile/navigation redesign.
- * Settings has moved to the Profile/Menu destination.
+ * Bottom tabs. Each one is its own nested navigation graph, so it keeps its own back stack
+ * (Apple Music style): open an album in Library, switch to Search and back, the album is still there.
  */
 enum class NavigationTab(
     val title: String,
     val icon: ImageVector,
+    val graph: HarmoniaNavDestination,
     val destination: HarmoniaNavDestination
 ) {
-    HOME("Home", HarmoniaIcons.Home, HarmoniaNavDestination.Home),
-    SEARCH("Search", HarmoniaIcons.Search, HarmoniaNavDestination.Search),
-    LIBRARY("Library", HarmoniaIcons.Library, HarmoniaNavDestination.Library),
-    PLAYLISTS("Playlists", HarmoniaIcons.Playlists, HarmoniaNavDestination.Playlists)
+    HOME("Home", HarmoniaIcons.Home, HarmoniaNavDestination.HomeTab, HarmoniaNavDestination.Home),
+    SEARCH("Search", HarmoniaIcons.Search, HarmoniaNavDestination.SearchTab, HarmoniaNavDestination.Search),
+    LIBRARY("Library", HarmoniaIcons.Library, HarmoniaNavDestination.LibraryTab, HarmoniaNavDestination.Library),
+    PLAYLISTS("Playlists", HarmoniaIcons.Playlists, HarmoniaNavDestination.PlaylistsTab, HarmoniaNavDestination.Playlists)
 }
+
+/** The tab a back stack belongs to: the newest entry that sits inside one of the tab graphs. */
+private fun tabFor(backStack: List<NavBackStackEntry>): NavigationTab {
+    for (entry in backStack.asReversed()) {
+        val tab = NavigationTab.entries.firstOrNull { tab ->
+            entry.destination.hierarchy.any { it.hasRoute(tab.graph::class) }
+        }
+        if (tab != null) return tab
+    }
+    return NavigationTab.HOME
+}
+
+private const val NAV_FADE_MS = 180
 
 @Composable
 fun MainAppContainer(
@@ -114,12 +142,13 @@ fun MainAppContainer(
     playlistsViewModel: PlaylistsViewModel = viewModel(),
     libraryViewModel: LibraryViewModel = viewModel()
 ) {
-    var selectedTab by rememberSaveable { mutableStateOf(NavigationTab.HOME) }
-    var selectedPlaylistId by rememberSaveable { mutableStateOf<String?>(null) }
-    var detailStack by rememberSaveable { mutableStateOf(listOf<String>()) }
-    var showProfileHub by rememberSaveable { mutableStateOf(false) }
-    var showSettings by rememberSaveable { mutableStateOf(false) }
-    var showCarMode by rememberSaveable { mutableStateOf(false) }
+    val navController = rememberNavController()
+    val backStack by navController.currentBackStack.collectAsState()
+    val currentEntry by navController.currentBackStackEntryAsState()
+    val currentDestination = currentEntry?.destination
+    val selectedTab = tabFor(backStack)
+    val isCarMode = currentDestination?.hasRoute(HarmoniaNavDestination.CarMode::class) == true
+
     var showNowPlayingSheet by rememberSaveable { mutableStateOf(false) }
     var menuTrack by remember { mutableStateOf<Track?>(null) }
     var playlistPickerTrack by remember { mutableStateOf<Track?>(null) }
@@ -133,44 +162,46 @@ fun MainAppContainer(
         }
     }
 
+    fun selectTab(tab: NavigationTab) {
+        if (tab == selectedTab) {
+            // Re-tapping the open tab goes back to its first screen.
+            navController.popBackStack(tab.destination, inclusive = false)
+            return
+        }
+        navController.navigate(tab.graph) {
+            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
     fun openLibraryTab(tab: LibraryTab) {
         libraryViewModel.selectTab(tab)
-        detailStack = emptyList()
-        selectedPlaylistId = null
-        selectedTab = NavigationTab.LIBRARY
+        selectTab(NavigationTab.LIBRARY)
+        navController.popBackStack(HarmoniaNavDestination.Library, inclusive = false)
     }
-
-    fun openPlaylist(playlistId: String) {
-        detailStack = emptyList()
-        selectedPlaylistId = playlistId
-        selectedTab = NavigationTab.PLAYLISTS
-    }
-
-    val onTrackMenu: (Track) -> Unit = { track -> menuTrack = track }
-
-    val currentDetail = detailStack.lastOrNull()
-    val selectedAlbumId = if (currentDetail?.startsWith("album:") == true) currentDetail.removePrefix("album:") else null
-    val selectedArtistId = if (currentDetail?.startsWith("artist:") == true) currentDetail.removePrefix("artist:") else null
 
     fun navigateToAlbum(albumId: String) {
-        val entry = "album:$albumId"
-        if (detailStack.lastOrNull() != entry) {
-            detailStack = detailStack + entry
-        }
+        val entry = navController.currentBackStackEntry
+        if (entry?.destination?.hasRoute(HarmoniaNavDestination.AlbumDetail::class) == true &&
+            entry.toRoute<HarmoniaNavDestination.AlbumDetail>().albumId == albumId
+        ) return
+        navController.navigate(HarmoniaNavDestination.AlbumDetail(albumId))
     }
 
     fun navigateToArtist(artistId: String) {
-        val entry = "artist:$artistId"
-        if (detailStack.lastOrNull() != entry) {
-            detailStack = detailStack + entry
-        }
+        val entry = navController.currentBackStackEntry
+        if (entry?.destination?.hasRoute(HarmoniaNavDestination.ArtistDetail::class) == true &&
+            entry.toRoute<HarmoniaNavDestination.ArtistDetail>().artistId == artistId
+        ) return
+        navController.navigate(HarmoniaNavDestination.ArtistDetail(artistId))
     }
 
-    fun popDetail() {
-        if (detailStack.isNotEmpty()) {
-            detailStack = detailStack.dropLast(1)
-        }
+    fun openPlaylist(playlistId: String) {
+        navController.navigate(HarmoniaNavDestination.PlaylistDetail(playlistId))
     }
+
+    val onTrackMenu: (Track) -> Unit = { track -> menuTrack = track }
 
     val playerUiState by playbackViewModel.uiState.collectAsState()
     val personalizationUiState by personalizationViewModel.uiState.collectAsState()
@@ -178,45 +209,24 @@ fun MainAppContainer(
 
     val colors = HarmoniaThemeTokens.colors
 
-    val canGoBack = showNowPlayingSheet || showCarMode || showSettings || showProfileHub || detailStack.isNotEmpty() || selectedPlaylistId != null || selectedTab != NavigationTab.HOME
+    // Now Playing is an overlay, not a route; everything else uses the navigation back stack.
+    BackHandler(enabled = showNowPlayingSheet) { showNowPlayingSheet = false }
 
-    // Back handling for hierarchal views and modals
-    BackHandler(
-        enabled = canGoBack
-    ) {
-        when {
-            showNowPlayingSheet -> showNowPlayingSheet = false
-            showCarMode -> showCarMode = false
-            showSettings -> showSettings = false
-            showProfileHub -> showProfileHub = false
-            detailStack.isNotEmpty() -> popDetail()
-            selectedPlaylistId != null -> selectedPlaylistId = null
-            selectedTab != NavigationTab.HOME -> selectedTab = NavigationTab.HOME
-        }
-    }
-
-    val isTopLevelDestination = !showCarMode && !showProfileHub && !showSettings &&
-            detailStack.isEmpty() && selectedPlaylistId == null
+    val playTracks: (List<Track>, Int) -> Unit = { tracks, index -> playbackViewModel.playTrackList(tracks, index) }
+    val shuffleTracks: (List<Track>) -> Unit = { tracks -> playbackViewModel.playTrackList(tracks.shuffled(), 0) }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
-            if (isTopLevelDestination) {
+            if (!isCarMode) {
                 NavigationBar(
                     containerColor = colors.surfaceElevated,
                     contentColor = colors.textPrimary
                 ) {
                     NavigationTab.entries.forEach { tab ->
-                        val isSelected = selectedTab == tab
                         NavigationBarItem(
-                            selected = isSelected,
-                            onClick = {
-                                detailStack = emptyList()
-                                if (tab == NavigationTab.PLAYLISTS && selectedTab == NavigationTab.PLAYLISTS) {
-                                    selectedPlaylistId = null
-                                }
-                                selectedTab = tab
-                            },
+                            selected = selectedTab == tab,
+                            onClick = { selectTab(tab) },
                             icon = {
                                 Icon(
                                     imageVector = tab.icon,
@@ -229,7 +239,7 @@ fun MainAppContainer(
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = colors.primarySignal,
                                 selectedTextColor = colors.primarySignal,
-                                indicatorColor = colors.surfaceContainer,
+                                indicatorColor = Color.Transparent,
                                 unselectedIconColor = colors.textSecondary,
                                 unselectedTextColor = colors.textSecondary
                             )
@@ -245,86 +255,26 @@ fun MainAppContainer(
                 .background(colors.backgroundRoot)
                 .padding(innerPadding)
         ) {
-            when {
-                showCarMode -> {
-                    CarModeScreen(
-                        playbackViewModel = playbackViewModel,
-                        onExit = { showCarMode = false }
-                    )
-                }
-                showSettings -> {
-                    SettingsScreen(
-                        onBack = { showSettings = false },
-                        onOpenCarMode = { showCarMode = true }
-                    )
-                }
-                showProfileHub -> {
-                    ProfileHubScreen(
-                        onBack = { showProfileHub = false },
-                        onOpenLikes = {
-                            showProfileHub = false
-                            openLibraryTab(LibraryTab.FAVORITES)
-                        },
-                        onOpenCarMode = {
-                            showCarMode = true
-                        },
-                        onOpenSettings = {
-                            showSettings = true
-                        }
-                    )
-                }
-                selectedAlbumId != null -> {
-                    AlbumDetailScreen(
-                        albumId = selectedAlbumId,
-                        currentPlayingTrackId = playerUiState.currentTrack?.id,
-                        isPlaying = playerUiState.playbackState.isPlaying,
-                        onBack = { popDetail() },
-                        onPlayTrack = { tracks, clickedIndex ->
-                            playbackViewModel.playTrackList(tracks, clickedIndex)
-                        },
-                        onShuffleAll = { tracks ->
-                            playbackViewModel.playTrackList(tracks.shuffled(), 0)
-                        },
-                        onArtistClick = { artistId ->
-                            navigateToArtist(artistId)
-                        },
-                        onTrackMenu = onTrackMenu
-                    )
-                }
-                selectedArtistId != null -> {
-                    ArtistDetailScreen(
-                        artistId = selectedArtistId,
-                        currentPlayingTrackId = playerUiState.currentTrack?.id,
-                        isPlaying = playerUiState.playbackState.isPlaying,
-                        onBack = { popDetail() },
-                        onPlayTrack = { tracks, clickedIndex ->
-                            playbackViewModel.playTrackList(tracks, clickedIndex)
-                        },
-                        onShuffleAll = { tracks ->
-                            playbackViewModel.playTrackList(tracks.shuffled(), 0)
-                        },
-                        onAlbumClick = { albumId ->
-                            navigateToAlbum(albumId)
-                        },
-                        onTrackMenu = onTrackMenu
-                    )
-                }
-                else -> {
-                    when (selectedTab) {
-                        NavigationTab.HOME -> HomeScreen(
+            NavHost(
+                navController = navController,
+                startDestination = HarmoniaNavDestination.HomeTab,
+                modifier = Modifier.fillMaxSize(),
+                enterTransition = { fadeIn(tween(NAV_FADE_MS)) },
+                exitTransition = { fadeOut(tween(NAV_FADE_MS)) },
+                popEnterTransition = { fadeIn(tween(NAV_FADE_MS)) },
+                popExitTransition = { fadeOut(tween(NAV_FADE_MS)) }
+            ) {
+                navigation<HarmoniaNavDestination.HomeTab>(startDestination = HarmoniaNavDestination.Home) {
+                    composable<HarmoniaNavDestination.Home> {
+                        HomeScreen(
                             playbackState = playerUiState.playbackState,
                             currentTrack = playerUiState.currentTrack,
-                            onNavigateToLibrary = { selectedTab = NavigationTab.LIBRARY },
-                            onNavigateToPlaylists = {
-                                selectedPlaylistId = null
-                                selectedTab = NavigationTab.PLAYLISTS
-                            },
+                            onNavigateToLibrary = { selectTab(NavigationTab.LIBRARY) },
+                            onNavigateToPlaylists = { selectTab(NavigationTab.PLAYLISTS) },
                             onViewAllAlbums = { openLibraryTab(LibraryTab.ALBUMS) },
                             onViewAllArtists = { openLibraryTab(LibraryTab.ARTISTS) },
                             onPlaylistClick = { playlist -> openPlaylist(playlist.id) },
-                            onTrackClick = { tracks, clickedIndex ->
-                                playbackViewModel.playTrackList(tracks, clickedIndex)
-                            },
+                            onTrackClick = playTracks,
                             onTrackMenu = onTrackMenu,
                             onOpenNowPlaying = { showNowPlayingSheet = true },
                             onAlbumClick = { album -> navigateToAlbum(album.id) },
@@ -343,55 +293,100 @@ fun MainAppContainer(
                                 }
                             },
                             onShuffleAllClick = { playbackViewModel.shuffleAll() },
-                            onProfileClick = { showProfileHub = true },
-                            onSearchClick = { selectedTab = NavigationTab.SEARCH }
+                            onProfileClick = { navController.navigate(HarmoniaNavDestination.Profile) },
+                            onSearchClick = { selectTab(NavigationTab.SEARCH) }
                         )
-                        NavigationTab.SEARCH -> SearchScreen(
-                            onTrackClick = { tracks, clickedIndex ->
-                                playbackViewModel.playTrackList(tracks, clickedIndex)
-                            },
+                    }
+                }
+                navigation<HarmoniaNavDestination.SearchTab>(startDestination = HarmoniaNavDestination.Search) {
+                    composable<HarmoniaNavDestination.Search> {
+                        SearchScreen(
+                            onTrackClick = playTracks,
                             onTrackMenu = onTrackMenu,
                             onAlbumClick = { album -> navigateToAlbum(album.id) },
                             onArtistClick = { artist -> navigateToArtist(artist.id) },
                             onPlaylistClick = { playlist -> openPlaylist(playlist.id) }
                         )
-                        NavigationTab.LIBRARY -> LibraryScreen(
+                    }
+                }
+                navigation<HarmoniaNavDestination.LibraryTab>(startDestination = HarmoniaNavDestination.Library) {
+                    composable<HarmoniaNavDestination.Library> {
+                        LibraryScreen(
+                            viewModel = libraryViewModel,
                             personalizationViewModel = personalizationViewModel,
-                            onTrackClick = { tracks, clickedIndex ->
-                                playbackViewModel.playTrackList(tracks, clickedIndex)
-                            },
+                            onTrackClick = playTracks,
                             onTrackMenu = onTrackMenu,
                             onAlbumClick = { album -> navigateToAlbum(album.id) },
                             onArtistClick = { artist -> navigateToArtist(artist.id) },
-                            onProfileClick = { showProfileHub = true }
+                            onProfileClick = { navController.navigate(HarmoniaNavDestination.Profile) }
                         )
-                        NavigationTab.PLAYLISTS -> {
-                            if (selectedPlaylistId != null) {
-                                PlaylistDetailScreen(
-                                    playlistId = selectedPlaylistId!!,
-                                    onBack = { selectedPlaylistId = null },
-                                    onPlay = { tracks, startIndex ->
-                                        playbackViewModel.playTrackList(tracks, startIndex)
-                                    },
-                                    onShuffle = { tracks ->
-                                        playbackViewModel.playTrackList(tracks.shuffled(), 0)
-                                    },
-                                    onTrackMenu = onTrackMenu
-                                )
-                            } else {
-                                PlaylistsScreen(
-                                    onPlaylistClick = { playlist ->
-                                        selectedPlaylistId = playlist.id
-                                    }
-                                )
-                            }
-                        }
                     }
+                }
+                navigation<HarmoniaNavDestination.PlaylistsTab>(startDestination = HarmoniaNavDestination.Playlists) {
+                    composable<HarmoniaNavDestination.Playlists> {
+                        PlaylistsScreen(
+                            onPlaylistClick = { playlist -> openPlaylist(playlist.id) }
+                        )
+                    }
+                }
+
+                composable<HarmoniaNavDestination.AlbumDetail> { entry ->
+                    AlbumDetailScreen(
+                        albumId = entry.toRoute<HarmoniaNavDestination.AlbumDetail>().albumId,
+                        currentPlayingTrackId = playerUiState.currentTrack?.id,
+                        isPlaying = playerUiState.playbackState.isPlaying,
+                        onBack = { navController.popBackStack() },
+                        onPlayTrack = playTracks,
+                        onShuffleAll = shuffleTracks,
+                        onArtistClick = { artistId -> navigateToArtist(artistId) },
+                        onTrackMenu = onTrackMenu
+                    )
+                }
+                composable<HarmoniaNavDestination.ArtistDetail> { entry ->
+                    ArtistDetailScreen(
+                        artistId = entry.toRoute<HarmoniaNavDestination.ArtistDetail>().artistId,
+                        currentPlayingTrackId = playerUiState.currentTrack?.id,
+                        isPlaying = playerUiState.playbackState.isPlaying,
+                        onBack = { navController.popBackStack() },
+                        onPlayTrack = playTracks,
+                        onShuffleAll = shuffleTracks,
+                        onAlbumClick = { albumId -> navigateToAlbum(albumId) },
+                        onTrackMenu = onTrackMenu
+                    )
+                }
+                composable<HarmoniaNavDestination.PlaylistDetail> { entry ->
+                    PlaylistDetailScreen(
+                        playlistId = entry.toRoute<HarmoniaNavDestination.PlaylistDetail>().playlistId,
+                        onBack = { navController.popBackStack() },
+                        onPlay = playTracks,
+                        onShuffle = shuffleTracks,
+                        onTrackMenu = onTrackMenu
+                    )
+                }
+                composable<HarmoniaNavDestination.Profile> {
+                    ProfileHubScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenLikes = { openLibraryTab(LibraryTab.FAVORITES) },
+                        onOpenCarMode = { navController.navigate(HarmoniaNavDestination.CarMode) },
+                        onOpenSettings = { navController.navigate(HarmoniaNavDestination.Settings) }
+                    )
+                }
+                composable<HarmoniaNavDestination.Settings> {
+                    SettingsScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenCarMode = { navController.navigate(HarmoniaNavDestination.CarMode) }
+                    )
+                }
+                composable<HarmoniaNavDestination.CarMode> {
+                    CarModeScreen(
+                        playbackViewModel = playbackViewModel,
+                        onExit = { navController.popBackStack() }
+                    )
                 }
             }
 
             // Docked MiniPlayer above navigation (hidden during CarMode)
-            if (!showCarMode && playerUiState.currentTrack != null) {
+            if (!isCarMode && playerUiState.currentTrack != null) {
                 MiniPlayer(
                     playbackState = playerUiState.playbackState,
                     currentTrack = playerUiState.currentTrack,
@@ -503,7 +498,7 @@ fun MainAppContainer(
                 hostState = snackbarHostState,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = if (playerUiState.currentTrack != null && !showCarMode) 80.dp else 8.dp)
+                    .padding(bottom = if (playerUiState.currentTrack != null && !isCarMode) 80.dp else 8.dp)
             )
         }
     }

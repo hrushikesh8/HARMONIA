@@ -28,9 +28,9 @@ Status: `Done` · `In progress` · `Planned`
 |---|------|------|--------|
 | 1.1 | Soft Lavender accent, Spotify-style dark neutrals, properly designed light theme | UI | Done |
 | 1.2 | Theme choice: Follow system / Dark / Light | UX, BE | Done |
-| 1.3 | Replace developer jargon in screen copy with plain language | UI, UX | Planned |
+| 1.3 | Replace developer jargon in screen copy with plain language | UI, UX | Done (Settings spec rows and Profile activity list finish in 3.1 / 3.2) |
 | 1.4 | New font family: Figtree (bundled), no more monospace labels | UI | Done |
-| 1.5 | Move to Compose Navigation, Apple-style bottom tabs, back keeps scroll position | UX, BE | Planned |
+| 1.5 | Move to Compose Navigation, Apple-style bottom tabs, back keeps scroll position | UX, BE | Done |
 | 1.6 | App icon and splash refreshed to the lavender identity (still old green/blue) | UI | Planned |
 
 ## Phase 2: Signature screens
@@ -57,6 +57,7 @@ Status: `Done` · `In progress` · `Planned`
 | 3.5 | Format filter chips generated from your library (OGG, Opus, ALAC...) | UI, BE | Planned |
 | 3.6 | Album grid adapts to screen width / landscape / tablets | UI | Planned |
 | 3.7 | Queue: auto-scroll while dragging; strict "Play next" with shuffle on | UX, BE | Planned |
+| 3.9 | Instrumented UI tests (`androidTest`) were already out of date before the revamp (expect a Settings tab, old copy); refresh them | BE | Planned |
 | 3.8 | Check playback service start-up time on a real phone (emulator showed "not responding" on cold start) | BE | Planned |
 
 ## Phase 4: New features
@@ -65,7 +66,7 @@ Status: `Done` · `In progress` · `Planned`
 |---|------|------|--------|
 | 4.1 | Now Playing background tinted from album art | UI, BE | Planned |
 | 4.2 | Browse by genre and year | UI, UX, BE | Planned |
-| 4.3 | Lyrics (embedded tags or `.lrc` files, synced scrolling) | UI, UX, BE | Planned |
+| 4.3 | Lyrics (embedded tags or `.lrc` files, synced scrolling; LRCLIB as an optional online source) | UI, UX, BE | Planned |
 | 4.4 | A-Z fast scroll, multi-select, undo after removing | UX, BE | Planned |
 | 4.5 | Playback options: crossfade, gapless, speed, volume normalisation | UX, BE | Planned |
 | 4.6 | Home-screen widget, app shortcuts, "Open with Harmonia" | UI, BE | Planned |
@@ -100,6 +101,38 @@ Status: `Done` · `In progress` · `Planned`
 - **Why:** Roboto plus monospace made the app feel like a technical tool. Figtree is a
   friendly geometric font, close in spirit to Spotify's, and bundling it means it looks
   the same on every phone and works offline.
+
+### 1.3 Plain-language copy
+- **What:** Rewrote about 95 on-screen strings across Home, Library, Search, Album, Artist,
+  Playlists, Profile, Settings and Car Mode. Examples: "Sovereign Offline Audio Vault" became
+  "Your music, on your phone"; "telemetry events logged locally" became "plays recorded on
+  this phone"; all-caps headings like "LOCAL MEDIA CATALOG" became sentence-style ("Your music").
+- **Why:** The old copy read like engineering docs (ADR numbers, SQLite, SAF). A music app
+  should talk like one, the way Apple Music and Spotify do.
+
+### 1.5 Compose Navigation
+- **What:** Replaced the hand-rolled screen switching in `MainActivity` (a stack of boolean
+  flags) with Navigation Compose 2.9.8 and the typed routes in
+  `presentation/navigation/HarmoniaNavDestination.kt`. Each bottom tab is its own nested graph.
+  Album, artist, playlist, profile, settings and car mode pages are pushed onto the open tab, and
+  the tab bar stays visible on them. Re-tapping the open tab returns to its first screen.
+- **Why:** Before, going back rebuilt screens from scratch and lost scroll position, and adding
+  a screen meant touching a long chain of flags. Now every tab remembers where you were (open an
+  album in Library, switch to Search, come back: the album is still open), which is the Apple
+  Music behaviour, and new screens are one `composable<Route>` entry.
+
+## Decisions and ideas checked
+
+### Telegram music bot as a song source (checked, not adopted)
+- **Idea:** Use a Telegram bot (e.g. @Shazam_music_downloader_bot) to fetch songs and lyrics
+  instead of YouTube extraction.
+- **Finding:** Bots can't talk to bots, so the app would have to log in as the user's own
+  Telegram account (TDLib/MTProto) and script chats with an anonymous bot. That risks the
+  user's account under Telegram's API terms, breaks whenever the bot changes or disappears,
+  and the audio is almost certainly unlicensed, which Google Play treats as a policy violation
+  (same problem as YouTube extraction).
+- **Decision:** Keep Harmonia playing files the user already has. For lyrics, look at LRCLIB
+  (open synced-lyrics database) in task 4.3; for metadata, MusicBrainz (4.9).
 
 ## Done before this tracker (PR #1)
 Song menu (Play next, Add to queue, Add to playlist, Go to album/artist), queue editor

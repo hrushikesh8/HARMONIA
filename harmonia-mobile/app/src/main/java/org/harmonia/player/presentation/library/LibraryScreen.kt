@@ -315,7 +315,7 @@ fun LibraryScreen(
         ) {
             Column {
                 Text(
-                    text = "LIBRARY",
+                    text = "Library",
                     style = MaterialTheme.typography.displayLarge.copy(
                         fontWeight = FontWeight.Black,
                         letterSpacing = 1.5.sp,
@@ -324,7 +324,7 @@ fun LibraryScreen(
                     color = colors.textPrimary
                 )
                 Text(
-                    text = "LOCAL MEDIA CATALOG",
+                    text = "Your music",
                     style = MaterialTheme.typography.labelSmall,
                     color = colors.primarySignal
                 )
@@ -790,7 +790,7 @@ internal fun TracksTabContent(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "No matching audio tracks found",
+                text = "No matching songs",
                 style = MaterialTheme.typography.bodyMedium,
                 color = HarmoniaThemeTokens.colors.textSecondary
             )
@@ -1397,13 +1397,13 @@ private fun ScanningState() {
             )
             Spacer(modifier = Modifier.height(spacing.standard))
             Text(
-                text = "Scanning Local Audio",
+                text = "Finding your music",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 color = colors.textPrimary
             )
             Spacer(modifier = Modifier.height(spacing.small))
             Text(
-                text = "Discovering audio files from device storage...",
+                text = "Looking for music on your phone\u2026",
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.textSecondary,
                 textAlign = TextAlign.Center
@@ -1446,7 +1446,7 @@ private fun ScanFailedState(
                 )
                 Spacer(modifier = Modifier.height(spacing.medium))
                 Text(
-                    text = "Scan Failed",
+                    text = "Couldn't scan your music",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = colors.textPrimary
                 )
@@ -1506,7 +1506,7 @@ private fun EmptyLibraryState(message: String) {
             )
             Spacer(modifier = Modifier.height(spacing.xSmall))
             Text(
-                text = "No supported audio tracks were found on this device. Add music files to your storage to start listening.",
+                text = "No songs on this phone yet. Copy music to your phone or add a folder to start listening.",
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.textSecondary,
                 textAlign = TextAlign.Center
@@ -1548,13 +1548,13 @@ internal fun EmptyFavoritesState(
                 )
                 Spacer(modifier = Modifier.height(spacing.medium))
                 Text(
-                    text = "No Favorite Tracks",
+                    text = "No favorites yet",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                     color = colors.textPrimary
                 )
                 Spacer(modifier = Modifier.height(spacing.small))
                 Text(
-                    text = "Tracks marked as favorites in your library or Now Playing will appear here.",
+                    text = "Tap the heart on any song and it will show up here.",
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.textSecondary,
                     textAlign = TextAlign.Center
@@ -1603,7 +1603,7 @@ private fun ScanningBanner() {
         )
         Spacer(modifier = Modifier.width(spacing.small))
         Text(
-            text = "Updating music library...",
+            text = "Updating your library\u2026",
             style = MaterialTheme.typography.bodySmall,
             color = colors.textPrimary
         )
@@ -1675,7 +1675,7 @@ private fun PermissionWarningBanner(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(
-            text = "Audio permission required to scan new files",
+            text = "Allow access to your music to find new songs",
             style = MaterialTheme.typography.bodySmall,
             color = colors.statusWarning,
             modifier = Modifier.weight(1f),

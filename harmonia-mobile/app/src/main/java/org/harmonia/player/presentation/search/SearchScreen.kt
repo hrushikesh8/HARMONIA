@@ -95,7 +95,7 @@ fun SearchScreen(
 
         // Title Header
         Text(
-            text = "SEARCH",
+            text = "Search",
             style = MaterialTheme.typography.displayLarge.copy(
                 fontWeight = FontWeight.Black,
                 letterSpacing = 1.5.sp,
@@ -104,7 +104,7 @@ fun SearchScreen(
             color = colors.textPrimary
         )
         Text(
-            text = "LOCAL CATALOG INDEX",
+            text = "Your library",
             style = MaterialTheme.typography.labelSmall,
             color = colors.primarySignal
         )
@@ -233,14 +233,14 @@ private fun EmptyPromptState() {
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "Search Local Music Catalog",
+                text = "Search your music",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                 color = colors.textPrimary,
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "Instant search across offline tracks, albums, artists, playlists, and file names",
+                text = "Find songs, albums, artists and playlists",
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.textSecondary,
                 textAlign = TextAlign.Center
@@ -275,7 +275,7 @@ private fun NoResultsState(query: String) {
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "Check spelling or search by title, artist, album, or file extension",
+                text = "Check the spelling or try another word",
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.textSecondary,
                 textAlign = TextAlign.Center
@@ -309,7 +309,7 @@ private fun SearchResultsList(
         // Tracks Category
         if (showTracks && uiState.matchingTracks.isNotEmpty()) {
             item(key = "header_tracks") {
-                CategoryHeader(title = "TRACKS", count = uiState.matchingTracks.size)
+                CategoryHeader(title = "Songs", count = uiState.matchingTracks.size)
             }
             itemsIndexed(uiState.matchingTracks, key = { _, track -> "trk_${track.id}" }) { index, track ->
                 TrackResultRow(
@@ -323,7 +323,7 @@ private fun SearchResultsList(
         // Albums Category
         if (showAlbums && uiState.matchingAlbums.isNotEmpty()) {
             item(key = "header_albums") {
-                CategoryHeader(title = "ALBUMS", count = uiState.matchingAlbums.size)
+                CategoryHeader(title = "Albums", count = uiState.matchingAlbums.size)
             }
             items(uiState.matchingAlbums, key = { "alb_${it.id}" }) { album ->
                 AlbumResultRow(album = album, onClick = { onAlbumClick(album) })
@@ -333,7 +333,7 @@ private fun SearchResultsList(
         // Artists Category
         if (showArtists && uiState.matchingArtists.isNotEmpty()) {
             item(key = "header_artists") {
-                CategoryHeader(title = "ARTISTS", count = uiState.matchingArtists.size)
+                CategoryHeader(title = "Artists", count = uiState.matchingArtists.size)
             }
             items(uiState.matchingArtists, key = { "art_${it.id}" }) { artist ->
                 ArtistResultRow(artist = artist, onClick = { onArtistClick(artist) })
@@ -343,7 +343,7 @@ private fun SearchResultsList(
         // Playlists Category
         if (showPlaylists && uiState.matchingPlaylists.isNotEmpty()) {
             item(key = "header_playlists") {
-                CategoryHeader(title = "PLAYLISTS", count = uiState.matchingPlaylists.size)
+                CategoryHeader(title = "Playlists", count = uiState.matchingPlaylists.size)
             }
             items(uiState.matchingPlaylists, key = { "pl_${it.id}" }) { playlist ->
                 PlaylistResultRow(playlist = playlist, onClick = { onPlaylistClick(playlist) })
@@ -606,7 +606,7 @@ private fun PlaylistResultRow(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${playlist.trackCount} tracks",
+                    text = "${playlist.trackCount} songs",
                     color = colors.secondarySignal,
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp)
                 )

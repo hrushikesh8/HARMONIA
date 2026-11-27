@@ -83,7 +83,7 @@ fun CarModeScreen(
                     )
                     Spacer(modifier = Modifier.width(spacing.small))
                     Text(
-                        text = "CAR MODE",
+                        text = "Car Mode",
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Black,
                             letterSpacing = 1.sp

@@ -102,7 +102,7 @@ fun ProfileHubScreen(
                     }
                     Spacer(modifier = Modifier.width(spacing.small))
                     Text(
-                        text = "PROFILE & HUB",
+                        text = "Profile",
                         style = MaterialTheme.typography.labelSmall,
                         color = colors.primarySignal
                     )
@@ -153,7 +153,7 @@ fun ProfileHubScreen(
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "Sovereign Offline Audio Vault",
+                                    text = "Your music, on your phone",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = colors.secondarySignal
                                 )
@@ -165,7 +165,7 @@ fun ProfileHubScreen(
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 ) {
                                     Text(
-                                        text = "LOCAL-FIRST • ON-DEVICE",
+                                        text = "Your music stays on this phone",
                                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                                         color = colors.primarySignal
                                     )
@@ -181,22 +181,22 @@ fun ProfileHubScreen(
                             horizontalArrangement = Arrangement.spacedBy(spacing.small)
                         ) {
                             ProfileStatPill(
-                                label = "TRACKS",
+                                label = "Songs",
                                 value = "${uiState.totalTracks}",
                                 modifier = Modifier.weight(1f)
                             )
                             ProfileStatPill(
-                                label = "LIKES",
+                                label = "Likes",
                                 value = "${uiState.favoritesCount}",
                                 modifier = Modifier.weight(1f)
                             )
                             ProfileStatPill(
-                                label = "RATED",
+                                label = "Rated",
                                 value = "${uiState.ratedTracksCount}",
                                 modifier = Modifier.weight(1f)
                             )
                             ProfileStatPill(
-                                label = "STORAGE",
+                                label = "Sources",
                                 value = String.format(Locale.US, "%.1f MB", uiState.storageUsageEstimateMb),
                                 modifier = Modifier.weight(1.2f)
                             )
@@ -210,7 +210,7 @@ fun ProfileHubScreen(
             // Section: My Library
             item {
                 Text(
-                    text = "MY LIBRARY",
+                    text = "Your library",
                     style = MaterialTheme.typography.labelSmall,
                     color = colors.primarySignal,
                     modifier = Modifier.padding(bottom = spacing.small)
@@ -218,22 +218,22 @@ fun ProfileHubScreen(
 
                 ProfileMenuItem(
                     icon = HarmoniaIcons.Favorite,
-                    title = "My Favorites",
-                    subtitle = "${uiState.favoritesCount} favorite tracks • Jump to library",
+                    title = "Favorites",
+                    subtitle = "${uiState.favoritesCount} favorite songs",
                     onClick = onOpenLikes
                 )
 
                 ProfileMenuItem(
                     icon = HarmoniaIcons.Album,
-                    title = "Storage & Scanner",
-                    subtitle = "${uiState.storageSourcesCount} registered sources • Local media scanner",
+                    title = "Music folders",
+                    subtitle = "${uiState.storageSourcesCount} music sources",
                     onClick = onOpenSettings
                 )
 
                 Spacer(modifier = Modifier.height(spacing.large))
 
                 Text(
-                    text = "LISTENING EXPERIENCE",
+                    text = "Listening",
                     style = MaterialTheme.typography.labelSmall,
                     color = colors.primarySignal,
                     modifier = Modifier.padding(bottom = spacing.small)
@@ -242,21 +242,21 @@ fun ProfileHubScreen(
                 ProfileMenuItem(
                     icon = HarmoniaIcons.DirectionsCar,
                     title = "Car Mode",
-                    subtitle = "Distraction-free high-visibility interface for driving",
+                    subtitle = "Big, simple controls for the car",
                     onClick = onOpenCarMode
                 )
 
                 ProfileMenuItem(
                     icon = HarmoniaIcons.Playlists,
                     title = "Listening Activity",
-                    subtitle = "${uiState.totalListeningEvents} telemetry events logged locally",
+                    subtitle = "${uiState.totalListeningEvents} plays recorded on this phone",
                     onClick = { activeDialog = ProfileDialogDestination.ListeningActivity }
                 )
 
                 Spacer(modifier = Modifier.height(spacing.large))
 
                 Text(
-                    text = "PERSONALIZATION",
+                    text = "Personalization",
                     style = MaterialTheme.typography.labelSmall,
                     color = colors.primarySignal,
                     modifier = Modifier.padding(bottom = spacing.small)
@@ -275,15 +275,15 @@ fun ProfileHubScreen(
 
                 ProfileMenuItem(
                     icon = HarmoniaIcons.MusicNote,
-                    title = "Audio Equalizer DSP",
-                    subtitle = "5-Band hardware equalizer and decibel presets",
+                    title = "Equalizer",
+                    subtitle = "Shape the sound with bands and presets",
                     onClick = onOpenSettings
                 )
 
                 Spacer(modifier = Modifier.height(spacing.large))
 
                 Text(
-                    text = "APPLICATION & SYSTEM",
+                    text = "App",
                     style = MaterialTheme.typography.labelSmall,
                     color = colors.primarySignal,
                     modifier = Modifier.padding(bottom = spacing.small)
@@ -292,21 +292,21 @@ fun ProfileHubScreen(
                 ProfileMenuItem(
                     icon = HarmoniaIcons.Settings,
                     title = "Settings",
-                    subtitle = "Preferences, theme, playback defaults, storage & diagnostics",
+                    subtitle = "Theme, playback, folders and more",
                     onClick = onOpenSettings
                 )
 
                 ProfileMenuItem(
                     icon = HarmoniaIcons.Info,
-                    title = "Help & Audio Specifications",
-                    subtitle = "Media3 engine, supported codecs, and AudioFX architecture",
+                    title = "Help and supported formats",
+                    subtitle = "Supported formats and how playback works",
                     onClick = { activeDialog = ProfileDialogDestination.HelpFeedback }
                 )
 
                 ProfileMenuItem(
                     icon = HarmoniaIcons.Person,
-                    title = "Sovereign Architecture & About",
-                    subtitle = "Local-first storage identity and Room v5 SQLite guarantees",
+                    title = "About Harmonia",
+                    subtitle = "Everything stays on this device",
                     onClick = { activeDialog = ProfileDialogDestination.AccountDetails }
                 )
             }
@@ -323,7 +323,7 @@ fun ProfileHubScreen(
             }
             ProfileDialogDestination.RatingsSummary -> {
                 ProfileInfoDialog(
-                    title = "Personal Music Ratings",
+                    title = "Your ratings",
                     message = if (uiState.ratedTracksCount > 0) {
                         "Cataloged Ratings: ${uiState.ratedTracksCount} tracks scored\n" +
                                 "Average Rating: ${String.format(Locale.US, "%.1f", uiState.averageRating ?: 0.0)} ★\n\n" +
@@ -336,21 +336,21 @@ fun ProfileHubScreen(
             }
             ProfileDialogDestination.ProfileSummary -> {
                 ProfileInfoDialog(
-                    title = "My Profile",
+                    title = "Profile",
                     message = "Harmonia is an independent, sovereign audio player. Your listening profile is stored 100% locally on this device without tracking, remote telemetry, or mandatory cloud accounts.",
                     onDismiss = { activeDialog = ProfileDialogDestination.None }
                 )
             }
             ProfileDialogDestination.AccountDetails -> {
                 ProfileInfoDialog(
-                    title = "Sovereign Account Details",
+                    title = "Your details",
                     message = "Account Architecture: Local-First Sovereign\nDatabase: SQLite Room v5 (WAL Mode)\nApplication Version: 0.1.0-alpha\nTarget SDK: Android 16 (API 36)\nData Directory: App-scoped private storage\nExternal Network Tracking: Disabled by design (MRD-001)",
                     onDismiss = { activeDialog = ProfileDialogDestination.None }
                 )
             }
             ProfileDialogDestination.HelpFeedback -> {
                 ProfileInfoDialog(
-                    title = "Help & Audio Specifications",
+                    title = "Help and supported formats",
                     message = "Audio Pipeline: AndroidX Media3 / ExoPlayer\nSupported Codecs: FLAC, ALAC, MP3, Opus, AAC, Vorbis, WAV\nAudio DSP: 5-Band Hardware-backed AudioFX Equalizer with decibel presets\nStorage: MediaStore and Storage Access Framework (SAF)",
                     onDismiss = { activeDialog = ProfileDialogDestination.None }
                 )
@@ -502,7 +502,7 @@ private fun ListeningActivityDialog(
                     color = colors.textPrimary
                 )
                 Text(
-                    text = "$totalEvents total events recorded locally",
+                    text = "$totalEvents plays recorded on this phone",
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.primarySignal
                 )
@@ -511,7 +511,7 @@ private fun ListeningActivityDialog(
         text = {
             if (events.isEmpty()) {
                 Text(
-                    text = "No listening telemetry recorded yet. Play any track to begin factual session logging.",
+                    text = "Nothing here yet. Play a song and your history will show up here.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = colors.textSecondary
                 )

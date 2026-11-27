@@ -120,7 +120,7 @@ fun ArtistDetailScreen(
                 )
                 Spacer(modifier = Modifier.height(spacing.small))
                 Text(
-                    text = "This artist may have no remaining tracks in your local library.",
+                    text = "Their songs may have been moved or deleted from this phone.",
                     style = MaterialTheme.typography.bodySmall,
                     color = colors.textSecondary
                 )
@@ -175,7 +175,7 @@ fun ArtistDetailScreen(
                 Spacer(modifier = Modifier.width(spacing.small))
                 Column {
                     Text(
-                        text = "ARTIST",
+                        text = "Artist",
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
                         color = colors.primarySignal
                     )
@@ -267,7 +267,7 @@ fun ArtistDetailScreen(
                         )
                         Spacer(modifier = Modifier.width(spacing.small))
                         Text(
-                            text = "Play All",
+                            text = "Play",
                             fontWeight = FontWeight.Bold,
                             color = colors.backgroundRoot
                         )
@@ -318,7 +318,7 @@ fun ArtistDetailScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "ALBUMS (${albums.size})",
+                        text = "Albums",
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
                         color = colors.primarySignal
                     )
@@ -380,7 +380,7 @@ fun ArtistDetailScreen(
         // Tracks by This Artist Section
         item {
             Text(
-                text = "TRACKS BY THIS ARTIST (${tracks.size})",
+                text = "Songs",
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
                 color = colors.primarySignal,
                 modifier = Modifier.padding(bottom = spacing.small)
@@ -396,7 +396,7 @@ fun ArtistDetailScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No tracks found for this artist",
+                        text = "No songs by this artist",
                         style = MaterialTheme.typography.bodyMedium,
                         color = colors.textSecondary
                     )

@@ -150,7 +150,7 @@ class LibraryFavoritesUiTest {
         }
 
         // Title and description verification
-        composeTestRule.onNodeWithText("No Favorite Tracks").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No favorites yet").assertIsDisplayed()
         composeTestRule.onNodeWithText("Tracks marked as favorites in your library or Now Playing will appear here.").assertIsDisplayed()
 
         // Action button verification with 48dp touch target
@@ -260,8 +260,8 @@ class LibraryFavoritesUiTest {
 
         // Empty state is displayed reactively without app restart
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("No Favorite Tracks").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("No favorites yet").fetchSemanticsNodes().isNotEmpty()
         }
-        composeTestRule.onNodeWithText("No Favorite Tracks").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No favorites yet").assertIsDisplayed()
     }
 }

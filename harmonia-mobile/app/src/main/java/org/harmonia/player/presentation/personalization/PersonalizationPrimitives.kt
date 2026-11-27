@@ -161,7 +161,7 @@ fun RatingDialog(
         modifier = modifier,
         title = {
             Text(
-                text = "TRACK RATING",
+                text = "Rate this song",
                 style = MaterialTheme.typography.labelMedium.copy(
                     letterSpacing = 1.5.sp,
                     fontWeight = FontWeight.Bold
@@ -229,7 +229,7 @@ fun RatingDialog(
                     }
             ) {
                 Text(
-                    text = "DONE",
+                    text = "Done",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
                     color = colors.primarySignal
                 )
@@ -246,7 +246,7 @@ fun RatingDialog(
                         }
                 ) {
                     Text(
-                        text = "CLEAR RATING",
+                        text = "Clear rating",
                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                         color = colors.statusError
                     )
