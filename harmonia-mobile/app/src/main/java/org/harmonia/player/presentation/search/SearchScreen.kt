@@ -1,5 +1,6 @@
 package org.harmonia.player.presentation.search
 
+import org.harmonia.player.presentation.components.SongSwipeActions
 import org.harmonia.player.presentation.components.AlbumListRow
 import org.harmonia.player.presentation.components.ArtistListRow
 import org.harmonia.player.presentation.components.CollectionListRow
@@ -85,6 +86,7 @@ fun SearchScreen(
     viewModel: SearchViewModel = viewModel(),
     onTrackClick: (List<Track>, Int) -> Unit = { _, _ -> },
     onTrackMenu: ((Track) -> Unit)? = null,
+    onPlayNext: ((Track) -> Unit)? = null,
     onAlbumClick: (Album) -> Unit = {},
     onArtistClick: (Artist) -> Unit = {},
     onPlaylistClick: (Playlist) -> Unit = {},
@@ -207,6 +209,7 @@ fun SearchScreen(
                 filter = selectedFilter,
                 onTrackClick = openTrack,
                 onTrackMenu = onTrackMenu,
+                onPlayNext = onPlayNext,
                 onAlbumClick = openAlbum,
                 onArtistClick = openArtist,
                 onPlaylistClick = openPlaylist
@@ -407,6 +410,7 @@ private fun SearchResultsList(
     filter: SearchFilter,
     onTrackClick: (List<Track>, Int) -> Unit,
     onTrackMenu: ((Track) -> Unit)?,
+    onPlayNext: ((Track) -> Unit)?,
     onAlbumClick: (Album) -> Unit,
     onArtistClick: (Artist) -> Unit,
     onPlaylistClick: (Playlist) -> Unit
@@ -429,11 +433,13 @@ private fun SearchResultsList(
                 CategoryHeader(title = "Songs", count = uiState.matchingTracks.size)
             }
             itemsIndexed(uiState.matchingTracks, key = { _, track -> "trk_${track.id}" }) { index, track ->
-                SongListRow(
-                    track = track,
-                    onClick = { onTrackClick(uiState.matchingTracks, index) },
-                    onMenuClick = onTrackMenu?.let { menu -> { menu(track) } }
-                )
+                SongSwipeActions(onPlayNext = onPlayNext?.let { action -> { action(track) } }) {
+                    SongListRow(
+                        track = track,
+                        onClick = { onTrackClick(uiState.matchingTracks, index) },
+                        onMenuClick = onTrackMenu?.let { menu -> { menu(track) } }
+                    )
+                }
             }
         }
 

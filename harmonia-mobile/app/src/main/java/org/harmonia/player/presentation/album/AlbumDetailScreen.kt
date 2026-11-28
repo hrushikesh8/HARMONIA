@@ -1,5 +1,6 @@
 package org.harmonia.player.presentation.album
 
+import org.harmonia.player.presentation.components.SongSwipeActions
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -70,7 +71,8 @@ fun AlbumDetailScreen(
     onArtistClick: (String) -> Unit = {},
     onPlayTrack: (List<Track>, Int) -> Unit = { _, _ -> },
     onShuffleAll: (List<Track>) -> Unit = {},
-    onTrackMenu: ((Track) -> Unit)? = null
+    onTrackMenu: ((Track) -> Unit)? = null,
+    onPlayNext: ((Track) -> Unit)? = null
 ) {
     LaunchedEffect(albumId) {
         viewModel.loadAlbum(albumId)
@@ -199,16 +201,18 @@ fun AlbumDetailScreen(
             }
             items(disc.tracks, key = { it.id }) { track ->
                 val index = tracks.indexOf(track)
-                AlbumTrackRow(
-                    track = track,
-                    albumArtist = album.artistName,
-                    isActive = track.id == currentPlayingTrackId,
-                    isPlaying = isPlaying,
-                    isFavorite = track.id in favoriteTrackIds,
-                    onClick = { onPlayTrack(tracks, index) },
-                    onToggleFavorite = { personalizationViewModel.toggleFavorite(track.id) },
-                    onMenu = onTrackMenu?.let { menu -> { menu(track) } }
-                )
+                SongSwipeActions(onPlayNext = onPlayNext?.let { action -> { action(track) } }) {
+                    AlbumTrackRow(
+                        track = track,
+                        albumArtist = album.artistName,
+                        isActive = track.id == currentPlayingTrackId,
+                        isPlaying = isPlaying,
+                        isFavorite = track.id in favoriteTrackIds,
+                        onClick = { onPlayTrack(tracks, index) },
+                        onToggleFavorite = { personalizationViewModel.toggleFavorite(track.id) },
+                        onMenu = onTrackMenu?.let { menu -> { menu(track) } }
+                    )
+                }
             }
         }
 

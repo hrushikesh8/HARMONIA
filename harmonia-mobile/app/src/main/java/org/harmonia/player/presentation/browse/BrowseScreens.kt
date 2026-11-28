@@ -1,5 +1,6 @@
 package org.harmonia.player.presentation.browse
 
+import org.harmonia.player.presentation.components.SongSwipeActions
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -221,7 +222,8 @@ fun GenreDetailScreen(
     onPlay: (List<Track>, Int) -> Unit,
     onShuffle: (List<Track>) -> Unit,
     onTrackMenu: ((Track) -> Unit)?,
-    onAlbumClick: (Album) -> Unit
+    onAlbumClick: (Album) -> Unit,
+    onPlayNext: ((Track) -> Unit)? = null
 ) {
     val uiState by libraryViewModel.uiState.collectAsState()
     val genre = remember(uiState.tracks, genreName) {
@@ -259,11 +261,13 @@ fun GenreDetailScreen(
         }
         item { SectionTitle("Songs") }
         itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
-            SongListRow(
-                track = track,
-                onClick = { onPlay(tracks, index) },
-                onMenuClick = onTrackMenu?.let { menu -> { menu(track) } }
-            )
+            SongSwipeActions(onPlayNext = onPlayNext?.let { action -> { action(track) } }) {
+                SongListRow(
+                    track = track,
+                    onClick = { onPlay(tracks, index) },
+                    onMenuClick = onTrackMenu?.let { menu -> { menu(track) } }
+                )
+            }
         }
     }
 }
@@ -370,7 +374,8 @@ fun DecadeScreen(
     onBack: () -> Unit,
     onPlay: (List<Track>, Int) -> Unit,
     onShuffle: (List<Track>) -> Unit,
-    onTrackMenu: ((Track) -> Unit)?
+    onTrackMenu: ((Track) -> Unit)?,
+    onPlayNext: ((Track) -> Unit)? = null
 ) {
     val uiState by libraryViewModel.uiState.collectAsState()
     val group = remember(uiState.tracks, uiState.albums, decade) {
@@ -409,11 +414,13 @@ fun DecadeScreen(
                 }
             }
             items(yearGroup.tracks, key = { "y${yearGroup.year}_${it.id}" }) { track ->
-                SongListRow(
-                    track = track,
-                    onClick = { onPlay(allTracks, allTracks.indexOf(track).coerceAtLeast(0)) },
-                    onMenuClick = onTrackMenu?.let { menu -> { menu(track) } }
-                )
+                SongSwipeActions(onPlayNext = onPlayNext?.let { action -> { action(track) } }) {
+                    SongListRow(
+                        track = track,
+                        onClick = { onPlay(allTracks, allTracks.indexOf(track).coerceAtLeast(0)) },
+                        onMenuClick = onTrackMenu?.let { menu -> { menu(track) } }
+                    )
+                }
             }
         }
     }

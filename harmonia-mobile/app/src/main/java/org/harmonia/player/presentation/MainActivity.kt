@@ -251,6 +251,13 @@ fun MainAppContainer(
     BackHandler(enabled = showNowPlayingSheet) { showNowPlayingSheet = false }
 
     val playTracks: (List<Track>, Int) -> Unit = { tracks, index -> playbackViewModel.playTrackList(tracks, index) }
+    // Swipe a song right-to-left in any list: it plays after the current song.
+    val playNextBySwipe: (Track) -> Unit = { track ->
+        val title = org.harmonia.player.presentation.util.TrackDisplayUtils.formatDisplayTitle(track)
+        val nothingQueued = playerUiState.queue.isEmpty()
+        playbackViewModel.playNext(listOf(track))
+        showMessage(if (nothingQueued) "Playing \"$title\"" else "\"$title\" plays next")
+    }
     val shuffleTracks: (List<Track>) -> Unit = { tracks -> playbackViewModel.playTrackList(tracks.shuffled(), 0) }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -308,7 +315,8 @@ fun MainAppContainer(
                         HomeScreen(
                             playbackState = playerUiState.playbackState,
                             currentTrack = playerUiState.currentTrack,
-                            onNavigateToLibrary = { selectTab(NavigationTab.LIBRARY) },
+                            // Always open the song list itself, not whatever page the Library tab was last on.
+                            onNavigateToLibrary = { openLibraryTab(LibraryTab.TRACKS) },
                             onNavigateToPlaylists = { openInLibrary(HarmoniaNavDestination.Playlists) },
                             onViewAllAlbums = { openLibraryTab(LibraryTab.ALBUMS) },
                             onViewAllArtists = { openLibraryTab(LibraryTab.ARTISTS) },
@@ -342,6 +350,7 @@ fun MainAppContainer(
                         SearchScreen(
                             onTrackClick = playTracks,
                             onTrackMenu = onTrackMenu,
+                            onPlayNext = playNextBySwipe,
                             onAlbumClick = { album -> navigateToAlbum(album.id) },
                             onArtistClick = { artist -> navigateToArtist(artist.id) },
                             onPlaylistClick = { playlist -> openPlaylist(playlist.id) },
@@ -399,8 +408,12 @@ fun MainAppContainer(
                         category = LibraryTab.entries.firstOrNull { it.name == tab } ?: LibraryTab.TRACKS,
                         onBack = { navController.popBackStack() },
                         onPlayNext = { tracks ->
-                            playbackViewModel.playNext(tracks)
-                            showMessage(if (tracks.size == 1) "Playing next" else "${tracks.size} songs playing next")
+                            if (tracks.size == 1) {
+                                playNextBySwipe(tracks.first())
+                            } else {
+                                playbackViewModel.playNext(tracks)
+                                showMessage("${tracks.size} songs playing next")
+                            }
                         },
                         onAddToQueue = { tracks ->
                             playbackViewModel.addToQueue(tracks)
@@ -431,7 +444,8 @@ fun MainAppContainer(
                         onPlay = playTracks,
                         onShuffle = shuffleTracks,
                         onTrackMenu = onTrackMenu,
-                        onAlbumClick = { album -> navigateToAlbum(album.id) }
+                        onAlbumClick = { album -> navigateToAlbum(album.id) },
+                        onPlayNext = playNextBySwipe
                     )
                 }
                 composable<HarmoniaNavDestination.Years> {
@@ -448,7 +462,8 @@ fun MainAppContainer(
                         onBack = { navController.popBackStack() },
                         onPlay = playTracks,
                         onShuffle = shuffleTracks,
-                        onTrackMenu = onTrackMenu
+                        onTrackMenu = onTrackMenu,
+                        onPlayNext = playNextBySwipe
                     )
                 }
                 composable<HarmoniaNavDestination.AlbumDetail> { entry ->
@@ -460,7 +475,8 @@ fun MainAppContainer(
                         onPlayTrack = playTracks,
                         onShuffleAll = shuffleTracks,
                         onArtistClick = { artistId -> navigateToArtist(artistId) },
-                        onTrackMenu = onTrackMenu
+                        onTrackMenu = onTrackMenu,
+                        onPlayNext = playNextBySwipe
                     )
                 }
                 composable<HarmoniaNavDestination.ArtistDetail> { entry ->
@@ -472,7 +488,8 @@ fun MainAppContainer(
                         onPlayTrack = playTracks,
                         onShuffleAll = shuffleTracks,
                         onAlbumClick = { albumId -> navigateToAlbum(albumId) },
-                        onTrackMenu = onTrackMenu
+                        onTrackMenu = onTrackMenu,
+                        onPlayNext = playNextBySwipe
                     )
                 }
                 composable<HarmoniaNavDestination.PlaylistDetail> { entry ->
@@ -482,7 +499,8 @@ fun MainAppContainer(
                         onPlay = playTracks,
                         onShuffle = shuffleTracks,
                         onTrackMenu = onTrackMenu,
-                        onRemoved = { message, undo -> showUndo(message, undo) }
+                        onRemoved = { message, undo -> showUndo(message, undo) },
+                        onPlayNext = playNextBySwipe
                     )
                 }
                 composable<HarmoniaNavDestination.Profile> {

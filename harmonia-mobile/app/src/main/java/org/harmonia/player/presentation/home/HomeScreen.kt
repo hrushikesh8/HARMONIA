@@ -1,5 +1,7 @@
 package org.harmonia.player.presentation.home
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -700,84 +702,76 @@ private fun QuickActionsBar(
     onNavigateToLibrary: () -> Unit,
     onNavigateToPlaylists: () -> Unit
 ) {
-    val colors = HarmoniaThemeTokens.colors
     val spacing = HarmoniaThemeTokens.spacing
-
+    // Each button is as wide as its label and labels never wrap; on a narrow screen or with a
+    // large font size the row scrolls sideways instead of breaking a word across two lines.
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(spacing.small)
     ) {
-        // Shuffle All (Primary Sonic Amber Pill)
-        Button(
-            onClick = onShuffleAll,
-            modifier = Modifier
-                .weight(1.2f)
-                .height(44.dp)
-                .touchTarget48()
-                .semantics { contentDescription = "Shuffle all library tracks" },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = colors.primarySignal,
-                contentColor = colors.backgroundRoot
-            ),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Icon(
-                imageVector = HarmoniaIcons.Shuffle,
-                contentDescription = null,
-                tint = colors.backgroundRoot,
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(spacing.xSmall))
-            Text("Shuffle All", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-        }
+        QuickActionPill(
+            label = "Shuffle All",
+            icon = HarmoniaIcons.Shuffle,
+            primary = true,
+            description = "Shuffle all library tracks",
+            onClick = onShuffleAll
+        )
+        QuickActionPill(
+            label = "Songs",
+            icon = HarmoniaIcons.MusicNote,
+            primary = false,
+            description = "Open songs",
+            onClick = onNavigateToLibrary
+        )
+        QuickActionPill(
+            label = "Playlists",
+            icon = HarmoniaIcons.Playlists,
+            primary = false,
+            description = "Open playlists",
+            onClick = onNavigateToPlaylists
+        )
+    }
+}
 
-        // Tracks Shortcut (Tonal Container Pill)
-        Button(
-            onClick = onNavigateToLibrary,
-            modifier = Modifier
-                .weight(1f)
-                .height(44.dp)
-                .touchTarget48()
-                .semantics { contentDescription = "Open library tracks" },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = colors.surfaceContainer,
-                contentColor = colors.textPrimary
-            ),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Icon(
-                imageVector = HarmoniaIcons.Library,
-                contentDescription = null,
-                tint = colors.secondarySignal,
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(spacing.xSmall))
-            Text("Tracks", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-        }
-
-        // Playlists Shortcut (Tonal Container Pill)
-        Button(
-            onClick = onNavigateToPlaylists,
-            modifier = Modifier
-                .weight(1.1f)
-                .height(44.dp)
-                .touchTarget48()
-                .semantics { contentDescription = "Open playlists" },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = colors.surfaceContainer,
-                contentColor = colors.textPrimary
-            ),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Icon(
-                imageVector = HarmoniaIcons.Playlists,
-                contentDescription = null,
-                tint = colors.secondarySignal,
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(spacing.xSmall))
-            Text("Playlists", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-        }
+@Composable
+private fun QuickActionPill(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    primary: Boolean,
+    description: String,
+    onClick: () -> Unit
+) {
+    val colors = HarmoniaThemeTokens.colors
+    val onPrimary = if (colors.isDark) colors.backgroundRoot else colors.surfaceElevated
+    Button(
+        onClick = onClick,
+        modifier = Modifier
+            .height(44.dp)
+            .touchTarget48()
+            .semantics { contentDescription = description },
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (primary) colors.primarySignal else colors.surfaceContainer,
+            contentColor = if (primary) onPrimary else colors.textPrimary
+        ),
+        shape = RoundedCornerShape(12.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (primary) onPrimary else colors.primarySignal,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = label,
+            fontWeight = if (primary) FontWeight.Bold else FontWeight.SemiBold,
+            fontSize = 13.sp,
+            maxLines = 1,
+            softWrap = false
+        )
     }
 }
 

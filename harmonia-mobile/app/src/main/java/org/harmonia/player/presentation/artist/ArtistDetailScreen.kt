@@ -1,5 +1,6 @@
 package org.harmonia.player.presentation.artist
 
+import org.harmonia.player.presentation.components.SongSwipeActions
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -78,7 +79,8 @@ fun ArtistDetailScreen(
     onAlbumClick: (String) -> Unit = {},
     onPlayTrack: (List<Track>, Int) -> Unit = { _, _ -> },
     onShuffleAll: (List<Track>) -> Unit = {},
-    onTrackMenu: ((Track) -> Unit)? = null
+    onTrackMenu: ((Track) -> Unit)? = null,
+    onPlayNext: ((Track) -> Unit)? = null
 ) {
     LaunchedEffect(artistId) {
         viewModel.loadArtist(artistId)
@@ -192,16 +194,18 @@ fun ArtistDetailScreen(
                 SectionTitle(if (showAllSongs) "All songs" else "Top songs")
             }
             itemsIndexed(songList, key = { _, track -> "song_${track.id}" }) { index, track ->
-                ArtistSongRow(
-                    rank = index + 1,
-                    track = track,
-                    isActive = track.id == currentPlayingTrackId,
-                    isPlaying = isPlaying,
-                    isFavorite = track.id in favoriteTrackIds,
-                    onClick = { onPlayTrack(songList, index) },
-                    onToggleFavorite = { personalizationViewModel.toggleFavorite(track.id) },
-                    onMenu = onTrackMenu?.let { menu -> { menu(track) } }
-                )
+                SongSwipeActions(onPlayNext = onPlayNext?.let { action -> { action(track) } }) {
+                    ArtistSongRow(
+                        rank = index + 1,
+                        track = track,
+                        isActive = track.id == currentPlayingTrackId,
+                        isPlaying = isPlaying,
+                        isFavorite = track.id in favoriteTrackIds,
+                        onClick = { onPlayTrack(songList, index) },
+                        onToggleFavorite = { personalizationViewModel.toggleFavorite(track.id) },
+                        onMenu = onTrackMenu?.let { menu -> { menu(track) } }
+                    )
+                }
             }
             if (tracks.size > uiState.topSongs.size) {
                 item {

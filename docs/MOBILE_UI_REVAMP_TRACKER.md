@@ -511,6 +511,23 @@ Build order chosen by Sagar: **4.1 → 4.4 → 4.5 → 4.2 → 4.3**, then the r
   `.\gradlew :app:assembleRelease`. Without them the release APK is unsigned and won't install.
 - Install over USB with `adb -d install -r <apk>` or copy the APK to the phone and open it.
 
+### Phone-test feedback (Sagar and Hrushikesh)
+- **Home buttons wrapped mid-word** ("Track" / "s"): the three buttons had fixed width shares, so on
+  narrower phones or with bigger system font the label didn't fit. Buttons are now as wide as their
+  label, never wrap, and the row scrolls sideways if it ever runs out of room. Checked at 1.3x font.
+  "Tracks" is now **"Songs"**, matching the rest of the app.
+- **"Songs" opened the last Library page** (e.g. Genres) instead of the song list: it switched to the
+  Library tab, which restores wherever you left it. It now opens the Songs list directly, with Back
+  going to the Library list. (The Library tab itself still remembers your place, like Apple Music.)
+- **Swipe actions on songs (agreed behaviour):**
+  - **Right to left → Play next** in every song list (Songs, Favorites, Search, album, artist,
+    genre, decade, playlist). The row springs back; a message confirms ""Song" plays next" (or
+    starts playing if nothing is queued).
+  - **Left to right → Remove from playlist**, playlists only, with **Undo**.
+  - A coloured hint shows behind the row while swiping; both actions are also available to screen
+    readers. Shared component: `presentation/components/SongSwipeActions.kt`. Swiping is off while
+    selecting songs. The Now Playing queue keeps its own swipe-to-remove.
+
 ## Decisions and ideas checked
 
 ### Telegram music bot as a song source (checked, not adopted)

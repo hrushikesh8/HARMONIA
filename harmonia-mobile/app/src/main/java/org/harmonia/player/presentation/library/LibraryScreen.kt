@@ -1,5 +1,6 @@
 package org.harmonia.player.presentation.library
 
+import org.harmonia.player.presentation.components.SongSwipeActions
 import org.harmonia.player.presentation.components.shouldShowAlphabetBar
 import org.harmonia.player.presentation.components.alphabetPositions
 import org.harmonia.player.presentation.components.AlphabetScroller
@@ -808,7 +809,8 @@ fun LibraryScreen(
                         else -> null
                     },
                     selectedIds = selectedIds,
-                    onToggleSelect = { track -> selectedIds = selectedIds?.toggled(track.id) }
+                    onToggleSelect = { track -> selectedIds = selectedIds?.toggled(track.id) },
+                    onPlayNextSong = { track -> onPlayNext(listOf(track)) }
                 )
                 LibraryTab.FAVORITES -> FavoritesTabContent(
                     tracks = filteredFavoriteTracks,
@@ -824,7 +826,8 @@ fun LibraryScreen(
                         else -> null
                     },
                     selectedIds = selectedIds,
-                    onToggleSelect = { track -> selectedIds = selectedIds?.toggled(track.id) }
+                    onToggleSelect = { track -> selectedIds = selectedIds?.toggled(track.id) },
+                    onPlayNextSong = { track -> onPlayNext(listOf(track)) }
                 )
                 LibraryTab.ALBUMS -> AlbumsTabContent(
                     albums = filteredAlbums,
@@ -920,7 +923,8 @@ internal fun TracksTabContent(
     onTrackMenu: ((Track) -> Unit)? = null,
     indexKeyOf: ((Track) -> String?)? = null,
     selectedIds: Set<String>? = null,
-    onToggleSelect: (Track) -> Unit = {}
+    onToggleSelect: (Track) -> Unit = {},
+    onPlayNextSong: ((Track) -> Unit)? = null
 ) {
     if (tracks.isEmpty()) {
         Box(
@@ -944,7 +948,8 @@ internal fun TracksTabContent(
             onTrackMenu = onTrackMenu,
             indexKeyOf = indexKeyOf,
             selectedIds = selectedIds,
-            onToggleSelect = onToggleSelect
+            onToggleSelect = onToggleSelect,
+            onPlayNextSong = onPlayNextSong
         )
     }
 }
@@ -960,7 +965,8 @@ internal fun FavoritesTabContent(
     onTrackMenu: ((Track) -> Unit)? = null,
     indexKeyOf: ((Track) -> String?)? = null,
     selectedIds: Set<String>? = null,
-    onToggleSelect: (Track) -> Unit = {}
+    onToggleSelect: (Track) -> Unit = {},
+    onPlayNextSong: ((Track) -> Unit)? = null
 ) {
     if (tracks.isEmpty()) {
         EmptyFavoritesState(onBrowseTracks = onBrowseTracks)
@@ -975,7 +981,8 @@ internal fun FavoritesTabContent(
             onTrackMenu = onTrackMenu,
             indexKeyOf = indexKeyOf,
             selectedIds = selectedIds,
-            onToggleSelect = onToggleSelect
+            onToggleSelect = onToggleSelect,
+            onPlayNextSong = onPlayNextSong
         )
     }
 }
@@ -992,7 +999,8 @@ private fun SongList(
     onTrackMenu: ((Track) -> Unit)?,
     indexKeyOf: ((Track) -> String?)?,
     selectedIds: Set<String>?,
-    onToggleSelect: (Track) -> Unit
+    onToggleSelect: (Track) -> Unit,
+    onPlayNextSong: ((Track) -> Unit)? = null
 ) {
     val listState = rememberLazyListState()
     val positions = remember(tracks, indexKeyOf) {
@@ -1011,6 +1019,10 @@ private fun SongList(
         ) {
             itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
                 val badge = badgeFor(track, unmountedSourceIds, disabledSourceIds)
+                SongSwipeActions(
+                    onPlayNext = onPlayNextSong?.let { action -> { action(track) } },
+                    enabled = selectedIds == null
+                ) {
                 SongListRow(
                     track = track,
                     onClick = {
@@ -1023,6 +1035,7 @@ private fun SongList(
                     onMenuClick = onTrackMenu?.let { menu -> { menu(track) } },
                     selected = selectedIds?.contains(track.id)
                 )
+                }
             }
         }
         if (showBar) {

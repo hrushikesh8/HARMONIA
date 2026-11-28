@@ -1,5 +1,6 @@
 package org.harmonia.player.presentation.playlists
 
+import org.harmonia.player.presentation.components.SongSwipeActions
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -97,6 +98,7 @@ fun PlaylistDetailScreen(
     onTrackMenu: ((Track) -> Unit)? = null,
     /** Shows "Removed …" with an Undo button; the second argument puts the song back. */
     onRemoved: (message: String, undo: () -> Unit) -> Unit = { _, _ -> },
+    onPlayNext: ((Track) -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: PlaylistDetailViewModel = viewModel(
         key = "playlist_detail_$playlistId",
@@ -322,7 +324,7 @@ fun PlaylistDetailScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Drag ≡ to reorder · swipe a song to remove it",
+                            text = "Drag ≡ to reorder · swipe right to remove, left to play next",
                             style = MaterialTheme.typography.bodySmall,
                             color = colors.textSecondary,
                             modifier = Modifier.weight(1f)
@@ -379,7 +381,6 @@ fun PlaylistDetailScreen(
         } else {
             itemsIndexed(workingItems, key = { _, item -> item.id }) { index, item ->
                 val isDragging = item.id == draggingId
-                val dismissState = rememberSwipeToDismissBoxState()
                 Box(
                     modifier = if (isDragging) {
                         Modifier.zIndex(1f).graphicsLayer { translationY = dragOffset }
@@ -387,26 +388,14 @@ fun PlaylistDetailScreen(
                         Modifier.animateItem()
                     }
                 ) {
-                    SwipeToDismissBox(
-                        state = dismissState,
-                        gesturesEnabled = draggingId == null,
-                        onDismiss = {
+                    // Left to right removes (with Undo); right to left plays the song next.
+                    SongSwipeActions(
+                        enabled = draggingId == null,
+                        onPlayNext = item.track?.let { track -> onPlayNext?.let { action -> { action(track) } } },
+                        onRemove = {
                             val title = item.track?.let { TrackDisplayUtils.formatDisplayTitle(it) } ?: "Song"
                             viewModel.removeTrack(item.trackId)
                             onRemoved("Removed \"$title\"") { viewModel.restoreTrack(item.trackId, index) }
-                        },
-                        backgroundContent = {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(colors.statusError.copy(alpha = 0.2f))
-                                    .padding(horizontal = spacing.standard),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Icon(HarmoniaIcons.Delete, contentDescription = null, tint = colors.statusError)
-                                Icon(HarmoniaIcons.Delete, contentDescription = null, tint = colors.statusError)
-                            }
                         }
                     ) {
                         PlaylistSongRow(
