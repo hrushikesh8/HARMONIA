@@ -739,6 +739,12 @@ class FakePlayerInvocationHandler : InvocationHandler {
 
     val listeners = mutableListOf<Player.Listener>()
 
+    /** Media ids in the fake player's playlist, kept in step with add/remove/move calls. */
+    val mediaIds = mutableListOf<String>()
+
+    private fun idsOf(list: Any?): List<String> =
+        (list as? List<*>)?.mapNotNull { (it as? MediaItem)?.mediaId } ?: emptyList()
+
     fun createProxy(): Player {
         return Proxy.newProxyInstance(
             Player::class.java.classLoader,
@@ -864,14 +870,32 @@ class FakePlayerInvocationHandler : InvocationHandler {
                 if (args != null && args.isNotEmpty()) {
                     val items = args[0] as? List<*>
                     mediaItemCount = items?.size ?: 0
+                    mediaIds.clear()
+                    mediaIds.addAll(idsOf(items))
                 }
                 null
             }
             "addMediaItems" -> {
                 if (args != null && args.isNotEmpty()) {
-                    val items = args[0] as? List<*>
-                    mediaItemCount += items?.size ?: 0
+                    // addMediaItems(items) or addMediaItems(index, items)
+                    val (index, items) = if (args[0] is Int) (args[0] as Int) to args[1] else mediaIds.size to args[0]
+                    val ids = idsOf(items)
+                    mediaIds.addAll(index.coerceIn(0, mediaIds.size), ids)
+                    mediaItemCount += (items as? List<*>)?.size ?: 0
                 }
+                null
+            }
+            "removeMediaItem" -> {
+                val index = args?.get(0) as Int
+                if (index in mediaIds.indices) mediaIds.removeAt(index)
+                mediaItemCount = (mediaItemCount - 1).coerceAtLeast(0)
+                if (currentMediaItemIndex > index) currentMediaItemIndex--
+                null
+            }
+            "moveMediaItem" -> {
+                val from = args?.get(0) as Int
+                val to = args[1] as Int
+                if (from in mediaIds.indices && to in mediaIds.indices) mediaIds.add(to, mediaIds.removeAt(from))
                 null
             }
             "setShuffleModeEnabled" -> {

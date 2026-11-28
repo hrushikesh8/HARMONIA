@@ -95,6 +95,8 @@ fun PlaylistDetailScreen(
     onPlay: (tracks: List<Track>, startIndex: Int) -> Unit,
     onShuffle: (tracks: List<Track>) -> Unit,
     onTrackMenu: ((Track) -> Unit)? = null,
+    /** Shows "Removed …" with an Undo button; the second argument puts the song back. */
+    onRemoved: (message: String, undo: () -> Unit) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
     viewModel: PlaylistDetailViewModel = viewModel(
         key = "playlist_detail_$playlistId",
@@ -388,7 +390,11 @@ fun PlaylistDetailScreen(
                     SwipeToDismissBox(
                         state = dismissState,
                         gesturesEnabled = draggingId == null,
-                        onDismiss = { viewModel.removeTrack(item.trackId) },
+                        onDismiss = {
+                            val title = item.track?.let { TrackDisplayUtils.formatDisplayTitle(it) } ?: "Song"
+                            viewModel.removeTrack(item.trackId)
+                            onRemoved("Removed \"$title\"") { viewModel.restoreTrack(item.trackId, index) }
+                        },
                         backgroundContent = {
                             Row(
                                 modifier = Modifier

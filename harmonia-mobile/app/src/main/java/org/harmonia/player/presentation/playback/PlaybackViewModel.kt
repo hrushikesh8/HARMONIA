@@ -91,6 +91,18 @@ class PlaybackViewModel(
     fun moveQueueItem(fromIndex: Int, toIndex: Int) = playbackPort.moveQueueItem(fromIndex, toIndex)
     fun removeQueueItem(index: Int) = playbackPort.removeQueueItem(index)
 
+    /** Undo for [removeQueueItem]: puts the song back where it was. */
+    fun restoreQueueItem(index: Int, track: Track) = playbackPort.insertIntoQueue(index, listOf(track))
+
+    fun playNext(tracks: List<Track>) {
+        if (tracks.isNotEmpty()) playbackPort.playNext(tracks)
+    }
+
+    fun addToQueue(tracks: List<Track>) {
+        if (tracks.isEmpty()) return
+        if (playbackPort.queue.value.isEmpty()) playTrackList(tracks, 0) else playbackPort.appendToQueue(tracks)
+    }
+
     fun shuffleAll() {
         viewModelScope.launch {
             val tracks = trackRepository.observeAllTracks().firstOrNull()

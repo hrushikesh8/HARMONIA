@@ -1,6 +1,10 @@
 package org.harmonia.player.presentation.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -68,21 +72,29 @@ fun SongListRow(
     isStatusError: Boolean = false,
     isFavorite: Boolean = false,
     onToggleFavorite: (() -> Unit)? = null,
-    onMenuClick: (() -> Unit)? = null
+    onMenuClick: (() -> Unit)? = null,
+    /** Non-null while picking songs: shows a check circle and hides the heart and menu. */
+    selected: Boolean? = null
 ) {
     val colors = HarmoniaThemeTokens.colors
     val spacing = HarmoniaThemeTokens.spacing
     val title = TrackDisplayUtils.formatDisplayTitle(track)
     val dimmed = statusText != null
+    val selecting = selected != null
 
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(RowShape)
-            .combinedClickable(onClick = onClick, onLongClick = onMenuClick)
+            .combinedClickable(onClick = onClick, onLongClick = if (selecting) null else onMenuClick)
             .semantics {
                 contentDescription = buildString {
-                    append("Play $title by ${track.artistName ?: "Unknown"}")
+                    if (selected != null) {
+                        append("$title by ${track.artistName ?: "Unknown"}, ")
+                        append(if (selected) "selected" else "not selected")
+                    } else {
+                        append("Play $title by ${track.artistName ?: "Unknown"}")
+                    }
                     if (statusText != null) append(" ($statusText)")
                 }
             }
@@ -90,6 +102,10 @@ fun SongListRow(
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (selected != null) {
+            SelectionCircle(selected = selected)
+            Spacer(modifier = Modifier.width(spacing.medium))
+        }
         HarmoniaArtwork(
             artworkHash = track.artworkHash ?: track.localFile?.fileHash,
             size = 48.dp,
@@ -123,11 +139,36 @@ fun SongListRow(
                 )
             }
         }
-        if (onToggleFavorite != null) {
+        if (!selecting && onToggleFavorite != null) {
             FavoriteButton(isFavorite = isFavorite, onToggleFavorite = onToggleFavorite)
         }
-        if (onMenuClick != null) {
+        if (!selecting && onMenuClick != null) {
             TrackMenuButton(trackTitle = title, onClick = onMenuClick)
+        }
+    }
+}
+
+/** Round check used when picking several songs. */
+@Composable
+fun SelectionCircle(selected: Boolean, modifier: Modifier = Modifier) {
+    val colors = HarmoniaThemeTokens.colors
+    Box(
+        modifier = modifier
+            .size(24.dp)
+            .clip(CircleShape)
+            .then(
+                if (selected) Modifier.background(colors.primarySignal)
+                else Modifier.border(2.dp, colors.textSecondary, CircleShape)
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        if (selected) {
+            Icon(
+                imageVector = HarmoniaIcons.Check,
+                contentDescription = null,
+                tint = if (colors.isDark) colors.backgroundRoot else colors.surfaceElevated,
+                modifier = Modifier.size(16.dp)
+            )
         }
     }
 }

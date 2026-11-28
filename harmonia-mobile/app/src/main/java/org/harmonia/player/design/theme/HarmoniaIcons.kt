@@ -1058,6 +1058,15 @@ object HarmoniaIcons {
         "M10,4H4c-1.1,0 -1.99,0.9 -1.99,2L2,18c0,1.1 0.9,2 2,2h16c1.1,0 2,-0.9 2,-2V8c0,-1.1 -0.9,-2 -2,-2h-8l-2,-2z"
     )
 
+    /** Check mark (Material "check"), used for selected songs. */
+    val Check: ImageVector = pathIcon("Check", "M9,16.17L4.83,12l-1.42,1.41L9,19 21,7l-1.41,-1.41z")
+
+    /** Select / checklist (Material "checklist"), opens multi-select. */
+    val Select: ImageVector = pathIcon(
+        "Select",
+        "M22,7h-9v2h9V7zM22,15h-9v2h9V15zM5.54,11L2,7.46l1.41,-1.41l2.12,2.12l4.24,-4.24l1.41,1.41L5.54,11zM5.54,19L2,15.46l1.41,-1.41l2.12,2.12l4.24,-4.24l1.41,1.41L5.54,19z"
+    )
+
     private fun pathIcon(name: String, pathData: String): ImageVector = ImageVector.Builder(
         name = name,
         defaultWidth = 24.dp,

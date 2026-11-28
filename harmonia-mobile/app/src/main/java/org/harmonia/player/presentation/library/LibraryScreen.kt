@@ -1,5 +1,14 @@
 package org.harmonia.player.presentation.library
 
+import org.harmonia.player.presentation.components.shouldShowAlphabetBar
+import org.harmonia.player.presentation.components.alphabetPositions
+import org.harmonia.player.presentation.components.AlphabetScroller
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.LaunchedEffect
 import android.Manifest
 import android.app.Activity
@@ -147,7 +156,10 @@ fun LibraryScreen(
     onOpenSettings: (() -> Unit)? = null,
     onProfileClick: (() -> Unit)? = null,
     category: LibraryTab? = null,
-    onBack: (() -> Unit)? = null
+    onBack: (() -> Unit)? = null,
+    onPlayNext: (List<Track>) -> Unit = {},
+    onAddToQueue: (List<Track>) -> Unit = {},
+    onAddToPlaylist: (List<Track>) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     // When opened from the Library landing list, show just this one category (no tab row).
@@ -157,6 +169,9 @@ fun LibraryScreen(
 
     var showSortMenu by remember { mutableStateOf(false) }
     var favoriteSortOrder by rememberSaveable { mutableStateOf(FavoriteSortOrder.RECENTLY_FAVORITED) }
+    // Song ids picked in Select mode; null when not selecting (task 4.4).
+    var selectedIds by remember(activeTab) { mutableStateOf<Set<String>?>(null) }
+    BackHandler(enabled = selectedIds != null) { selectedIds = null }
     var selectedFormatFilter by rememberSaveable { mutableStateOf(ALL_FORMATS) }
     var isSearchExpanded by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -608,19 +623,62 @@ fun LibraryScreen(
             }
         }
 
-        if (category != null && activeTab != LibraryTab.FOLDERS) {
-            Text(
-                text = "Sorted by ${sortLabel(activeTab, uiState, favoriteSortOrder)}",
-                style = MaterialTheme.typography.labelMedium,
-                color = colors.primarySignal,
-                modifier = Modifier
-                    .padding(top = spacing.small)
-                    .clip(RoundedCornerShape(50))
-                    .clickable { showSortMenu = true }
-                    .background(colors.surfaceContainer)
-                    .padding(horizontal = spacing.medium, vertical = 6.dp)
-                    .semantics { contentDescription = "Change sort order" }
+        val isSongList = activeTab == LibraryTab.TRACKS || activeTab == LibraryTab.FAVORITES
+        val currentSelection = selectedIds
+        if (currentSelection != null && isSongList) {
+            val visibleSongs = if (activeTab == LibraryTab.TRACKS) filteredTracks else filteredFavoriteTracks
+            val picked = visibleSongs.filter { it.id in currentSelection }
+            SelectionBar(
+                selectedCount = picked.size,
+                allSelected = visibleSongs.isNotEmpty() && picked.size == visibleSongs.size,
+                inFavorites = activeTab == LibraryTab.FAVORITES,
+                onSelectAll = { selectedIds = visibleSongs.map { it.id }.toSet() },
+                onClearAll = { selectedIds = emptySet() },
+                onDone = { selectedIds = null },
+                onPlay = { onTrackClick(picked, 0); selectedIds = null },
+                onPlayNext = { onPlayNext(picked); selectedIds = null },
+                onAddToQueue = { onAddToQueue(picked); selectedIds = null },
+                onAddToPlaylist = { onAddToPlaylist(picked); selectedIds = null },
+                onFavorite = {
+                    val makeFavorite = activeTab != LibraryTab.FAVORITES
+                    picked.forEach { personalizationViewModel.setFavorite(makeFavorite, it.id) }
+                    selectedIds = null
+                }
             )
+        } else if (category != null && activeTab != LibraryTab.FOLDERS) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(spacing.small),
+                modifier = Modifier.padding(top = spacing.small)
+            ) {
+                Text(
+                    text = "Sorted by ${sortLabel(activeTab, uiState, favoriteSortOrder)}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colors.primarySignal,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .clickable { showSortMenu = true }
+                        .background(colors.surfaceContainer)
+                        .padding(horizontal = spacing.medium, vertical = 6.dp)
+                        .semantics { contentDescription = "Change sort order" }
+                )
+                if (isSongList) {
+                    Text(
+                        text = "Select",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = colors.textPrimary,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .clickable { selectedIds = emptySet() }
+                            .background(colors.surfaceContainer)
+                            .padding(horizontal = spacing.medium, vertical = 6.dp)
+                            .semantics {
+                                role = Role.Button
+                                contentDescription = "Select songs"
+                            }
+                    )
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(spacing.medium))
@@ -743,7 +801,14 @@ fun LibraryScreen(
                     unmountedSourceIds = uiState.unmountedSourceIds,
                     disabledSourceIds = uiState.disabledSourceIds,
                     onTrackClick = onTrackClick,
-                    onTrackMenu = onTrackMenu
+                    onTrackMenu = onTrackMenu,
+                    indexKeyOf = when (uiState.trackSortOrder) {
+                        TrackSortOrder.TITLE_ASC -> { track: Track -> track.title }
+                        TrackSortOrder.ARTIST_ASC -> { track: Track -> track.artistName }
+                        else -> null
+                    },
+                    selectedIds = selectedIds,
+                    onToggleSelect = { track -> selectedIds = selectedIds?.toggled(track.id) }
                 )
                 LibraryTab.FAVORITES -> FavoritesTabContent(
                     tracks = filteredFavoriteTracks,
@@ -752,15 +817,28 @@ fun LibraryScreen(
                     unmountedSourceIds = uiState.unmountedSourceIds,
                     disabledSourceIds = uiState.disabledSourceIds,
                     onTrackClick = onTrackClick,
-                    onTrackMenu = onTrackMenu
+                    onTrackMenu = onTrackMenu,
+                    indexKeyOf = when (favoriteSortOrder) {
+                        FavoriteSortOrder.TITLE_ASC -> { track: Track -> track.title }
+                        FavoriteSortOrder.ARTIST_ASC -> { track: Track -> track.artistName }
+                        else -> null
+                    },
+                    selectedIds = selectedIds,
+                    onToggleSelect = { track -> selectedIds = selectedIds?.toggled(track.id) }
                 )
                 LibraryTab.ALBUMS -> AlbumsTabContent(
                     albums = filteredAlbums,
-                    onAlbumClick = onAlbumClick
+                    onAlbumClick = onAlbumClick,
+                    indexKeyOf = when (uiState.albumSortOrder) {
+                        AlbumSortOrder.TITLE_ASC -> { album: Album -> album.title }
+                        AlbumSortOrder.ARTIST_ASC -> { album: Album -> album.artistName }
+                        else -> null
+                    }
                 )
                 LibraryTab.ARTISTS -> ArtistsTabContent(
                     artists = filteredArtists,
-                    onArtistClick = onArtistClick
+                    onArtistClick = onArtistClick,
+                    indexKeyOf = if (uiState.artistSortOrder == ArtistSortOrder.NAME_ASC) { artist: Artist -> artist.name } else null
                 )
                 LibraryTab.FOLDERS -> FoldersTabContent(
                     folders = musicFolders,
@@ -815,6 +893,22 @@ private fun FormatFilterPillsRow(
     }
 }
 
+internal fun Set<String>.toggled(id: String): Set<String> = if (id in this) this - id else this + id
+
+private fun badgeFor(track: Track, unmountedSourceIds: Set<String>, disabledSourceIds: Set<String>): String? {
+    val sourceId = track.localFile?.sourceId
+    return when {
+        sourceId != null && disabledSourceIds.contains(sourceId) -> "Source Disabled"
+        sourceId != null && unmountedSourceIds.contains(sourceId) -> "Storage Unmounted"
+        track.availability == LocalFileAvailability.UNAVAILABLE -> "File Unavailable"
+        else -> null
+    }
+}
+
+/** Room on the right for the A–Z bar, and room at the bottom so it clears the mini player. */
+private val AlphabetBarWidth = 22.dp
+private val AlphabetBarBottomInset = 88.dp
+
 @Composable
 internal fun TracksTabContent(
     tracks: List<Track>,
@@ -823,10 +917,11 @@ internal fun TracksTabContent(
     unmountedSourceIds: Set<String> = emptySet(),
     disabledSourceIds: Set<String> = emptySet(),
     onTrackClick: (List<Track>, Int) -> Unit,
-    onTrackMenu: ((Track) -> Unit)? = null
+    onTrackMenu: ((Track) -> Unit)? = null,
+    indexKeyOf: ((Track) -> String?)? = null,
+    selectedIds: Set<String>? = null,
+    onToggleSelect: (Track) -> Unit = {}
 ) {
-    val spacing = HarmoniaThemeTokens.spacing
-
     if (tracks.isEmpty()) {
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -839,34 +934,18 @@ internal fun TracksTabContent(
             )
         }
     } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-            contentPadding = PaddingValues(bottom = 96.dp)
-        ) {
-            itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
-                val sourceId = track.localFile?.sourceId
-                val isUnmounted = sourceId != null && unmountedSourceIds.contains(sourceId)
-                val isDisabled = sourceId != null && disabledSourceIds.contains(sourceId)
-                val isUnavailable = track.availability == LocalFileAvailability.UNAVAILABLE
-
-                val badgeText: String? = when {
-                    isDisabled -> "Source Disabled"
-                    isUnmounted -> "Storage Unmounted"
-                    isUnavailable -> "File Unavailable"
-                    else -> null
-                }
-
-                TrackRowCard(
-                    track = track,
-                    badgeText = badgeText,
-                    isFavorite = favoriteTrackIds.contains(track.id),
-                    onToggleFavorite = onToggleFavorite?.let { action -> { action(track) } },
-                    onClick = { onTrackClick(tracks, index) },
-                    onMenuClick = onTrackMenu?.let { menu -> { menu(track) } }
-                )
-            }
-        }
+        SongList(
+            tracks = tracks,
+            isFavorite = { favoriteTrackIds.contains(it.id) },
+            onToggleFavorite = onToggleFavorite,
+            unmountedSourceIds = unmountedSourceIds,
+            disabledSourceIds = disabledSourceIds,
+            onTrackClick = onTrackClick,
+            onTrackMenu = onTrackMenu,
+            indexKeyOf = indexKeyOf,
+            selectedIds = selectedIds,
+            onToggleSelect = onToggleSelect
+        )
     }
 }
 
@@ -878,38 +957,139 @@ internal fun FavoritesTabContent(
     unmountedSourceIds: Set<String> = emptySet(),
     disabledSourceIds: Set<String> = emptySet(),
     onTrackClick: (List<Track>, Int) -> Unit,
-    onTrackMenu: ((Track) -> Unit)? = null
+    onTrackMenu: ((Track) -> Unit)? = null,
+    indexKeyOf: ((Track) -> String?)? = null,
+    selectedIds: Set<String>? = null,
+    onToggleSelect: (Track) -> Unit = {}
 ) {
-    val spacing = HarmoniaThemeTokens.spacing
-
     if (tracks.isEmpty()) {
         EmptyFavoritesState(onBrowseTracks = onBrowseTracks)
     } else {
+        SongList(
+            tracks = tracks,
+            isFavorite = { true },
+            onToggleFavorite = onToggleFavorite,
+            unmountedSourceIds = unmountedSourceIds,
+            disabledSourceIds = disabledSourceIds,
+            onTrackClick = onTrackClick,
+            onTrackMenu = onTrackMenu,
+            indexKeyOf = indexKeyOf,
+            selectedIds = selectedIds,
+            onToggleSelect = onToggleSelect
+        )
+    }
+}
+
+/** Song list with the A–Z bar (when sorted alphabetically) and Select mode (task 4.4). */
+@Composable
+private fun SongList(
+    tracks: List<Track>,
+    isFavorite: (Track) -> Boolean,
+    onToggleFavorite: ((Track) -> Unit)?,
+    unmountedSourceIds: Set<String>,
+    disabledSourceIds: Set<String>,
+    onTrackClick: (List<Track>, Int) -> Unit,
+    onTrackMenu: ((Track) -> Unit)?,
+    indexKeyOf: ((Track) -> String?)?,
+    selectedIds: Set<String>?,
+    onToggleSelect: (Track) -> Unit
+) {
+    val listState = rememberLazyListState()
+    val positions = remember(tracks, indexKeyOf) {
+        indexKeyOf?.let { key -> alphabetPositions(tracks.map(key)) } ?: emptyMap()
+    }
+    val showBar = selectedIds == null && shouldShowAlphabetBar(positions)
+
+    Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(end = if (showBar) AlphabetBarWidth else 0.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
             contentPadding = PaddingValues(bottom = 96.dp)
         ) {
             itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
-                val sourceId = track.localFile?.sourceId
-                val isUnmounted = sourceId != null && unmountedSourceIds.contains(sourceId)
-                val isDisabled = sourceId != null && disabledSourceIds.contains(sourceId)
-                val isUnavailable = track.availability == LocalFileAvailability.UNAVAILABLE
-
-                val badgeText: String? = when {
-                    isDisabled -> "Source Disabled"
-                    isUnmounted -> "Storage Unmounted"
-                    isUnavailable -> "File Unavailable"
-                    else -> null
-                }
-
-                TrackRowCard(
+                val badge = badgeFor(track, unmountedSourceIds, disabledSourceIds)
+                SongListRow(
                     track = track,
-                    badgeText = badgeText,
-                    isFavorite = true,
-                    onToggleFavorite = { onToggleFavorite(track) },
-                    onClick = { onTrackClick(tracks, index) },
-                    onMenuClick = onTrackMenu?.let { menu -> { menu(track) } }
+                    onClick = {
+                        if (selectedIds != null) onToggleSelect(track) else onTrackClick(tracks, index)
+                    },
+                    statusText = badge,
+                    isStatusError = badge == "File Unavailable",
+                    isFavorite = isFavorite(track),
+                    onToggleFavorite = onToggleFavorite?.let { action -> { action(track) } },
+                    onMenuClick = onTrackMenu?.let { menu -> { menu(track) } },
+                    selected = selectedIds?.contains(track.id)
+                )
+            }
+        }
+        if (showBar) {
+            AlphabetScroller(
+                positions = positions,
+                onJumpTo = { listState.scrollToItem(it) },
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(bottom = AlphabetBarBottomInset)
+            )
+        }
+    }
+}
+
+/** Shown instead of "Sorted by" while picking songs: count, select all, and what to do with them. */
+@Composable
+private fun SelectionBar(
+    selectedCount: Int,
+    allSelected: Boolean,
+    inFavorites: Boolean,
+    onSelectAll: () -> Unit,
+    onClearAll: () -> Unit,
+    onDone: () -> Unit,
+    onPlay: () -> Unit,
+    onPlayNext: () -> Unit,
+    onAddToQueue: () -> Unit,
+    onAddToPlaylist: () -> Unit,
+    onFavorite: () -> Unit
+) {
+    val colors = HarmoniaThemeTokens.colors
+    val spacing = HarmoniaThemeTokens.spacing
+    val enabled = selectedCount > 0
+    Column(modifier = Modifier.padding(top = spacing.small)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = when (selectedCount) {
+                    0 -> "Select songs"
+                    1 -> "1 song selected"
+                    else -> "$selectedCount songs selected"
+                },
+                style = MaterialTheme.typography.titleSmall,
+                color = colors.textPrimary,
+                modifier = Modifier
+                    .weight(1f)
+                    .semantics { liveRegion = LiveRegionMode.Polite }
+            )
+            TextButton(onClick = if (allSelected) onClearAll else onSelectAll) {
+                Text(if (allSelected) "Clear" else "Select all", color = colors.primarySignal)
+            }
+            TextButton(onClick = onDone) {
+                Text("Done", color = colors.primarySignal, fontWeight = FontWeight.Bold)
+            }
+        }
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(spacing.small),
+            contentPadding = PaddingValues(vertical = 4.dp)
+        ) {
+            item { SelectionAction("Play", HarmoniaIcons.Play, enabled, onPlay) }
+            item { SelectionAction("Play next", HarmoniaIcons.PlayNext, enabled, onPlayNext) }
+            item { SelectionAction("Add to queue", HarmoniaIcons.AddToQueue, enabled, onAddToQueue) }
+            item { SelectionAction("Add to playlist", HarmoniaIcons.PlaylistAdd, enabled, onAddToPlaylist) }
+            item {
+                SelectionAction(
+                    label = if (inFavorites) "Remove from favorites" else "Add to favorites",
+                    icon = if (inFavorites) HarmoniaIcons.FavoriteBorder else HarmoniaIcons.Favorite,
+                    enabled = enabled,
+                    onClick = onFavorite
                 )
             }
         }
@@ -917,24 +1097,63 @@ internal fun FavoritesTabContent(
 }
 
 @Composable
+private fun SelectionAction(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, enabled: Boolean, onClick: () -> Unit) {
+    val colors = HarmoniaThemeTokens.colors
+    val tint = if (enabled) colors.textPrimary else colors.textDisabled
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(colors.surfaceContainer)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .semantics(mergeDescendants = true) { role = Role.Button }
+    ) {
+        Icon(imageVector = icon, contentDescription = null, tint = if (enabled) colors.primarySignal else tint, modifier = Modifier.size(18.dp))
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(text = label, style = MaterialTheme.typography.labelMedium, color = tint)
+    }
+}
+
+@Composable
 private fun AlbumsTabContent(
     albums: List<Album>,
-    onAlbumClick: (Album) -> Unit
+    onAlbumClick: (Album) -> Unit,
+    indexKeyOf: ((Album) -> String?)? = null
 ) {
     val spacing = HarmoniaThemeTokens.spacing
 
     if (albums.isEmpty()) {
         EmptyLibraryState(message = "No albums found in library")
     } else {
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = AlbumGridMinCellWidth),
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.spacedBy(spacing.medium),
-            verticalArrangement = Arrangement.spacedBy(spacing.medium),
-            contentPadding = PaddingValues(bottom = 96.dp)
-        ) {
-            items(albums, key = { it.id }) { album ->
-                AlbumGridItem(album = album, onClick = { onAlbumClick(album) })
+        val gridState = rememberLazyGridState()
+        val positions = remember(albums, indexKeyOf) {
+            indexKeyOf?.let { key -> alphabetPositions(albums.map(key)) } ?: emptyMap()
+        }
+        val showBar = shouldShowAlphabetBar(positions)
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyVerticalGrid(
+                state = gridState,
+                columns = GridCells.Adaptive(minSize = AlbumGridMinCellWidth),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(end = if (showBar) AlphabetBarWidth else 0.dp),
+                horizontalArrangement = Arrangement.spacedBy(spacing.medium),
+                verticalArrangement = Arrangement.spacedBy(spacing.medium),
+                contentPadding = PaddingValues(bottom = 96.dp)
+            ) {
+                items(albums, key = { it.id }) { album ->
+                    AlbumGridItem(album = album, onClick = { onAlbumClick(album) })
+                }
+            }
+            if (showBar) {
+                AlphabetScroller(
+                    positions = positions,
+                    onJumpTo = { gridState.scrollToItem(it) },
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(bottom = AlphabetBarBottomInset)
+                )
             }
         }
     }
@@ -943,20 +1162,38 @@ private fun AlbumsTabContent(
 @Composable
 private fun ArtistsTabContent(
     artists: List<Artist>,
-    onArtistClick: (Artist) -> Unit
+    onArtistClick: (Artist) -> Unit,
+    indexKeyOf: ((Artist) -> String?)? = null
 ) {
-    val spacing = HarmoniaThemeTokens.spacing
-
     if (artists.isEmpty()) {
         EmptyLibraryState(message = "No artists found in library")
     } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-            contentPadding = PaddingValues(bottom = 96.dp)
-        ) {
-            items(artists, key = { it.id }) { artist ->
-                ArtistListRow(artist = artist, onClick = { onArtistClick(artist) })
+        val listState = rememberLazyListState()
+        val positions = remember(artists, indexKeyOf) {
+            indexKeyOf?.let { key -> alphabetPositions(artists.map(key)) } ?: emptyMap()
+        }
+        val showBar = shouldShowAlphabetBar(positions)
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(end = if (showBar) AlphabetBarWidth else 0.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+                contentPadding = PaddingValues(bottom = 96.dp)
+            ) {
+                items(artists, key = { it.id }) { artist ->
+                    ArtistListRow(artist = artist, onClick = { onArtistClick(artist) })
+                }
+            }
+            if (showBar) {
+                AlphabetScroller(
+                    positions = positions,
+                    onJumpTo = { listState.scrollToItem(it) },
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(bottom = AlphabetBarBottomInset)
+                )
             }
         }
     }

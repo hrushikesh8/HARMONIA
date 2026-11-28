@@ -91,6 +91,16 @@ class PlaylistDetailViewModel(
         }
     }
 
+    /** Undo for [removeTrack]: adds the song back and moves it to where it was. */
+    fun restoreTrack(trackId: String, index: Int) {
+        viewModelScope.launch {
+            val added = playlistRepository.addTrackToPlaylist(playlistId, trackId)
+            if (index in 0 until added.position) {
+                playlistRepository.reorderPlaylistItem(playlistId, fromPosition = added.position, toPosition = index)
+            }
+        }
+    }
+
     /** Moves the song at [fromIndex] to [toIndex] (used by drag to reorder). */
     fun moveTrack(fromIndex: Int, toIndex: Int) {
         val size = _uiState.value.items.size

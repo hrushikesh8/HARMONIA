@@ -54,6 +54,21 @@ class PlaylistsViewModel(
         }
     }
 
+    fun addTracksToPlaylist(playlistId: String, trackIds: List<String>) {
+        if (trackIds.isEmpty()) return
+        viewModelScope.launch {
+            playlistRepository.addTracksToPlaylist(playlistId, trackIds)
+        }
+    }
+
+    fun createPlaylistWithTracks(name: String, trackIds: List<String>) {
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            val playlist = playlistRepository.createPlaylist(name.trim())
+            if (trackIds.isNotEmpty()) playlistRepository.addTracksToPlaylist(playlist.id, trackIds)
+        }
+    }
+
     fun createPlaylistWithTrack(name: String, trackId: String) {
         if (name.isBlank()) return
         viewModelScope.launch {

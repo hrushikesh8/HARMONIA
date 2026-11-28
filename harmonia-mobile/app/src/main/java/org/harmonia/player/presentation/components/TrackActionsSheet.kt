@@ -169,11 +169,11 @@ fun TrackMenuButton(trackTitle: String, onClick: () -> Unit, modifier: Modifier 
 }
 
 /**
- * Picks an existing playlist for [track], or creates a new one containing it.
+ * Picks an existing playlist for [tracks] (one song or several), or creates a new one with them.
  */
 @Composable
 fun AddToPlaylistDialog(
-    track: Track,
+    tracks: List<Track>,
     playlists: List<Playlist>,
     onSelectPlaylist: (Playlist) -> Unit,
     onCreatePlaylist: (String) -> Unit,
@@ -187,7 +187,11 @@ fun AddToPlaylistDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                "Add \"${TrackDisplayUtils.formatDisplayTitle(track)}\" to playlist",
+                if (tracks.size == 1) {
+                    "Add \"${TrackDisplayUtils.formatDisplayTitle(tracks.first())}\" to playlist"
+                } else {
+                    "Add ${tracks.size} songs to playlist"
+                },
                 color = colors.textPrimary,
                 fontWeight = FontWeight.Bold,
                 maxLines = 2,

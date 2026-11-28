@@ -663,13 +663,31 @@ class HarmoniaPlayerController(
             setQueue(tracks, 0)
             return
         }
+        insertAt(_playbackState.value.activeQueueIndex + 1, tracks)
+    }
+
+    override fun insertIntoQueue(index: Int, tracks: List<Track>) {
+        if (tracks.isEmpty()) return
+        if (_queue.value.isEmpty()) {
+            appendToQueue(tracks)
+            return
+        }
+        insertAt(index, tracks)
+    }
+
+    /** Inserts [tracks] at [index] in both the saved queue and the player, keeping the current song. */
+    private fun insertAt(index: Int, tracks: List<Track>) {
         scope.launch {
             val currentQueue = _queue.value
             val activeIdx = _playbackState.value.activeQueueIndex
-            val insertAt = (activeIdx + 1).coerceIn(0, currentQueue.size)
+            val insertAt = index.coerceIn(0, currentQueue.size)
             val newItems = tracks.map { track -> QueueItem(position = 0, trackId = track.id, track = track) }
             val updated = (currentQueue.take(insertAt) + newItems + currentQueue.drop(insertAt)).renumbered()
             _queue.value = updated
+            if (insertAt <= activeIdx) {
+                // Songs went in before the current one, which moves it down.
+                _playbackState.value = _playbackState.value.copy(activeQueueIndex = activeIdx + tracks.size)
+            }
             playbackStateRepository.setQueue(updated)
 
             val mediaItems = tracks.map { track -> toMediaItem(track) }

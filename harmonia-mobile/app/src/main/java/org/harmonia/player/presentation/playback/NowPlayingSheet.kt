@@ -771,12 +771,16 @@ private fun HarmoniaThinSlider(
             .semantics { this.contentDescription = contentDescription },
         colors = sliderColors,
         thumb = {
-            Box(
-                modifier = Modifier
-                    .size(thumbSize)
-                    .clip(CircleShape)
-                    .background(thumbColor)
-            )
+            // Fixed-size frame with the dot centred in it, so the dot sits exactly on the track
+            // line whatever its (animated) size.
+            Box(modifier = Modifier.size(20.dp), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier
+                        .size(thumbSize)
+                        .clip(CircleShape)
+                        .background(thumbColor)
+                )
+            }
         },
         track = { state ->
             SliderDefaults.Track(

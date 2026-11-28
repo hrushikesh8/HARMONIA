@@ -29,8 +29,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -166,7 +170,7 @@ fun MainAppContainer(
 
     var showNowPlayingSheet by rememberSaveable { mutableStateOf(false) }
     var menuTrack by remember { mutableStateOf<Track?>(null) }
-    var playlistPickerTrack by remember { mutableStateOf<Track?>(null) }
+    var playlistPickerTracks by remember { mutableStateOf<List<Track>?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
@@ -174,6 +178,19 @@ fun MainAppContainer(
         coroutineScope.launch {
             snackbarHostState.currentSnackbarData?.dismiss()
             snackbarHostState.showSnackbar(message)
+        }
+    }
+
+    /** A message with an Undo button; [onUndo] runs only if the button is tapped. */
+    fun showUndo(message: String, onUndo: () -> Unit) {
+        coroutineScope.launch {
+            snackbarHostState.currentSnackbarData?.dismiss()
+            val result = snackbarHostState.showSnackbar(
+                message = message,
+                actionLabel = "Undo",
+                duration = SnackbarDuration.Long
+            )
+            if (result == SnackbarResult.ActionPerformed) onUndo()
         }
     }
 
@@ -374,7 +391,16 @@ fun MainAppContainer(
                         onAlbumClick = { album -> navigateToAlbum(album.id) },
                         onArtistClick = { artist -> navigateToArtist(artist.id) },
                         category = LibraryTab.entries.firstOrNull { it.name == tab } ?: LibraryTab.TRACKS,
-                        onBack = { navController.popBackStack() }
+                        onBack = { navController.popBackStack() },
+                        onPlayNext = { tracks ->
+                            playbackViewModel.playNext(tracks)
+                            showMessage(if (tracks.size == 1) "Playing next" else "${tracks.size} songs playing next")
+                        },
+                        onAddToQueue = { tracks ->
+                            playbackViewModel.addToQueue(tracks)
+                            showMessage(if (tracks.size == 1) "Added to queue" else "${tracks.size} songs added to queue")
+                        },
+                        onAddToPlaylist = { tracks -> playlistPickerTracks = tracks }
                     )
                 }
                 composable<HarmoniaNavDestination.Playlists> {
@@ -414,7 +440,8 @@ fun MainAppContainer(
                         onBack = { navController.popBackStack() },
                         onPlay = playTracks,
                         onShuffle = shuffleTracks,
-                        onTrackMenu = onTrackMenu
+                        onTrackMenu = onTrackMenu,
+                        onRemoved = { message, undo -> showUndo(message, undo) }
                     )
                 }
                 composable<HarmoniaNavDestination.Profile> {
@@ -507,7 +534,16 @@ fun MainAppContainer(
                         navigateToArtist(artistId)
                     },
                     onMoveQueueItem = { from, to -> playbackViewModel.moveQueueItem(from, to) },
-                    onRemoveQueueItem = { idx -> playbackViewModel.removeQueueItem(idx) },
+                    onRemoveQueueItem = { idx ->
+                        val removed = playerUiState.queue.getOrNull(idx)?.track
+                        playbackViewModel.removeQueueItem(idx)
+                        if (removed != null) {
+                            val title = org.harmonia.player.presentation.util.TrackDisplayUtils.formatDisplayTitle(removed)
+                            showUndo("Removed \"$title\" from the queue") {
+                                playbackViewModel.restoreQueueItem(idx, removed)
+                            }
+                        }
+                    },
                     onOpenTrackMenu = playerUiState.currentTrack?.let { track -> { menuTrack = track } }
                 )
             }
@@ -524,7 +560,7 @@ fun MainAppContainer(
                         playbackViewModel.addToQueue(track)
                         showMessage("Added to queue")
                     },
-                    onAddToPlaylist = { playlistPickerTrack = track },
+                    onAddToPlaylist = { playlistPickerTracks = listOf(track) },
                     onGoToAlbum = track.albumId?.let { albumId ->
                         {
                             showNowPlayingSheet = false
@@ -540,21 +576,21 @@ fun MainAppContainer(
                 )
             }
 
-            playlistPickerTrack?.let { track ->
+            playlistPickerTracks?.let { tracks ->
                 AddToPlaylistDialog(
-                    track = track,
+                    tracks = tracks,
                     playlists = playlistsUiState.playlists,
                     onSelectPlaylist = { playlist ->
-                        playlistsViewModel.addTrackToPlaylist(playlist.id, track.id)
-                        playlistPickerTrack = null
+                        playlistsViewModel.addTracksToPlaylist(playlist.id, tracks.map { it.id })
+                        playlistPickerTracks = null
                         showMessage("Added to ${playlist.name}")
                     },
                     onCreatePlaylist = { name ->
-                        playlistsViewModel.createPlaylistWithTrack(name, track.id)
-                        playlistPickerTrack = null
+                        playlistsViewModel.createPlaylistWithTracks(name, tracks.map { it.id })
+                        playlistPickerTracks = null
                         showMessage("Added to ${name.trim()}")
                     },
-                    onDismiss = { playlistPickerTrack = null }
+                    onDismiss = { playlistPickerTracks = null }
                 )
             }
 
@@ -571,6 +607,17 @@ fun MainAppContainer(
                             else -> 88.dp
                         }
                     )
-            )
+            ) { data ->
+                // Harmonia colours instead of Material's white bar; Undo in lavender.
+                val themeColors = HarmoniaThemeTokens.colors
+                Snackbar(
+                    snackbarData = data,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    containerColor = themeColors.surfaceElevated,
+                    contentColor = themeColors.textPrimary,
+                    actionColor = themeColors.primarySignal
+                )
+            }
     }
 }

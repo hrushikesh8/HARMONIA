@@ -71,7 +71,7 @@ Build order chosen by Sagar: **4.1 → 4.4 → 4.5 → 4.2 → 4.3**, then the r
 | 4.1 | Now Playing background tinted from album art | UI, BE | Done |
 | 4.2 | Browse by genre and year | UI, UX, BE | Planned |
 | 4.3 | Lyrics (embedded tags or `.lrc` files, synced scrolling; LRCLIB as an optional online source) | UI, UX, BE | Planned |
-| 4.4 | A-Z fast scroll, multi-select, undo after removing | UX, BE | Planned |
+| 4.4 | A-Z fast scroll, multi-select, undo after removing | UX, BE | Done |
 | 4.5 | Playback options: crossfade, gapless, speed, volume normalisation | UX, BE | Planned |
 | 4.6 | Home-screen widget, app shortcuts, "Open with Harmonia" | UI, BE | Planned |
 | 4.7 | Smart playlists, M3U import/export | UI, UX, BE | Planned |
@@ -405,6 +405,31 @@ Build order chosen by Sagar: **4.1 → 4.4 → 4.5 → 4.2 → 4.3**, then the r
   new library (we didn't add AndroidX Palette). Unit tested.
 - **Why:** It's the most recognisable touch of Apple Music and Spotify's player and makes each
   song feel different, for very little code.
+- **Also (Sagar's feedback):** the volume slider looked as heavy as the song progress bar. Volume
+  is now a quieter 3dp grey track with a smaller thumb; the lavender progress bar leads. Both
+  thicken while you drag them so it's clear you've grabbed them.
+
+### 4.4 A–Z fast scroll, multi-select, undo
+- **A–Z bar:** when Songs, Favorites, Albums or Artists are sorted alphabetically (by title,
+  artist or name), an A–Z strip appears on the right like Apple Music. Tap or drag over it to jump;
+  a bubble shows the letter under your finger and the phone ticks as you pass letters. Letters
+  with songs are lavender, empty ones grey (tapping an empty letter goes to the next one with
+  songs). Accents are ignored (É files under E) and numbers/symbols go under #. Screen readers get
+  a "Jump to X" action per letter. `presentation/components/AlphabetScroller.kt`, unit tested.
+- **Multi-select:** a **Select** button next to "Sorted by" in Songs and Favorites. Tap songs to
+  tick them ("3 songs selected", Select all / Clear, Done; Back also exits), then: Play, Play next,
+  Add to queue, Add to playlist (the playlist dialog now takes several songs: "Add 3 songs to
+  playlist") and Add to / Remove from favorites. Hearts and menus hide while selecting.
+- **Undo:** removing a song from the queue (swipe in Now Playing) or from a playlist (swipe) now
+  shows "Removed "Song"" with an **Undo** button, which puts the song back exactly where it was.
+  The player gained `insertIntoQueue(index, songs)` for this; playlists re-add and move the song.
+  New `QueueEditingTest` drives the real player controller against a fake player and checks the
+  app's queue and the player's own list stay identical through remove, undo, add and play-next.
+- **Also:** the snackbar was Material's white bar with grey text (hard to read); it now uses
+  Harmonia colours with a lavender action. Volume/progress slider dots now sit exactly on the line.
+- **Seen once, not reproduced:** on the emulator, rapid queue edits right at a song change left the
+  player one song out of step with the queue list. The unit tests above don't reproduce it; keep an
+  eye out on a real phone.
 
 ## Decisions and ideas checked
 
