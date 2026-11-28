@@ -702,12 +702,12 @@ fun LibraryScreen(
                 }
                 uiState.isScanFailed -> {
                     ScanFailedState(
-                        errorMessage = uiState.scanErrorMessage ?: "Media reconciliation scan failed",
+                        errorMessage = friendlyScanError(uiState.scanErrorMessage),
                         onRetry = { viewModel.retryScan() }
                     )
                 }
                 else -> {
-                    EmptyLibraryState(message = "No audio files found")
+                    EmptyLibraryState(message = "No songs found")
                 }
             }
         } else {
@@ -717,7 +717,7 @@ fun LibraryScreen(
                 Spacer(modifier = Modifier.height(spacing.small))
             } else if (uiState.isScanFailed) {
                 ScanErrorBanner(
-                    errorMessage = uiState.scanErrorMessage ?: "Scan failed",
+                    errorMessage = friendlyScanError(uiState.scanErrorMessage),
                     onRetry = { viewModel.retryScan() }
                 )
                 Spacer(modifier = Modifier.height(spacing.small))
@@ -1124,7 +1124,7 @@ private fun AlbumsTabContent(
     val spacing = HarmoniaThemeTokens.spacing
 
     if (albums.isEmpty()) {
-        EmptyLibraryState(message = "No albums found in library")
+        EmptyLibraryState(message = "No albums yet")
     } else {
         val gridState = rememberLazyGridState()
         val positions = remember(albums, indexKeyOf) {
@@ -1166,7 +1166,7 @@ private fun ArtistsTabContent(
     indexKeyOf: ((Artist) -> String?)? = null
 ) {
     if (artists.isEmpty()) {
-        EmptyLibraryState(message = "No artists found in library")
+        EmptyLibraryState(message = "No artists yet")
     } else {
         val listState = rememberLazyListState()
         val positions = remember(artists, indexKeyOf) {
@@ -1208,7 +1208,7 @@ private fun FoldersTabContent(
     val spacing = HarmoniaThemeTokens.spacing
 
     if (folders.isEmpty()) {
-        EmptyLibraryState(message = "No local music folders found")
+        EmptyLibraryState(message = "No music folders found")
     } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -1266,77 +1266,64 @@ internal fun TrackRowCard(
     )
 }
 
+/**
+ * Full-screen message used for the Library's empty, permission and error states: a round icon,
+ * a short title, one friendly line and (optionally) one button. No card or border.
+ */
 @Composable
-private fun PermissionRequiredState(
-    permissionState: StoragePermissionState,
-    onRequestPermission: () -> Unit,
-    onOpenSettings: () -> Unit
+private fun LibraryMessage(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    body: String,
+    actionLabel: String? = null,
+    actionDescription: String? = null,
+    onAction: (() -> Unit)? = null,
+    iconTint: androidx.compose.ui.graphics.Color = HarmoniaThemeTokens.colors.primarySignal
 ) {
     val colors = HarmoniaThemeTokens.colors
     val spacing = HarmoniaThemeTokens.spacing
-    val cardShape = RoundedCornerShape(16.dp)
-
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .hairlineBorder(color = colors.borderStructural, shape = cardShape, width = 1.dp),
-            shape = cardShape,
-            colors = CardDefaults.cardColors(containerColor = colors.surfaceElevated)
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = spacing.large, vertical = spacing.xLarge)
         ) {
-            Column(
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(spacing.large),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .size(72.dp)
+                    .clip(CircleShape)
+                    .background(colors.surfaceContainer),
+                contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = HarmoniaIcons.MusicNote,
-                    contentDescription = null,
-                    tint = colors.primarySignal,
-                    modifier = Modifier.size(48.dp)
-                )
-                Spacer(modifier = Modifier.height(spacing.medium))
-                val isSettingsRequired = permissionState == StoragePermissionState.SETTINGS_REQUIRED
-                Text(
-                    text = if (isSettingsRequired) "Permission Required in Settings" else "Audio Permission Required",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = colors.textPrimary,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(spacing.small))
-                Text(
-                    text = if (isSettingsRequired) {
-                        "Audio permission was permanently denied. Please enable audio storage access in system settings to discover local music."
-                    } else {
-                        "Harmonia is an offline-first music player that needs access to your device audio files to discover and organize your local library."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.textSecondary,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(20.dp))
+                Icon(imageVector = icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(32.dp))
+            }
+            Spacer(modifier = Modifier.height(spacing.standard))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                color = colors.textPrimary,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(spacing.small))
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.textSecondary,
+                textAlign = TextAlign.Center
+            )
+            if (actionLabel != null && onAction != null) {
+                Spacer(modifier = Modifier.height(spacing.large))
                 Button(
-                    onClick = if (isSettingsRequired) onOpenSettings else onRequestPermission,
+                    onClick = onAction,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = colors.primarySignal,
-                        contentColor = colors.backgroundRoot
+                        contentColor = if (colors.isDark) colors.backgroundRoot else colors.surfaceElevated
                     ),
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(50),
                     modifier = Modifier
                         .height(48.dp)
-                        .touchTarget48()
-                        .semantics {
-                            contentDescription = if (isSettingsRequired) "Open system settings" else "Grant audio permission"
-                        }
+                        .semantics { if (actionDescription != null) contentDescription = actionDescription }
                 ) {
-                    Text(
-                        text = if (isSettingsRequired) "Open Settings" else "Grant Permission",
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text(text = actionLabel, style = MaterialTheme.typography.labelLarge)
                 }
             }
         }
@@ -1344,32 +1331,47 @@ private fun PermissionRequiredState(
 }
 
 @Composable
+private fun PermissionRequiredState(
+    permissionState: StoragePermissionState,
+    onRequestPermission: () -> Unit,
+    onOpenSettings: () -> Unit
+) {
+    if (permissionState == StoragePermissionState.SETTINGS_REQUIRED) {
+        LibraryMessage(
+            icon = HarmoniaIcons.Settings,
+            title = "Turn on music access in Settings",
+            body = "Harmonia can't see your songs because access is turned off. In Settings, open Permissions, " +
+                "then Music and audio, and choose Allow.",
+            actionLabel = "Open Settings",
+            actionDescription = "Open system settings",
+            onAction = onOpenSettings
+        )
+    } else {
+        LibraryMessage(
+            icon = HarmoniaIcons.MusicNote,
+            title = "Let Harmonia find your music",
+            body = "Harmonia plays the songs saved on this phone. Allow access to your music and they'll show up here. " +
+                "Nothing leaves your phone.",
+            actionLabel = "Allow access",
+            actionDescription = "Grant audio permission",
+            onAction = onRequestPermission
+        )
+    }
+}
+
+@Composable
 private fun ScanningState() {
     val colors = HarmoniaThemeTokens.colors
     val spacing = HarmoniaThemeTokens.spacing
-
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(spacing.large)
-        ) {
-            CircularProgressIndicator(
-                color = colors.primarySignal,
-                modifier = Modifier.size(48.dp)
-            )
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(spacing.large)) {
+            CircularProgressIndicator(color = colors.primarySignal, modifier = Modifier.size(40.dp))
             Spacer(modifier = Modifier.height(spacing.standard))
-            Text(
-                text = "Finding your music",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = colors.textPrimary
-            )
+            Text(text = "Finding your music", style = MaterialTheme.typography.titleLarge, color = colors.textPrimary)
             Spacer(modifier = Modifier.height(spacing.small))
             Text(
-                text = "Looking for music on your phone\u2026",
-                style = MaterialTheme.typography.bodySmall,
+                text = "Looking through the songs on your phone. This takes a moment the first time.",
+                style = MaterialTheme.typography.bodyMedium,
                 color = colors.textSecondary,
                 textAlign = TextAlign.Center
             )
@@ -1382,165 +1384,75 @@ private fun ScanFailedState(
     errorMessage: String,
     onRetry: () -> Unit
 ) {
-    val colors = HarmoniaThemeTokens.colors
-    val spacing = HarmoniaThemeTokens.spacing
-    val cardShape = RoundedCornerShape(16.dp)
-
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .hairlineBorder(color = colors.borderStructural, shape = cardShape, width = 1.dp),
-            shape = cardShape,
-            colors = CardDefaults.cardColors(containerColor = colors.surfaceElevated)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(spacing.large),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Icon(
-                    imageVector = HarmoniaIcons.Close,
-                    contentDescription = null,
-                    tint = colors.statusError,
-                    modifier = Modifier.size(48.dp)
-                )
-                Spacer(modifier = Modifier.height(spacing.medium))
-                Text(
-                    text = "Couldn't scan your music",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = colors.textPrimary
-                )
-                Spacer(modifier = Modifier.height(spacing.small))
-                Text(
-                    text = errorMessage,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.textSecondary,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(20.dp))
-                Button(
-                    onClick = onRetry,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = colors.primarySignal,
-                        contentColor = colors.backgroundRoot
-                    ),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier
-                        .height(48.dp)
-                        .touchTarget48()
-                        .semantics {
-                            contentDescription = "Retry scan"
-                        }
-                ) {
-                    Text("Retry Scan", fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-    }
+    LibraryMessage(
+        icon = HarmoniaIcons.Info,
+        title = "Couldn't look for songs",
+        body = errorMessage,
+        actionLabel = "Try again",
+        actionDescription = "Retry scan",
+        onAction = onRetry,
+        iconTint = HarmoniaThemeTokens.colors.statusError
+    )
 }
 
 @Composable
 private fun EmptyLibraryState(message: String) {
-    val colors = HarmoniaThemeTokens.colors
-    val spacing = HarmoniaThemeTokens.spacing
-
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(spacing.large)
-        ) {
-            Icon(
-                imageVector = HarmoniaIcons.MusicNote,
-                contentDescription = null,
-                tint = colors.textSecondary,
-                modifier = Modifier.size(48.dp)
-            )
-            Spacer(modifier = Modifier.height(spacing.medium))
-            Text(
-                text = message,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = colors.textPrimary
-            )
-            Spacer(modifier = Modifier.height(spacing.xSmall))
-            Text(
-                text = "No songs on this phone yet. Copy music to your phone or add a folder to start listening.",
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.textSecondary,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
+    LibraryMessage(
+        icon = HarmoniaIcons.MusicNote,
+        title = message,
+        body = "Copy music to your phone (for example into the Music folder), or add a folder in Settings, " +
+            "and it will show up here."
+    )
 }
 
 @Composable
 internal fun EmptyFavoritesState(
     onBrowseTracks: () -> Unit
 ) {
+    LibraryMessage(
+        icon = HarmoniaIcons.Favorite,
+        title = "No favorites yet",
+        body = "Tap the heart on any song and it will show up here.",
+        actionLabel = "Browse songs",
+        actionDescription = "Browse all tracks in library",
+        onAction = onBrowseTracks
+    )
+}
+
+/** Thin status line above the list (no border), with an optional small action. */
+@Composable
+private fun LibraryStatusLine(
+    text: String,
+    textColor: androidx.compose.ui.graphics.Color,
+    showProgress: Boolean = false,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null
+) {
     val colors = HarmoniaThemeTokens.colors
     val spacing = HarmoniaThemeTokens.spacing
-    val cardShape = RoundedCornerShape(16.dp)
-
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(colors.surfaceContainer)
+            .padding(horizontal = spacing.medium, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .hairlineBorder(color = colors.borderStructural, shape = cardShape, width = 1.dp),
-            shape = cardShape,
-            colors = CardDefaults.cardColors(containerColor = colors.surfaceElevated)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(spacing.large),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Icon(
-                    imageVector = HarmoniaIcons.FavoriteBorder,
-                    contentDescription = null,
-                    tint = colors.textSecondary,
-                    modifier = Modifier.size(48.dp)
-                )
-                Spacer(modifier = Modifier.height(spacing.medium))
-                Text(
-                    text = "No favorites yet",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = colors.textPrimary
-                )
-                Spacer(modifier = Modifier.height(spacing.small))
-                Text(
-                    text = "Tap the heart on any song and it will show up here.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.textSecondary,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(20.dp))
-                Button(
-                    onClick = onBrowseTracks,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = colors.primarySignal,
-                        contentColor = colors.backgroundRoot
-                    ),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier
-                        .height(48.dp)
-                        .touchTarget48()
-                        .semantics {
-                            contentDescription = "Browse all tracks in library"
-                        }
-                ) {
-                    Text("Browse Tracks", fontWeight = FontWeight.Bold)
-                }
+        if (showProgress) {
+            CircularProgressIndicator(color = colors.primarySignal, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
+            Spacer(modifier = Modifier.width(spacing.small))
+        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = textColor,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        if (actionLabel != null && onAction != null) {
+            TextButton(onClick = onAction) {
+                Text(text = actionLabel, color = colors.primarySignal, style = MaterialTheme.typography.labelLarge)
             }
         }
     }
@@ -1548,31 +1460,11 @@ internal fun EmptyFavoritesState(
 
 @Composable
 private fun ScanningBanner() {
-    val colors = HarmoniaThemeTokens.colors
-    val spacing = HarmoniaThemeTokens.spacing
-    val bannerShape = RoundedCornerShape(8.dp)
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = spacing.xSmall)
-            .background(colors.surfaceElevated, bannerShape)
-            .hairlineBorder(color = colors.borderStructural, shape = bannerShape, width = 1.dp)
-            .padding(horizontal = spacing.medium, vertical = spacing.small),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        CircularProgressIndicator(
-            color = colors.primarySignal,
-            modifier = Modifier.size(16.dp),
-            strokeWidth = 2.dp
-        )
-        Spacer(modifier = Modifier.width(spacing.small))
-        Text(
-            text = "Updating your library\u2026",
-            style = MaterialTheme.typography.bodySmall,
-            color = colors.textPrimary
-        )
-    }
+    LibraryStatusLine(
+        text = "Updating your library\u2026",
+        textColor = HarmoniaThemeTokens.colors.textSecondary,
+        showProgress = true
+    )
 }
 
 @Composable
@@ -1580,42 +1472,12 @@ private fun ScanErrorBanner(
     errorMessage: String,
     onRetry: () -> Unit
 ) {
-    val colors = HarmoniaThemeTokens.colors
-    val spacing = HarmoniaThemeTokens.spacing
-    val bannerShape = RoundedCornerShape(8.dp)
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = spacing.xSmall)
-            .background(colors.surfaceElevated, bannerShape)
-            .hairlineBorder(color = colors.statusError.copy(alpha = 0.5f), shape = bannerShape, width = 1.dp)
-            .padding(horizontal = spacing.medium, vertical = spacing.small),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = errorMessage,
-            style = MaterialTheme.typography.bodySmall,
-            color = colors.statusError,
-            modifier = Modifier.weight(1f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Spacer(modifier = Modifier.width(spacing.small))
-        Button(
-            onClick = onRetry,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = colors.primarySignal,
-                contentColor = colors.backgroundRoot
-            ),
-            shape = RoundedCornerShape(6.dp),
-            modifier = Modifier.touchTarget48(),
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-        ) {
-            Text("Retry", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-        }
-    }
+    LibraryStatusLine(
+        text = errorMessage,
+        textColor = HarmoniaThemeTokens.colors.statusError,
+        actionLabel = "Try again",
+        onAction = onRetry
+    )
 }
 
 @Composable
@@ -1624,46 +1486,23 @@ private fun PermissionWarningBanner(
     onRequestPermission: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
-    val colors = HarmoniaThemeTokens.colors
-    val spacing = HarmoniaThemeTokens.spacing
-    val bannerShape = RoundedCornerShape(8.dp)
     val isSettingsRequired = permissionState == StoragePermissionState.SETTINGS_REQUIRED
+    LibraryStatusLine(
+        text = "Allow access to your music so new songs show up",
+        textColor = HarmoniaThemeTokens.colors.statusWarning,
+        actionLabel = if (isSettingsRequired) "Settings" else "Allow",
+        onAction = if (isSettingsRequired) onOpenSettings else onRequestPermission
+    )
+}
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = spacing.xSmall)
-            .background(colors.surfaceElevated, bannerShape)
-            .hairlineBorder(color = colors.statusWarning.copy(alpha = 0.5f), shape = bannerShape, width = 1.dp)
-            .padding(horizontal = spacing.medium, vertical = spacing.small),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = "Allow access to your music to find new songs",
-            style = MaterialTheme.typography.bodySmall,
-            color = colors.statusWarning,
-            modifier = Modifier.weight(1f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Spacer(modifier = Modifier.width(spacing.small))
-        Button(
-            onClick = if (isSettingsRequired) onOpenSettings else onRequestPermission,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = colors.primarySignal,
-                contentColor = colors.backgroundRoot
-            ),
-            shape = RoundedCornerShape(6.dp),
-            modifier = Modifier.touchTarget48(),
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-        ) {
-            Text(
-                text = if (isSettingsRequired) "Settings" else "Grant",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold
-            )
-        }
+/** Scan problems in plain words; the technical message stays in the view model for debugging. */
+internal fun friendlyScanError(raw: String?): String {
+    val text = raw.orEmpty().lowercase(Locale.ROOT)
+    return when {
+        "file(s) failed" in text || "failed during" in text ->
+            "Some songs couldn't be read. The rest of your library is fine."
+        "permission" in text -> "Harmonia needs access to your music to look for songs."
+        else -> "Something went wrong while looking for songs."
     }
 }
 

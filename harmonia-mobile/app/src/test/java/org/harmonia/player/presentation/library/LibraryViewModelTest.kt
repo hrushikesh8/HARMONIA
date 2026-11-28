@@ -82,8 +82,11 @@ private class FakeMediaReconciliationEngine : MediaReconciliationEngine {
     var failureErrorMessage: String? = null
     var onScanBlock: (suspend (StorageSource, ScanMode) -> Unit)? = null
 
+    val modes = mutableListOf<ScanMode>()
+
     override fun scanSource(source: StorageSource, mode: ScanMode): Flow<ScanProgress> = flow {
         scanCount++
+        modes += mode
         emit(ScanProgress(sourceId = source.id, status = ScanProgressStatus.IDLE))
         if (shouldFail) {
             emit(
@@ -189,6 +192,19 @@ class LibraryViewModelTest {
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.uiState.collect {}
         }
+    }
+
+    @Test
+    fun `empty library gets a full scan so it can refill, otherwise incremental`() = runTest(testDispatcher) {
+        val emptyLibrary = createViewModel()
+        subscribeUiState(emptyLibrary)
+        advanceUntilIdle()
+        assertEquals(ScanMode.FULL_RECONCILIATION, reconciliationEngine.modes.last())
+
+        trackRepo.tracks.value = listOf(Track(id = "t1", title = "One", durationSec = 60.0))
+        emptyLibrary.retryScan()
+        advanceUntilIdle()
+        assertEquals(ScanMode.INCREMENTAL, reconciliationEngine.modes.last())
     }
 
     @Test

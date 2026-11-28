@@ -128,9 +128,9 @@ class HarmoniaM4EEndToEndIntegrationTest {
         // Navigate to Library
         composeTestRule.onNodeWithText("Library").performClick()
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("Audio Permission Required").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Let Harmonia find your music").fetchSemanticsNodes().isNotEmpty()
         }
-        composeTestRule.onNodeWithText("Audio Permission Required").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Let Harmonia find your music").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Grant audio permission").assertIsDisplayed()
 
         // Transition to SETTINGS_REQUIRED (permanent denial)
@@ -140,9 +140,9 @@ class HarmoniaM4EEndToEndIntegrationTest {
         composeTestRule.onNodeWithText("Library").performClick()
 
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("Permission Required in Settings").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Turn on music access in Settings").fetchSemanticsNodes().isNotEmpty()
         }
-        composeTestRule.onNodeWithText("Permission Required in Settings").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Turn on music access in Settings").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Open system settings").assertIsDisplayed()
 
         // Transition to GRANTED -> triggers automatic initial ingestion
@@ -151,9 +151,9 @@ class HarmoniaM4EEndToEndIntegrationTest {
         composeTestRule.onNodeWithText("Library").performClick()
 
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("No audio files found").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("No songs found").fetchSemanticsNodes().isNotEmpty()
         }
-        composeTestRule.onNodeWithText("No audio files found").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No songs found").assertIsDisplayed()
     }
 
     // -------------------------------------------------------------------------

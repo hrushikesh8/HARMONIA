@@ -154,7 +154,7 @@ class LibraryFavoritesUiTest {
         composeTestRule.onNodeWithText("Tap the heart on any song and it will show up here.").assertIsDisplayed()
 
         // Action button verification with 48dp touch target
-        val browseButton = composeTestRule.onNodeWithText("Browse Tracks")
+        val browseButton = composeTestRule.onNodeWithText("Browse songs")
         browseButton.assertIsDisplayed()
         browseButton.assertHeightIsAtLeast(48.dp)
         browseButton.assertWidthIsAtLeast(48.dp)

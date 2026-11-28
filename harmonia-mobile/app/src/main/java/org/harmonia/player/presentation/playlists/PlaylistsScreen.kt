@@ -1,5 +1,8 @@
 package org.harmonia.player.presentation.playlists
 
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -77,74 +80,57 @@ fun PlaylistsScreen(
     ) {
         Spacer(modifier = Modifier.height(spacing.standard))
 
-        // Header with "New Playlist" button
+        // Header: back, title (same as the other Library pages)
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            verticalAlignment = Alignment.CenterVertically
         ) {
             if (onBack != null) {
-                androidx.compose.material3.IconButton(
+                IconButton(
                     onClick = onBack,
                     modifier = Modifier.semantics { contentDescription = "Back to Library" }
                 ) {
-                    androidx.compose.material3.Icon(
-                        imageVector = org.harmonia.player.design.theme.HarmoniaIcons.ArrowBack,
-                        contentDescription = null,
-                        tint = colors.textPrimary
-                    )
+                    Icon(imageVector = HarmoniaIcons.ArrowBack, contentDescription = null, tint = colors.textPrimary)
                 }
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Playlists",
-                    style = MaterialTheme.typography.displayLarge.copy(
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 1.5.sp,
-                        fontSize = 26.sp
-                    ),
-                    color = colors.textPrimary
-                )
-                Text(
-                    text = "Made by you",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = colors.primarySignal
-                )
-            }
-
-            Button(
-                onClick = { showCreateDialog = true },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = colors.primarySignal,
-                    contentColor = colors.backgroundRoot
-                ),
-                shape = RoundedCornerShape(10.dp),
-                modifier = Modifier
-                    .height(40.dp)
-                    .touchTarget48()
-                    .semantics { contentDescription = "Create new playlist" }
-            ) {
-                Text("New", fontWeight = FontWeight.Bold)
+                Text(text = "Playlists", style = MaterialTheme.typography.headlineMedium, color = colors.textPrimary)
+                Text(text = "Made by you", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary)
             }
         }
 
-        Spacer(modifier = Modifier.height(spacing.standard))
+        Spacer(modifier = Modifier.height(spacing.small))
 
         if (uiState.isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = colors.primarySignal)
             }
-        } else if (uiState.playlists.isEmpty()) {
-            EmptyPlaylistsState(onCreateClick = { showCreateDialog = true })
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(spacing.small),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
                 contentPadding = PaddingValues(bottom = spacing.bottomScaffold)
             ) {
+                // Apple Music style: "New Playlist…" is the first row of the list.
+                item(key = "new_playlist") {
+                    NewPlaylistRow(onClick = { showCreateDialog = true })
+                }
+                if (uiState.playlists.isEmpty()) {
+                    item(key = "empty") {
+                        Column(modifier = Modifier.padding(vertical = spacing.large)) {
+                            Text(text = "No playlists yet", style = MaterialTheme.typography.titleMedium, color = colors.textPrimary)
+                            Text(
+                                text = "Create one to keep your favorite songs together.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = colors.textSecondary
+                            )
+                        }
+                    }
+                }
                 items(uiState.playlists, key = { it.id }) { playlist ->
-                    PlaylistRowCard(
+                    PlaylistRow(
                         playlist = playlist,
+                        coverHash = uiState.covers[playlist.id],
                         onClick = { onPlaylistClick(playlist) },
                         onRenameClick = { playlistToRename = playlist },
                         onDeleteClick = { playlistToDelete = playlist }
@@ -187,142 +173,114 @@ fun PlaylistsScreen(
     }
 }
 
+/** First row of the list, like Apple Music's "New Playlist…". */
 @Composable
-private fun PlaylistRowCard(
+private fun NewPlaylistRow(onClick: () -> Unit) {
+    val colors = HarmoniaThemeTokens.colors
+    val spacing = HarmoniaThemeTokens.spacing
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .semantics(mergeDescendants = true) {
+                role = Role.Button
+                contentDescription = "Create new playlist"
+            }
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(colors.surfaceContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(imageVector = HarmoniaIcons.PlaylistAdd, contentDescription = null, tint = colors.primarySignal, modifier = Modifier.size(26.dp))
+        }
+        Spacer(modifier = Modifier.width(spacing.medium))
+        Text(text = "New Playlist\u2026", style = MaterialTheme.typography.bodyLarge, color = colors.primarySignal)
+    }
+}
+
+@Composable
+private fun PlaylistRow(
     playlist: Playlist,
+    coverHash: String?,
     onClick: () -> Unit,
     onRenameClick: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
     val colors = HarmoniaThemeTokens.colors
     val spacing = HarmoniaThemeTokens.spacing
-    val cardShape = RoundedCornerShape(10.dp)
     var showMenu by remember { mutableStateOf(false) }
+    val songs = "${playlist.trackCount} ${if (playlist.trackCount == 1) "song" else "songs"}"
+    val subtitle = if (playlist.description.isNullOrBlank()) songs else "$songs \u00B7 ${playlist.description}"
 
-    Card(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .hairlineBorder(colors.borderStructural, cardShape)
+            .clip(RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
-            .semantics { contentDescription = "Playlist ${playlist.name}" },
-        shape = cardShape,
-        colors = CardDefaults.cardColors(containerColor = colors.surfaceElevated)
+            .semantics { contentDescription = "Playlist ${playlist.name}, $songs" }
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            HarmoniaArtwork(
-                artworkHash = playlist.artworkHash,
-                size = 44.dp,
-                cornerRadius = 8.dp,
-                placeholderIcon = HarmoniaIcons.Playlists,
-                contentDescription = "${playlist.name} artwork"
-            )
-
-            Spacer(modifier = Modifier.width(spacing.medium))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = playlist.name,
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = colors.textPrimary
-                )
-                val subtitle = buildString {
-                    append("${playlist.trackCount} ${if (playlist.trackCount == 1) "track" else "tracks"}")
-                    if (!playlist.description.isNullOrBlank()) {
-                        append(" • ${playlist.description}")
-                    }
-                }
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = colors.textSecondary
-                )
-            }
-
-            Box {
-                IconButton(
-                    onClick = { showMenu = true },
-                    modifier = Modifier
-                        .touchTarget48()
-                        .semantics { contentDescription = "Options for ${playlist.name}" }
-                ) {
-                    Icon(
-                        imageVector = HarmoniaIcons.MoreVert,
-                        contentDescription = null,
-                        tint = colors.textSecondary
-                    )
-                }
-
-                DropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { showMenu = false },
-                    modifier = Modifier
-                        .background(colors.surfaceElevated)
-                        .hairlineBorder(colors.borderStructural, RoundedCornerShape(8.dp))
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Rename", color = colors.textPrimary) },
-                        leadingIcon = { Icon(HarmoniaIcons.Edit, contentDescription = null, tint = colors.primarySignal) },
-                        onClick = {
-                            showMenu = false
-                            onRenameClick()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Delete", color = colors.statusError) },
-                        leadingIcon = { Icon(HarmoniaIcons.Delete, contentDescription = null, tint = colors.statusError) },
-                        onClick = {
-                            showMenu = false
-                            onDeleteClick()
-                        }
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EmptyPlaylistsState(onCreateClick: () -> Unit) {
-    val colors = HarmoniaThemeTokens.colors
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                imageVector = HarmoniaIcons.Playlists,
-                contentDescription = null,
-                tint = colors.primarySignal.copy(alpha = 0.6f),
-                modifier = Modifier.size(56.dp)
-            )
-            Spacer(modifier = Modifier.height(16.dp))
+        HarmoniaArtwork(
+            artworkHash = coverHash,
+            size = 56.dp,
+            cornerRadius = 6.dp,
+            placeholderIcon = HarmoniaIcons.Playlists,
+            contentDescription = null
+        )
+        Spacer(modifier = Modifier.width(spacing.medium))
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "No playlists yet",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = colors.textPrimary
+                text = playlist.name,
+                style = MaterialTheme.typography.bodyLarge,
+                color = colors.textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-            Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Create a playlist to keep your favorite songs together.",
+                text = subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = colors.textSecondary
+                color = colors.textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                onClick = onCreateClick,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = colors.primarySignal,
-                    contentColor = colors.backgroundRoot
-                ),
-                shape = RoundedCornerShape(10.dp),
-                modifier = Modifier.touchTarget48()
+        }
+        Box {
+            IconButton(
+                onClick = { showMenu = true },
+                modifier = Modifier
+                    .touchTarget48()
+                    .semantics { contentDescription = "Options for ${playlist.name}" }
             ) {
-                Text("Create Playlist", fontWeight = FontWeight.Bold)
+                Icon(imageVector = HarmoniaIcons.MoreVert, contentDescription = null, tint = colors.textSecondary)
+            }
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false },
+                containerColor = colors.surfaceElevated
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Rename", color = colors.textPrimary) },
+                    leadingIcon = { Icon(HarmoniaIcons.Edit, contentDescription = null, tint = colors.primarySignal) },
+                    onClick = {
+                        showMenu = false
+                        onRenameClick()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Delete", color = colors.statusError) },
+                    leadingIcon = { Icon(HarmoniaIcons.Delete, contentDescription = null, tint = colors.statusError) },
+                    onClick = {
+                        showMenu = false
+                        onDeleteClick()
+                    }
+                )
             }
         }
     }

@@ -22,7 +22,9 @@ data class PlayerUiState(
     val playbackState: PlaybackState = PlaybackState(),
     val currentTrack: Track? = null,
     val queue: List<QueueItem> = emptyList(),
-    val sleepTimerState: SleepTimerState = SleepTimerState()
+    val sleepTimerState: SleepTimerState = SleepTimerState(),
+    /** Queue positions in play order while shuffling; empty = queue order. */
+    val playOrder: List<Int> = emptyList()
 )
 
 class PlaybackViewModel(
@@ -33,8 +35,9 @@ class PlaybackViewModel(
     val uiState: StateFlow<PlayerUiState> = combine(
         playbackPort.playbackState,
         playbackPort.queue,
-        playbackPort.sleepTimerState
-    ) { state, queue, sleepTimer ->
+        playbackPort.sleepTimerState,
+        playbackPort.playOrder
+    ) { state, queue, sleepTimer, playOrder ->
         val currentTrack = state.currentTrackId?.let { id ->
             queue.firstOrNull { it.trackId == id }?.track ?: trackRepository.getTrackById(id)
         }
@@ -42,7 +45,8 @@ class PlaybackViewModel(
             playbackState = state,
             currentTrack = currentTrack,
             queue = queue,
-            sleepTimerState = sleepTimer
+            sleepTimerState = sleepTimer,
+            playOrder = playOrder.takeIf { it.size == queue.size }.orEmpty()
         )
     }.stateIn(
         scope = viewModelScope,

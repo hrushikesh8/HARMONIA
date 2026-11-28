@@ -152,9 +152,9 @@ class M3EndToEndIntegrationTest {
         }
         composeTestRule.onNodeWithText("Your music").assertIsDisplayed()
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("No audio files found").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("No songs found").fetchSemanticsNodes().isNotEmpty()
         }
-        composeTestRule.onNodeWithText("No audio files found").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No songs found").assertIsDisplayed()
 
         // 3. Switch to Search tab
         composeTestRule.onAllNodesWithText("Search").onFirst().performClick()
@@ -197,9 +197,9 @@ class M3EndToEndIntegrationTest {
         }
         composeTestRule.onNodeWithText("Your music").assertIsDisplayed()
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("Audio Permission Required").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Let Harmonia find your music").fetchSemanticsNodes().isNotEmpty()
         }
-        composeTestRule.onNodeWithText("Audio Permission Required").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Let Harmonia find your music").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Grant audio permission").assertIsDisplayed()
 
         // 3. Switch to Search tab -> unaffected by storage permission

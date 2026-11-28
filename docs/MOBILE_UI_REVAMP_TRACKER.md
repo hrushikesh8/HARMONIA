@@ -477,6 +477,40 @@ Build order chosen by Sagar: **4.1 → 4.4 → 4.5 → 4.2 → 4.3**, then the r
 - **Why:** with a big local library, "what kind of music" and "music from when" are the two most
   natural ways to dig in after artist and album.
 
+### Follow-up fixes (before the first phone build)
+- **Playlists list:** flat rows like every other list, with each playlist's cover (its own art, else
+  its first song's), "songs" instead of "tracks", and an Apple-style **New Playlist…** first row in
+  place of the "New" button.
+- **Permission, scan and empty screens:** one plain message style (round icon, title, one line,
+  pill button), no bordered cards. Wording rewritten: "Let Harmonia find your music … Nothing leaves
+  your phone" / "Allow access"; "Turn on music access in Settings" with the exact path; "Couldn't
+  look for songs" / "Try again"; "No songs found"; "Browse songs". Technical scan errors ("3
+  file(s) failed during reconciliation") are shown in plain words ("Some songs couldn't be read.
+  The rest of your library is fine."). Status lines above lists lost their borders.
+- **Queue with shuffle on:** now lists songs in the order they will actually play (read from the
+  player's shuffle order), says "11 up next · shuffled", and hides drag handles (reordering a
+  shuffled list would be confusing; swipe to remove still works). Checked: pressing Next plays the
+  songs in exactly the listed order.
+- **Library refills itself if emptied:** the launch scan is incremental ("what changed since the
+  last checkpoint?"). If the song list was ever emptied while the checkpoint survived (cleared
+  data, a failed migration, or the instrumented tests), it never refilled. An empty library now
+  always gets a full scan. Found while testing the first optimized build; unit tested.
+- **Small wording:** the playlist "Add songs" picker's "Search catalog" box is now "Find a song".
+- **First optimized (release-style) build checked on the emulator:** R8-shrunk, with the Baseline
+  Profile, 3.5 MB; launched, scanned, played, Now Playing / Genres / Years opened, no crashes or
+  missing-class errors.
+
+### How to build for a phone
+- **Test build (optimized, installs anywhere):** `.\gradlew :app:assembleBenchmarkRelease` →
+  `app/build/outputs/apk/benchmarkRelease/app-benchmarkRelease.apk`. This is the release build
+  (shrunk + Baseline Profile) signed with the debug key, like `flutter build apk --release`.
+- **Debug build (fastest to build, slower to run):** `.\gradlew :app:assembleDebug` →
+  `app/build/outputs/apk/debug/app-debug.apk`.
+- **Real release (for sharing / Play Store):** set `HARMONIA_KEYSTORE_PATH`,
+  `HARMONIA_KEYSTORE_PASSWORD`, `HARMONIA_KEY_ALIAS`, `HARMONIA_KEY_PASSWORD`, then
+  `.\gradlew :app:assembleRelease`. Without them the release APK is unsigned and won't install.
+- Install over USB with `adb -d install -r <apk>` or copy the APK to the phone and open it.
+
 ## Decisions and ideas checked
 
 ### Telegram music bot as a song source (checked, not adopted)

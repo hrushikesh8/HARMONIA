@@ -544,6 +544,7 @@ fun MainAppContainer(
                     playbackState = playerUiState.playbackState,
                     currentTrack = playerUiState.currentTrack,
                     queue = playerUiState.queue,
+                    playOrder = playerUiState.playOrder,
                     onPlayPause = {
                         if (playerUiState.playbackState.isPlaying) {
                             playbackViewModel.pause()

@@ -257,8 +257,32 @@ class HarmoniaPlayerController(
         )
     }
 
+    private val _playOrder = MutableStateFlow<List<Int>>(emptyList())
+    override val playOrder: StateFlow<List<Int>> = _playOrder.asStateFlow()
+
+    /** Reads the player's shuffle order so the queue can be shown in the order songs will play. */
+    private fun refreshPlayOrder(player: Player) {
+        if (!player.shuffleModeEnabled) {
+            _playOrder.value = emptyList()
+            return
+        }
+        val timeline = player.currentTimeline
+        _playOrder.value = org.harmonia.player.domain.playback.shufflePlayOrder(
+            count = timeline.windowCount,
+            first = timeline.getFirstWindowIndex(true)
+        ) { index -> timeline.getNextWindowIndex(index, Player.REPEAT_MODE_OFF, true) }
+    }
+
     private fun setupPlayerListener(controller: Player) {
         val listener = object : Player.Listener {
+            override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+                refreshPlayOrder(controller)
+            }
+
+            override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+                refreshPlayOrder(controller)
+            }
+
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 updateStateFromController(controller)
                 if (!playWhenReady) {

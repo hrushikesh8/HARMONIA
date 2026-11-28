@@ -8,6 +8,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -94,6 +95,11 @@ class PlaylistsFlowUiTest {
         }
 
         // Navigate to Playlists tab
+        // Library tab, wait for its list to load, then open Playlists.
+        composeTestRule.onNodeWithContentDescription("Library", useUnmergedTree = true).performClick()
+        composeTestRule.waitUntil(5000) {
+            composeTestRule.onAllNodesWithText("Playlists").fetchSemanticsNodes().isNotEmpty()
+        }
         composeTestRule.onAllNodesWithText("Playlists").onFirst().performClick()
         composeTestRule.waitUntil(5000) {
             composeTestRule.onAllNodesWithText("Made by you").fetchSemanticsNodes().isNotEmpty()
@@ -114,7 +120,7 @@ class PlaylistsFlowUiTest {
             composeTestRule.onAllNodesWithText("Ambient Journeys").fetchSemanticsNodes().isNotEmpty()
         }
         composeTestRule.onNodeWithText("Ambient Journeys").assertIsDisplayed()
-        composeTestRule.onAllNodesWithText("0 tracks", substring = true).onFirst().assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("0 songs", substring = true).onFirst().assertIsDisplayed()
     }
 
     @Test
@@ -126,6 +132,11 @@ class PlaylistsFlowUiTest {
         }
 
         // Navigate to Playlists tab
+        // Library tab, wait for its list to load, then open Playlists.
+        composeTestRule.onNodeWithContentDescription("Library", useUnmergedTree = true).performClick()
+        composeTestRule.waitUntil(5000) {
+            composeTestRule.onAllNodesWithText("Playlists").fetchSemanticsNodes().isNotEmpty()
+        }
         composeTestRule.onAllNodesWithText("Playlists").onFirst().performClick()
         composeTestRule.waitUntil(5000) {
             composeTestRule.onAllNodesWithText("Made by you").fetchSemanticsNodes().isNotEmpty()
@@ -162,6 +173,11 @@ class PlaylistsFlowUiTest {
         }
 
         // Navigate to Playlists tab
+        // Library tab, wait for its list to load, then open Playlists.
+        composeTestRule.onNodeWithContentDescription("Library", useUnmergedTree = true).performClick()
+        composeTestRule.waitUntil(5000) {
+            composeTestRule.onAllNodesWithText("Playlists").fetchSemanticsNodes().isNotEmpty()
+        }
         composeTestRule.onAllNodesWithText("Playlists").onFirst().performClick()
         composeTestRule.waitUntil(5000) {
             composeTestRule.onAllNodesWithText("Made by you").fetchSemanticsNodes().isNotEmpty()
@@ -186,13 +202,17 @@ class PlaylistsFlowUiTest {
         // Click "+ Add" button
         composeTestRule.onNodeWithContentDescription("Add tracks to playlist").performClick()
 
-        // Select Solaris and Breathe
+        // Select Solaris and Breathe. The phone's own music may also be listed, so find each by name.
+        composeTestRule.onNodeWithText("Find a song").performTextInput("Solaris")
         composeTestRule.waitUntil(5000) {
-            composeTestRule.onAllNodesWithText("Solaris").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("Solaris").fetchSemanticsNodes().size > 1
         }
-
-        composeTestRule.onNodeWithText("Solaris").performClick()
-        composeTestRule.onNodeWithText("Breathe").performClick()
+        composeTestRule.onAllNodesWithText("Solaris").onLast().performClick()
+        composeTestRule.onNodeWithText("Find a song").performTextReplacement("Breathe")
+        composeTestRule.waitUntil(5000) {
+            composeTestRule.onAllNodesWithText("Breathe").fetchSemanticsNodes().size > 1
+        }
+        composeTestRule.onAllNodesWithText("Breathe").onLast().performClick()
 
         // Click Add (2)
         composeTestRule.onNodeWithText("Add (2)").performClick()
@@ -232,6 +252,11 @@ class PlaylistsFlowUiTest {
         }
 
         // Navigate to Playlists tab
+        // Library tab, wait for its list to load, then open Playlists.
+        composeTestRule.onNodeWithContentDescription("Library", useUnmergedTree = true).performClick()
+        composeTestRule.waitUntil(5000) {
+            composeTestRule.onAllNodesWithText("Playlists").fetchSemanticsNodes().isNotEmpty()
+        }
         composeTestRule.onAllNodesWithText("Playlists").onFirst().performClick()
         composeTestRule.waitUntil(5000) {
             composeTestRule.onAllNodesWithText("Made by you").fetchSemanticsNodes().isNotEmpty()

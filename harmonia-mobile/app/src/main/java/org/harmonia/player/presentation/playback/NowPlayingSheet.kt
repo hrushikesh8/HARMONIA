@@ -123,6 +123,8 @@ fun NowPlayingSheet(
     onArtistClick: ((String) -> Unit)? = null,
     onMoveQueueItem: (fromIndex: Int, toIndex: Int) -> Unit = { _, _ -> },
     onRemoveQueueItem: (index: Int) -> Unit = {},
+    /** Queue positions in play order while shuffling (empty = queue order). */
+    playOrder: List<Int> = emptyList(),
     onOpenTrackMenu: (() -> Unit)? = null
 ) {
     var showQueue by remember { mutableStateOf(false) }
@@ -343,6 +345,7 @@ fun NowPlayingSheet(
                     ?: queue.indexOfFirst { it.trackId == playbackState.currentTrackId }
                 QueueView(
                     queue = queue,
+                    playOrder = playOrder,
                     activeIndex = activeIndex,
                     isPlaying = playbackState.isPlaying,
                     onItemClick = onQueueItemClick,
@@ -804,6 +807,7 @@ private data class QueueEntry(val key: String, val item: QueueItem)
 @Composable
 private fun QueueView(
     queue: List<QueueItem>,
+    playOrder: List<Int>,
     activeIndex: Int,
     isPlaying: Boolean,
     onItemClick: (Int) -> Unit,
@@ -837,9 +841,15 @@ private fun QueueView(
         return
     }
 
-    val entries = remember(queue) { queue.mapIndexed { idx, item -> QueueEntry("${item.trackId}#$idx", item) } }
+    // With shuffle on, list songs in the order they will actually play. Reordering a shuffled list
+    // would be confusing, so drag handles are hidden then (swipe to remove still works).
+    val shuffled = playOrder.size == queue.size && playOrder.isNotEmpty()
+    val entries = remember(queue, playOrder) {
+        val inQueueOrder = queue.mapIndexed { idx, item -> QueueEntry("${item.trackId}#$idx", item) }
+        if (shuffled) playOrder.map { inQueueOrder[it] } else inQueueOrder
+    }
     var workingEntries by remember(entries) { mutableStateOf(entries) }
-    val activeKey = entries.getOrNull(activeIndex)?.key
+    val activeKey = queue.getOrNull(activeIndex)?.let { "${it.trackId}#$activeIndex" }
     var draggingKey by remember { mutableStateOf<String?>(null) }
     var dragStartIndex by remember { mutableIntStateOf(-1) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
@@ -883,11 +893,16 @@ private fun QueueView(
         onScrolled = { dragBy(it) }
     )
 
-    val upNextCount = (queue.size - activeIndex - 1).coerceAtLeast(0)
+    val currentPosition = entries.indexOfFirst { it.key == activeKey }.coerceAtLeast(0)
+    val upNextCount = (entries.size - currentPosition - 1).coerceAtLeast(0)
 
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            text = "$upNextCount up next \u2022 drag \u2261 to reorder, swipe to remove",
+            text = if (shuffled) {
+                "$upNextCount up next \u2022 shuffled \u2022 swipe to remove"
+            } else {
+                "$upNextCount up next \u2022 drag \u2261 to reorder, swipe to remove"
+            },
             style = MaterialTheme.typography.labelSmall,
             color = colors.textSecondary,
             modifier = Modifier.padding(bottom = spacing.small)
@@ -945,6 +960,7 @@ private fun QueueView(
                                 val index = queue.indexOf(entry.item)
                                 if (index >= 0) onItemClick(index)
                             },
+                            showDragHandle = !shuffled,
                             dragHandleModifier = Modifier.pointerInput(entry.key) {
                                 detectDragGestures(
                                     onDragStart = {
@@ -976,7 +992,8 @@ private fun QueueRow(
     isPlaying: Boolean,
     isDragging: Boolean,
     onClick: () -> Unit,
-    dragHandleModifier: Modifier
+    dragHandleModifier: Modifier,
+    showDragHandle: Boolean = true
 ) {
     val colors = HarmoniaThemeTokens.colors
     val spacing = HarmoniaThemeTokens.spacing
@@ -1063,17 +1080,21 @@ private fun QueueRow(
             )
         }
 
-        Box(
-            modifier = dragHandleModifier
-                .size(48.dp)
-                .semantics { contentDescription = "Drag to reorder $title" },
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = HarmoniaIcons.DragHandle,
-                contentDescription = null,
-                tint = colors.textSecondary
-            )
+        if (showDragHandle) {
+            Box(
+                modifier = dragHandleModifier
+                    .size(48.dp)
+                    .semantics { contentDescription = "Drag to reorder $title" },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = HarmoniaIcons.DragHandle,
+                    contentDescription = null,
+                    tint = colors.textSecondary
+                )
+            }
+        } else {
+            Spacer(modifier = Modifier.width(12.dp))
         }
     }
 }

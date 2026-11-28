@@ -26,6 +26,12 @@ interface PlaybackPort {
     val queue: StateFlow<List<QueueItem>>
 
     /**
+     * With shuffle on, queue positions in the order they will play; empty means plain queue order
+     * (shuffle off, or not known). Default for test fakes: always queue order.
+     */
+    val playOrder: StateFlow<List<Int>> get() = QueueOrderUnknown
+
+    /**
      * Starts or resumes playback.
      */
     fun play()
@@ -133,4 +139,23 @@ interface PlaybackPort {
      * Cancels the active sleep timer and immediately restores playback volume to the baseline.
      */
     fun cancelSleepTimer()
+}
+
+/** Shared "no shuffle order" value for [PlaybackPort.playOrder]. */
+private val QueueOrderUnknown: StateFlow<List<Int>> = kotlinx.coroutines.flow.MutableStateFlow(emptyList())
+
+/**
+ * Walks a shuffle order from [first] using [next] (which returns -1 at the end) and returns the
+ * positions in play order, or an empty list if the walk doesn't cover all [count] items once.
+ */
+fun shufflePlayOrder(count: Int, first: Int, next: (Int) -> Int): List<Int> {
+    if (count <= 0 || first !in 0 until count) return emptyList()
+    val order = ArrayList<Int>(count)
+    val seen = HashSet<Int>(count)
+    var index = first
+    while (index in 0 until count && seen.add(index) && order.size < count) {
+        order += index
+        index = next(index)
+    }
+    return if (order.size == count) order else emptyList()
 }

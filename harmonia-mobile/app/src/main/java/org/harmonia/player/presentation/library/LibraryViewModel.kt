@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -331,7 +332,12 @@ class LibraryViewModel(
                 }
 
                 if (primarySource.isAvailable) {
-                    engine.scanSource(primarySource, ScanMode.INCREMENTAL).collect { progress ->
+                    // An empty library always gets a full scan. An incremental scan only looks at
+                    // changes since the last checkpoint, so if the song list was ever emptied
+                    // (cleared data, a failed migration) it would otherwise never refill.
+                    val libraryIsEmpty = trackRepository.observeAllTracks().firstOrNull().isNullOrEmpty()
+                    val mode = if (libraryIsEmpty) ScanMode.FULL_RECONCILIATION else ScanMode.INCREMENTAL
+                    engine.scanSource(primarySource, mode).collect { progress ->
                         when (progress.status) {
                             ScanProgressStatus.FAILED -> {
                                 _scanErrorMessage.value = progress.errorMessage ?: "Scan failed"
