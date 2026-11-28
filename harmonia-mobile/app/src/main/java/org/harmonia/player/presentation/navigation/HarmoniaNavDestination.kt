@@ -56,4 +56,17 @@ sealed interface HarmoniaNavDestination {
 
     @Serializable
     data class PlaylistDetail(val playlistId: String) : HarmoniaNavDestination
+
+    /** Browse by genre and year (task 4.2). */
+    @Serializable
+    data object Genres : HarmoniaNavDestination
+
+    @Serializable
+    data class GenreDetail(val name: String) : HarmoniaNavDestination
+
+    @Serializable
+    data object Years : HarmoniaNavDestination
+
+    @Serializable
+    data class DecadeDetail(val decade: Int) : HarmoniaNavDestination
 }

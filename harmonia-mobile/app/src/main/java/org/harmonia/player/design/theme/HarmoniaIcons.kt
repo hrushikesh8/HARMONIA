@@ -1058,6 +1058,18 @@ object HarmoniaIcons {
         "M10,4H4c-1.1,0 -1.99,0.9 -1.99,2L2,18c0,1.1 0.9,2 2,2h16c1.1,0 2,-0.9 2,-2V8c0,-1.1 -0.9,-2 -2,-2h-8l-2,-2z"
     )
 
+    /** Genres (Material "category"). */
+    val Genre: ImageVector = pathIcon(
+        "Genre",
+        "M12,2l-5.5,9h11L12,2zM17.5,13c-2.49,0 -4.5,2.01 -4.5,4.5s2.01,4.5 4.5,4.5 4.5,-2.01 4.5,-4.5 -2.01,-4.5 -4.5,-4.5zM3,21.5h8v-8H3v8z"
+    )
+
+    /** Years (Material "calendar_today"). */
+    val Calendar: ImageVector = pathIcon(
+        "Calendar",
+        "M20,3h-1V1h-2v2H7V1H5v2H4C2.9,3 2,3.9 2,5v16c0,1.1 0.9,2 2,2h16c1.1,0 2,-0.9 2,-2V5C22,3.9 21.1,3 20,3zM20,21H4V8h16V21z"
+    )
+
     /** Check mark (Material "check"), used for selected songs. */
     val Check: ImageVector = pathIcon("Check", "M9,16.17L4.83,12l-1.42,1.41L9,19 21,7l-1.41,-1.41z")
 

@@ -69,7 +69,7 @@ Build order chosen by Sagar: **4.1 → 4.4 → 4.5 → 4.2 → 4.3**, then the r
 | # | Task | Area | Status |
 |---|------|------|--------|
 | 4.1 | Now Playing background tinted from album art | UI, BE | Done |
-| 4.2 | Browse by genre and year | UI, UX, BE | Planned |
+| 4.2 | Browse by genre and year | UI, UX, BE | Done |
 | 4.3 | Lyrics (embedded tags or `.lrc` files, synced scrolling; LRCLIB as an optional online source) | UI, UX, BE | Planned |
 | 4.4 | A-Z fast scroll, multi-select, undo after removing | UX, BE | Done |
 | 4.5 | Playback options: crossfade, gapless, speed, volume normalisation | UX, BE | Done |
@@ -457,6 +457,25 @@ Build order chosen by Sagar: **4.1 → 4.4 → 4.5 → 4.2 → 4.3**, then the r
   fades and levelling on. The emulator has no sound, so how the fades and levelling *sound* still
   needs a listen on a real phone. 11 unit tests: tag reading, gain maths, fade curve, the gain
   stage on real sample buffers (scaling, clamping, smooth glide) and the Settings labels.
+
+### 4.2 Browse by genre and year
+- **What:** two new rows in the Library list, **Genres** and **Years**, and matching tiles in
+  Search → Browse. **Genres** is an alphabetical list with the A–Z bar ("Rock · 12 songs · 3
+  albums"); a genre opens with Play / Shuffle, its albums in a row, then its songs. **Years** shows a
+  tile per decade ("1990s · 24 songs"); a decade opens with Play / Shuffle and its songs grouped by
+  year, newest first. Songs with no year are counted underneath ("6 songs without a year aren't
+  shown here").
+- **Messy tags handled:** genres and years were already saved from the files' tags (no database
+  change), but tags are inconsistent, so `presentation/browse/BrowseGrouping.kt` cleans them up when
+  grouping: "Rock; Pop", "Rock/Pop", "Rock, Pop" count as two genres (the song appears in both);
+  old numeric ID3 codes like "(17)" become "Rock"; "rock" and "Rock" merge (shown with the
+  capitalised spelling); placeholders like "Unknown"/"Other" are ignored; a song with no year uses
+  its album's year; impossible years are ignored. Unit tested.
+- **Checked** on the emulator with six extra test songs tagged with different genres (including
+  "Jazz/Blues", "(8)" and "rock") and years 1959/1986/1994 (emulator-only test files, not in the
+  repo).
+- **Why:** with a big local library, "what kind of music" and "music from when" are the two most
+  natural ways to dig in after artist and album.
 
 ## Decisions and ideas checked
 

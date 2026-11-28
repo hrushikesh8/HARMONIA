@@ -221,7 +221,9 @@ enum class SearchBrowseTarget(val label: String) {
     ALBUMS("Albums"),
     ARTISTS("Artists"),
     PLAYLISTS("Playlists"),
-    FAVORITES("Favorites")
+    FAVORITES("Favorites"),
+    GENRES("Genres"),
+    YEARS("Years")
 }
 
 /** What Search shows before you type: recent searches, then Browse tiles (Apple Music style). */
@@ -335,6 +337,8 @@ private fun BrowseTile(target: SearchBrowseTarget, onClick: () -> Unit, modifier
         SearchBrowseTarget.ARTISTS -> HarmoniaIcons.Person
         SearchBrowseTarget.PLAYLISTS -> HarmoniaIcons.Playlists
         SearchBrowseTarget.FAVORITES -> HarmoniaIcons.Favorite
+        SearchBrowseTarget.GENRES -> HarmoniaIcons.Genre
+        SearchBrowseTarget.YEARS -> HarmoniaIcons.Calendar
     }
     Box(
         modifier = modifier

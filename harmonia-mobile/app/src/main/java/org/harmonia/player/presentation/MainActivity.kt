@@ -353,6 +353,8 @@ fun MainAppContainer(
                                         SearchBrowseTarget.ARTISTS -> HarmoniaNavDestination.LibraryCategory(LibraryTab.ARTISTS.name)
                                         SearchBrowseTarget.FAVORITES -> HarmoniaNavDestination.LibraryCategory(LibraryTab.FAVORITES.name)
                                         SearchBrowseTarget.PLAYLISTS -> HarmoniaNavDestination.Playlists
+                                        SearchBrowseTarget.GENRES -> HarmoniaNavDestination.Genres
+                                        SearchBrowseTarget.YEARS -> HarmoniaNavDestination.Years
                                     }
                                 )
                             }
@@ -366,6 +368,10 @@ fun MainAppContainer(
                                 when (destination) {
                                     LibraryDestination.Playlists ->
                                         navController.navigate(HarmoniaNavDestination.Playlists)
+                                    LibraryDestination.Genres ->
+                                        navController.navigate(HarmoniaNavDestination.Genres)
+                                    LibraryDestination.Years ->
+                                        navController.navigate(HarmoniaNavDestination.Years)
                                     is LibraryDestination.Category ->
                                         navController.navigate(HarmoniaNavDestination.LibraryCategory(destination.tab.name))
                                 }
@@ -410,6 +416,41 @@ fun MainAppContainer(
                     )
                 }
 
+                composable<HarmoniaNavDestination.Genres> {
+                    org.harmonia.player.presentation.browse.GenresScreen(
+                        libraryViewModel = libraryViewModel,
+                        onBack = { navController.popBackStack() },
+                        onGenreClick = { name -> navController.navigate(HarmoniaNavDestination.GenreDetail(name)) }
+                    )
+                }
+                composable<HarmoniaNavDestination.GenreDetail> { entry ->
+                    org.harmonia.player.presentation.browse.GenreDetailScreen(
+                        genreName = entry.toRoute<HarmoniaNavDestination.GenreDetail>().name,
+                        libraryViewModel = libraryViewModel,
+                        onBack = { navController.popBackStack() },
+                        onPlay = playTracks,
+                        onShuffle = shuffleTracks,
+                        onTrackMenu = onTrackMenu,
+                        onAlbumClick = { album -> navigateToAlbum(album.id) }
+                    )
+                }
+                composable<HarmoniaNavDestination.Years> {
+                    org.harmonia.player.presentation.browse.YearsScreen(
+                        libraryViewModel = libraryViewModel,
+                        onBack = { navController.popBackStack() },
+                        onDecadeClick = { decade -> navController.navigate(HarmoniaNavDestination.DecadeDetail(decade)) }
+                    )
+                }
+                composable<HarmoniaNavDestination.DecadeDetail> { entry ->
+                    org.harmonia.player.presentation.browse.DecadeScreen(
+                        decade = entry.toRoute<HarmoniaNavDestination.DecadeDetail>().decade,
+                        libraryViewModel = libraryViewModel,
+                        onBack = { navController.popBackStack() },
+                        onPlay = playTracks,
+                        onShuffle = shuffleTracks,
+                        onTrackMenu = onTrackMenu
+                    )
+                }
                 composable<HarmoniaNavDestination.AlbumDetail> { entry ->
                     AlbumDetailScreen(
                         albumId = entry.toRoute<HarmoniaNavDestination.AlbumDetail>().albumId,

@@ -50,6 +50,8 @@ import org.harmonia.player.presentation.playlists.PlaylistsViewModel
 /** Where a row on the Library landing page leads. */
 sealed interface LibraryDestination {
     data object Playlists : LibraryDestination
+    data object Genres : LibraryDestination
+    data object Years : LibraryDestination
     data class Category(val tab: LibraryTab) : LibraryDestination
 }
 
@@ -106,6 +108,8 @@ fun LibraryHomeScreen(
         LibraryEntry("Artists", HarmoniaIcons.Person, uiState.artists.size, LibraryDestination.Category(LibraryTab.ARTISTS)),
         LibraryEntry("Albums", HarmoniaIcons.Album, uiState.albums.size, LibraryDestination.Category(LibraryTab.ALBUMS)),
         LibraryEntry("Songs", HarmoniaIcons.MusicNote, uiState.tracks.size, LibraryDestination.Category(LibraryTab.TRACKS)),
+        LibraryEntry("Genres", HarmoniaIcons.Genre, null, LibraryDestination.Genres),
+        LibraryEntry("Years", HarmoniaIcons.Calendar, null, LibraryDestination.Years),
         LibraryEntry("Folders", HarmoniaIcons.Folder, null, LibraryDestination.Category(LibraryTab.FOLDERS)),
         LibraryEntry("Favorites", HarmoniaIcons.Favorite, favoriteTracks.size, LibraryDestination.Category(LibraryTab.FAVORITES))
     )
