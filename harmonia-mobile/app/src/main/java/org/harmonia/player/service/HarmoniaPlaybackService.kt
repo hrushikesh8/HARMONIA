@@ -27,6 +27,7 @@ class HarmoniaPlaybackService : MediaLibraryService() {
     private lateinit var treeResolver: MediaItemTreeResolver
     private var audioEffectManager: org.harmonia.player.service.equalizer.DefaultAudioEffectManager? = null
     private var equalizerBridge: org.harmonia.player.service.equalizer.PlaybackServiceEqualizerBridge? = null
+    private var playbackOptionsBinder: org.harmonia.player.service.audio.PlaybackOptionsBinder? = null
 
     @androidx.annotation.OptIn(UnstableApi::class)
     override fun onCreate() {
@@ -54,8 +55,24 @@ class HarmoniaPlaybackService : MediaLibraryService() {
             .setUsage(C.USAGE_MEDIA)
             .build()
 
+        // Gain stage for volume levelling and fades between songs (task 4.5). It is added in front
+        // of ExoPlayer's own processors, so speed changes keep working.
+        val gainProcessor = org.harmonia.player.service.audio.GainAudioProcessor()
+        val renderersFactory = object : androidx.media3.exoplayer.DefaultRenderersFactory(this) {
+            override fun buildAudioSink(
+                context: android.content.Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean
+            ): androidx.media3.exoplayer.audio.AudioSink =
+                androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .setAudioProcessors(arrayOf(gainProcessor))
+                    .build()
+        }
+
         // Create authoritative ExoPlayer instance
-        val exoPlayer = ExoPlayer.Builder(this)
+        val exoPlayer = ExoPlayer.Builder(this, renderersFactory)
             .setAudioAttributes(audioAttributes, /* handleAudioFocus = */ true)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
@@ -69,6 +86,12 @@ class HarmoniaPlaybackService : MediaLibraryService() {
         )
 
         player = exoPlayer
+
+        playbackOptionsBinder = org.harmonia.player.service.audio.PlaybackOptionsBinder(
+            player = exoPlayer,
+            gain = gainProcessor,
+            preferences = org.harmonia.player.core.di.ServiceLocator.getUserPreferencesRepository()
+        ).also { it.start() }
 
         // Initialize Audio Effect Manager and bridge to authoritative ExoPlayer audio session
         val equalizerFactory = org.harmonia.player.service.equalizer.AndroidPlatformEqualizerFactory()
@@ -111,6 +134,8 @@ class HarmoniaPlaybackService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        playbackOptionsBinder?.release()
+        playbackOptionsBinder = null
         if (::treeResolver.isInitialized) {
             treeResolver.release()
         }

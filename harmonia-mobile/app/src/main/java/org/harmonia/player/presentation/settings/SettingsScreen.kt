@@ -75,6 +75,7 @@ import org.harmonia.player.design.theme.HarmoniaIcons
 import org.harmonia.player.design.theme.HarmoniaThemeTokens
 import org.harmonia.player.design.theme.hairlineBorder
 import org.harmonia.player.design.theme.touchTarget48
+import org.harmonia.player.domain.model.PlaybackOptions
 import org.harmonia.player.domain.model.RepeatMode
 import org.harmonia.player.domain.model.audio.SleepTimerMode
 import org.harmonia.player.domain.model.audio.SleepTimerPreset
@@ -95,6 +96,7 @@ fun SettingsScreen(
     onOpenCarMode: (() -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val playbackOptions by viewModel.playbackOptions.collectAsState()
     val colors = HarmoniaThemeTokens.colors
     val spacing = HarmoniaThemeTokens.spacing
 
@@ -196,6 +198,51 @@ fun SettingsScreen(
                     describe = { "Set default repeat mode to ${it.name}" }
                 )
             }
+            SettingsDivider()
+            Column(modifier = Modifier.padding(spacing.standard)) {
+                Text(text = "Playback speed", style = MaterialTheme.typography.bodyLarge, color = colors.textPrimary)
+                Text(
+                    text = "Voices keep their normal pitch",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.textSecondary
+                )
+                Spacer(modifier = Modifier.height(spacing.small))
+                SegmentedChoice(
+                    options = PlaybackOptions.SPEEDS.map { it to speedLabel(it) },
+                    selected = PlaybackOptions.SPEEDS.minByOrNull { kotlin.math.abs(it - playbackOptions.speed) } ?: 1f,
+                    onSelect = viewModel::setPlaybackSpeed,
+                    describe = { "Set playback speed to ${speedLabel(it)}" }
+                )
+            }
+            SettingsDivider()
+            Column(modifier = Modifier.padding(spacing.standard)) {
+                Text(text = "Fade between songs", style = MaterialTheme.typography.bodyLarge, color = colors.textPrimary)
+                Text(
+                    text = "The end of each song fades out and the next song fades in.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.textSecondary
+                )
+                Spacer(modifier = Modifier.height(spacing.small))
+                SegmentedChoice(
+                    options = PlaybackOptions.FADE_CHOICES.map { it to fadeLabel(it) },
+                    selected = playbackOptions.fadeSeconds.takeIf { it in PlaybackOptions.FADE_CHOICES } ?: 0,
+                    onSelect = viewModel::setFadeSeconds,
+                    describe = { if (it == 0) "Turn off fading between songs" else "Fade between songs over $it seconds" }
+                )
+            }
+            SettingsDivider()
+            SettingsSwitchRow(
+                title = "Volume levelling",
+                subtitle = "Plays songs at a similar loudness, using the loudness info (ReplayGain) saved in your files",
+                checked = playbackOptions.volumeLeveling,
+                onCheckedChange = viewModel::setVolumeLeveling,
+                contentDescription = "Toggle volume levelling"
+            )
+            SettingsDivider()
+            SettingsValueRow(
+                title = "Gapless playback",
+                value = if (playbackOptions.fadeSeconds == 0) "On" else "Off while fading"
+            )
             SettingsDivider()
             Column(
                 modifier = Modifier
@@ -725,6 +772,14 @@ private fun <T> SegmentedChoice(
         }
     }
 }
+
+/** "1×", "1.25×", "0.75×". */
+internal fun speedLabel(speed: Float): String {
+    val text = if (speed % 1f == 0f) speed.toInt().toString() else speed.toString().trimEnd('0').trimEnd('.')
+    return "$text×"
+}
+
+internal fun fadeLabel(seconds: Int): String = if (seconds == 0) "Off" else "${seconds}s"
 
 internal fun repeatModeLabel(mode: RepeatMode): String = when (mode) {
     RepeatMode.OFF -> "Off"

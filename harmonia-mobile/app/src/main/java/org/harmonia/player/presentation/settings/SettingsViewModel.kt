@@ -426,6 +426,24 @@ class SettingsViewModel(
         userPrefs.setThemeMode(mode)
     }
 
+    /** Speed, fades and volume levelling (task 4.5); the playback service applies them live. */
+    val playbackOptions: StateFlow<org.harmonia.player.domain.model.PlaybackOptions> by lazy {
+        userPrefs.observePlaybackOptions()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), userPrefs.getPlaybackOptions())
+    }
+
+    fun setPlaybackSpeed(speed: Float) {
+        userPrefs.setPlaybackOptions(userPrefs.getPlaybackOptions().copy(speed = speed))
+    }
+
+    fun setFadeSeconds(seconds: Int) {
+        userPrefs.setPlaybackOptions(userPrefs.getPlaybackOptions().copy(fadeSeconds = seconds))
+    }
+
+    fun setVolumeLeveling(enabled: Boolean) {
+        userPrefs.setPlaybackOptions(userPrefs.getPlaybackOptions().copy(volumeLeveling = enabled))
+    }
+
     fun setDefaultShuffle(enabled: Boolean) {
         userPrefs.setDefaultShuffleEnabled(enabled)
         activePlaybackPort?.setShuffleMode(enabled)

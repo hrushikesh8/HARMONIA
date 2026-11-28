@@ -3,6 +3,7 @@ package org.harmonia.player.data.local.preferences
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.harmonia.player.domain.model.PlaybackOptions
 import org.harmonia.player.domain.model.RepeatMode
 import org.harmonia.player.domain.model.ThemeMode
 import org.harmonia.player.domain.repository.UserPreferencesRepository
@@ -45,4 +46,11 @@ class InMemoryUserPreferencesRepository(
     override fun isKeepScreenOn(): Boolean = _keepScreenOn.value
     override fun setKeepScreenOn(enabled: Boolean) { _keepScreenOn.value = enabled }
     override fun observeKeepScreenOn(): Flow<Boolean> = _keepScreenOn.asStateFlow()
+
+    private val _playbackOptions = MutableStateFlow(PlaybackOptions())
+    override fun getPlaybackOptions(): PlaybackOptions = _playbackOptions.value
+    override fun setPlaybackOptions(options: PlaybackOptions) {
+        _playbackOptions.value = PlaybackOptions.sanitized(options.speed, options.fadeSeconds, options.volumeLeveling)
+    }
+    override fun observePlaybackOptions(): Flow<PlaybackOptions> = _playbackOptions.asStateFlow()
 }

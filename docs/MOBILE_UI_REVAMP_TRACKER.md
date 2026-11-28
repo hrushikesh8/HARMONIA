@@ -72,7 +72,7 @@ Build order chosen by Sagar: **4.1 → 4.4 → 4.5 → 4.2 → 4.3**, then the r
 | 4.2 | Browse by genre and year | UI, UX, BE | Planned |
 | 4.3 | Lyrics (embedded tags or `.lrc` files, synced scrolling; LRCLIB as an optional online source) | UI, UX, BE | Planned |
 | 4.4 | A-Z fast scroll, multi-select, undo after removing | UX, BE | Done |
-| 4.5 | Playback options: crossfade, gapless, speed, volume normalisation | UX, BE | Planned |
+| 4.5 | Playback options: crossfade, gapless, speed, volume normalisation | UX, BE | Done |
 | 4.6 | Home-screen widget, app shortcuts, "Open with Harmonia" | UI, BE | Planned |
 | 4.7 | Smart playlists, M3U import/export | UI, UX, BE | Planned |
 | 4.8 | Move all text to `strings.xml` (translations) | BE | Planned |
@@ -430,6 +430,33 @@ Build order chosen by Sagar: **4.1 → 4.4 → 4.5 → 4.2 → 4.3**, then the r
 - **Seen once, not reproduced:** on the emulator, rapid queue edits right at a song change left the
   player one song out of step with the queue list. The unit tests above don't reproduce it; keep an
   eye out on a real phone.
+
+### 4.5 Playback options: speed, fades, volume levelling, gapless
+- **What (Settings → Playback):** **Playback speed** 0.75× to 2× (voices keep normal pitch),
+  **Fade between songs** Off / 3s / 6s / 10s, **Volume levelling** (on/off) and a **Gapless
+  playback** row showing On, or "Off while fading" when a fade is chosen. Changes apply straight away, even mid-song.
+- **How:** a small gain stage (`service/audio/GainAudioProcessor.kt`) sits inside ExoPlayer's
+  audio pipeline, in front of ExoPlayer's own speed processing. Levelling and fades multiply the
+  audio there and glide smoothly (no clicks). It is separate from the player volume (which the sleep
+  timer fades) and from the system equalizer, so none of them fight. `PlaybackOptionsBinder`
+  in the playback service applies the saved options, reads each song's tags and steps the fade.
+- **Volume levelling** uses ReplayGain tags from the files (MP3 TXXX, FLAC/Ogg comments, MP4
+  freeform atoms, Opus R128), track gain first, album gain if that's all there is, and never boosts a
+  song past its peak (no clipping). **Songs without these tags play unchanged.** Many libraries
+  are tagged by tools like foobar2000, MusicBrainz Picard or beets; measuring loudness ourselves
+  during the library scan would be a later improvement.
+- **Fades, honestly:** ExoPlayer plays one song at a time, so this is a fade-out then fade-in, not
+  an overlapping crossfade (that would need two players and a mixer). With 3s: the last 3 seconds
+  of a song fade to silence, the next song starts straight away (no gap added) and its first 3
+  seconds fade in. Fades happen whenever a song plays on into the next, **including tracks of the
+  same album** (Sagar's call; the first version skipped those to keep gapless albums seamless).
+  No fade after a manual skip, on repeat-one, or for songs shorter than 3x the fade.
+- **Gapless:** ExoPlayer already removes encoder gaps (MP3 LAME/iTunes info, AAC); nothing to
+  switch on. Settings shows it as On, or "Off while fading" since fades now apply to every song.
+- **Checked:** on the emulator the player reported speed 1.5 and played on into the next song with
+  fades and levelling on. The emulator has no sound, so how the fades and levelling *sound* still
+  needs a listen on a real phone. 11 unit tests: tag reading, gain maths, fade curve, the gain
+  stage on real sample buffers (scaling, clamping, smooth glide) and the Settings labels.
 
 ## Decisions and ideas checked
 

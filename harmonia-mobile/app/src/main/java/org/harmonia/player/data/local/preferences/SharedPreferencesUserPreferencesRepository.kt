@@ -5,6 +5,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import org.harmonia.player.domain.model.PlaybackOptions
 import org.harmonia.player.domain.model.RepeatMode
 import org.harmonia.player.domain.model.ThemeMode
 import org.harmonia.player.domain.repository.UserPreferencesRepository
@@ -131,7 +132,35 @@ class SharedPreferencesUserPreferencesRepository(
         }
     }.distinctUntilChanged()
 
+    override fun getPlaybackOptions(): PlaybackOptions = PlaybackOptions.sanitized(
+        speed = sharedPreferences.getFloat(KEY_PLAYBACK_SPEED, 1f),
+        fadeSeconds = sharedPreferences.getInt(KEY_FADE_SECONDS, 0),
+        volumeLeveling = sharedPreferences.getBoolean(KEY_VOLUME_LEVELING, false)
+    )
+
+    override fun setPlaybackOptions(options: PlaybackOptions) {
+        val clean = PlaybackOptions.sanitized(options.speed, options.fadeSeconds, options.volumeLeveling)
+        sharedPreferences.edit()
+            .putFloat(KEY_PLAYBACK_SPEED, clean.speed)
+            .putInt(KEY_FADE_SECONDS, clean.fadeSeconds)
+            .putBoolean(KEY_VOLUME_LEVELING, clean.volumeLeveling)
+            .apply()
+    }
+
+    override fun observePlaybackOptions(): Flow<PlaybackOptions> = callbackFlow {
+        val keys = setOf(KEY_PLAYBACK_SPEED, KEY_FADE_SECONDS, KEY_VOLUME_LEVELING)
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == null || key in keys) trySend(getPlaybackOptions())
+        }
+        sharedPreferences.registerOnSharedPreferenceChangeListener(listener)
+        trySend(getPlaybackOptions())
+        awaitClose { sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener) }
+    }.distinctUntilChanged()
+
     companion object {
+        const val KEY_PLAYBACK_SPEED = "key_playback_speed"
+        const val KEY_FADE_SECONDS = "key_fade_seconds"
+        const val KEY_VOLUME_LEVELING = "key_volume_leveling"
         const val PREFERENCES_NAME = "harmonia_user_preferences"
         /** Legacy boolean dark-mode switch, only read to migrate to [KEY_THEME_MODE]. */
         const val KEY_DARK_THEME = "key_dark_theme"

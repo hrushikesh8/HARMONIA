@@ -1,6 +1,8 @@
 package org.harmonia.player.domain.repository
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
+import org.harmonia.player.domain.model.PlaybackOptions
 import org.harmonia.player.domain.model.RepeatMode
 import org.harmonia.player.domain.model.ThemeMode
 
@@ -32,4 +34,9 @@ interface UserPreferencesRepository {
     fun isKeepScreenOn(): Boolean
     fun setKeepScreenOn(enabled: Boolean)
     fun observeKeepScreenOn(): Flow<Boolean>
+
+    /** Speed, fades and volume levelling (task 4.5). Defaults keep test fakes compiling. */
+    fun getPlaybackOptions(): PlaybackOptions = PlaybackOptions()
+    fun setPlaybackOptions(options: PlaybackOptions) {}
+    fun observePlaybackOptions(): Flow<PlaybackOptions> = flowOf(getPlaybackOptions())
 }
